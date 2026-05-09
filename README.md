@@ -1,38 +1,97 @@
 # 🧠 QA-Genius — SQA Intelligence Suite
 
-An AI-powered Quality Assurance companion that turns user stories, API specs, and plain-text descriptions into production-grade test artifacts. Built for QA engineers, SDETs, and developers who want to ship with confidence.
+A Streamlit-based AI workspace for QA engineers — seven structured workflows covering the QA lifecycle from user story refinement to performance testing. Outputs are AI-generated starting points designed for human review and iteration.
 
 ![Python](https://img.shields.io/badge/Python-3.10%2B-blue)
 ![Streamlit](https://img.shields.io/badge/UI-Streamlit-FF4B4B)
 ![GenAI](https://img.shields.io/badge/AI-Google%20GenAI-4285F4)
-![License](https://img.shields.io/badge/License-MIT-green)
+---
+
+## 🎯 Why I Built This
+
+<!-- TODO: Replace this paragraph with your own voice. Two or three sentences. -->
+<!-- Possible angles: -->
+<!-- - Personal: 2+ years in QA automation, wanted to test how far prompt engineering can take AI-assisted QA workflows -->
+<!-- - Technical: curious where structured prompt engineering for technical domains breaks down -->
+<!-- - Practical: covers the QA lifecycle as I see it day-to-day, from sprint planning to perf testing -->
+
+I built QA-Genius to explore how far prompt engineering can take AI-assisted QA workflows — and where it breaks down. The seven tabs reflect the QA lifecycle as I see it from my work experience: from refining vague user stories at sprint planning, to scaffolding Playwright scripts, to generating k6 performance suites. v1.0 ships with known limitations (see below); v1.1 addresses gaps surfaced during a thorough self-review.
 
 ---
 
 ## ✨ What It Does
 
-QA-Genius is a one-stop workspace for generating, analyzing, and exporting software quality artifacts using Large Language Models. Describe your feature, paste your JSON, or outline a user flow — the AI handles the rest.
+QA-Genius generates structured QA artifacts from plain-text inputs — user stories, API responses, app descriptions, sprint summaries. Each tab is independent, with its own prompt, structured Pydantic output schema, and export options.
 
-| Module | Description |
-|--------|-------------|
-| 📝 **Story Analyzer** | Detects ambiguities, missing ACs, and inconsistencies in user stories before they reach development. |
-| 🧪 **Test Cases** | Generates structured functional, edge-case, regression, and smoke test cases with steps, data, and expected results. |
-| 🐛 **Bug Report** | Transforms raw bug notes into production-grade bug reports with severity, reproducibility, and environment details. |
-| 📊 **Quality Analytics** | Analyzes sprint execution summaries and outputs a quality health score with actionable insights. |
-| ⚙️ **Automation Script** | Scaffolds complete automation projects — test code, page objects, config, and a run-ready ZIP. |
-| 🔍 **Schema Validator** | Validates JSON payloads against structural, semantic, and security best practices. |
-| 🔒 **Security Tests** | Produces OWASP Top 10 mapped security test cases with real payloads, remediation steps, and tool hints. |
-| ⚡ **Performance Tests** | Architects k6 performance suites with 6 load profiles (Smoke → Breakpoint), SLA assertions, and runnable scripts. |
+| Module | What It Generates |
+|--------|-------------------|
+| 📝 **Story Analyzer** | Ambiguity report with INVEST evaluation, vague-phrase detection, suggested rewrites, and Gherkin acceptance criteria. |
+| 🧪 **Test Cases** | Functional, negative, boundary, and edge-case test cases with steps, test data, BDD scenarios, traceability tags, and a coverage-gap summary. |
+| 🐛 **Bug Report** | Structured bug reports from raw notes — title, environment, repro steps, severity/priority, suspected pattern, and investigation checklist. |
+| 📊 **Quality Analytics** | Sprint quality report — pass rate, defect density, MTTR analysis, trend comparison, prioritized recommendations with owners. |
+| ⚙️ **Automation Script** | Playwright project scaffolding — test files, config, package.json, and run instructions. JS or TS, flat or POM. |
+| 🔍 **Schema Validator** | Validates real API responses against structural, semantic, and security expectations — catches PII exposure, type mismatches, format violations. |
+| 🔒 **Security Tests** | OWASP Top 10–mapped test cases with payloads, severity, remediation, and tool hints. Adapts to stated stack and compliance context. |
+| ⚡ **Performance Tests** | k6 scripts with six load profiles (Smoke → Breakpoint), per-endpoint SLA thresholds, correlation patterns, and execution plan. |
 
 ---
 
-## 🚀 Live Demo
+## 📸 Screenshots
+
+![Project Screenshot](https://res.cloudinary.com/dncod5rnj/image/upload/v1778323869/qageni_h7bzkz.png)
+<!-- TODO: Add 2-4 screenshots of the strongest tabs. -->
+<!-- Recommended: Test Cases output, Bug Report output, Security Tests, Performance Tests script. -->
+<!-- Place images in /assets/screenshots/ and reference them here. -->
+<!-- Example: -->
+<!-- ![Story Analyzer](assets/screenshots/story_analyzer.png) -->
+<!-- ![Test Cases](assets/screenshots/test_cases.png) -->
+<!-- ![Security Tests](assets/screenshots/security_tests.png) -->
+<!-- ![Performance Tests](assets/screenshots/performance_tests.png) -->
+
+
+
+---
+
+## ⚠️ Current Limitations
+
+This is v1.0. Outputs are AI-generated and require human review before use in production contexts. Known gaps under active improvement:
+
+- **Hallucination on specific values** — Generated scripts and reports may contain plausible-but-fabricated values (specific prices, version numbers, IDs, scoring percentages). Verify all specifics before using outputs as deliverables.
+- **Generic outputs in some scenarios** — Some tabs default to generic best-practice content rather than fully grounding in user input. Quality Analytics, Schema Validator, and Performance Tests are most affected.
+- **No automated tests yet** — Tool behavior is verified manually via a documented input set. Regression tests are on the roadmap.
+- **No deployment target** — Runs locally only; hosted demo not yet available.
+
+The detailed improvement backlog covering all seven tabs is documented in [`IMPROVEMENTS.md`](IMPROVEMENTS.md). v1.1 addresses the highest-impact items (correlation in Performance Tests, false-positive reduction in Schema Validator, environment-field handling in Bug Report, and trend analysis in Quality Analytics).
+
+---
+
+## 🏗️ How It Works
+
+The architecture is deliberately simple — one Streamlit page per tab, one prompt function per tab, structured output via Pydantic.
+
+```
+User input (Streamlit form)
+    ↓
+prompts.py::build_<tab>_prompt(input_data)
+    ↓
+LangChain 
+    ↓
+Pydantic schema parsing (models.py)
+    ↓
+UI rendering (ui/tab_*.py) + export options
+```
+
+Tabs do not share state. Each form submission is a fresh API call with no conversation history, which keeps prompts isolated and outputs deterministic across sessions.
+
+---
+
+## 🚀 Quick Start
 
 ```bash
 streamlit run app.py
 ```
 
-> The app launches with a dark-themed, wide-layout UI. Each tab is self-contained — no page reloads needed.
+The app launches at `http://localhost:8501` with a dark-themed wide layout.
 
 ---
 
@@ -40,12 +99,13 @@ streamlit run app.py
 
 | Layer | Technology |
 |-------|------------|
-| **Frontend** | Streamlit (custom CSS, responsive wide layout) |
-| **AI / LLM** | LangChain + Google GenAI (`gemini-2.5-flash-lite`) |
-| **Data Validation** | Pydantic v2 (structured output parsing) |
+| **UI** | Streamlit (custom CSS, dark theme, wide layout) |
+| **LLM Orchestration** | LangChain |
+| **Model** | Google Gemini 2.5 Flash Lite (`gemini-2.5-flash-lite`) |
+| **Structured Output** | Pydantic v2 |
 | **Data Processing** | Pandas, OpenPyXL (Excel export) |
 | **Resilience** | Tenacity (exponential backoff retry) |
-| **Config** | python-dotenv |
+| **Configuration** | python-dotenv |
 
 ---
 
@@ -84,15 +144,13 @@ Create a `.env` file in the project root:
 GOOGLE_API_KEY=your_google_genai_api_key_here
 ```
 
-> Get your API key from [Google AI Studio](https://aistudio.google.com/app/apikey).
+Get your API key from [Google AI Studio](https://aistudio.google.com/app/apikey).
 
 ### 5. Run the app
 
 ```bash
 streamlit run app.py
 ```
-
-The app will open at `http://localhost:8501`.
 
 ---
 
@@ -103,34 +161,33 @@ qa-genius/
 ├── app.py                      # Streamlit entry point — layout, tabs, theming
 ├── models.py                   # Pydantic schemas for all LLM outputs
 ├── constants.py                # UI labels, severity maps, CSS/HTML snippets
-├── prompts.py                  # LLM prompt templates (one per module)
+├── prompts.py                  # LLM prompt functions (one per tab)
 ├── utils.py                    # Shared helpers — model loader, exporters, retry logic
 ├── requirements.txt            # Python dependencies
 ├── .env                        # API keys (gitignored)
 ├── assets/
-│   └── style.css               # Custom dark-theme overrides
+│   └── style.css               # Dark-theme overrides
 └── ui/
     ├── __init__.py
-    ├── tab_ambiguity.py        # Story Analyzer tab
-    ├── tab_test_cases.py       # Test Case Generator tab
-    ├── tab_bug_report.py       # Bug Report Formatter tab
-    ├── tab_quality.py          # Quality Analytics tab
-    ├── tab_automation.py       # Automation Script tab
-    ├── tab_schema.py           # Schema Validator tab
-    ├── tab_security.py         # Security Tests tab
-    └── tab_performance.py      # Performance Tests tab
+    ├── tab_ambiguity.py        # Story Analyzer
+    ├── tab_test_cases.py       # Test Cases
+    ├── tab_bug_report.py       # Bug Report
+    ├── tab_quality.py          # Quality Analytics
+    ├── tab_automation.py       # Automation Script
+    ├── tab_schema.py           # Schema Validator
+    ├── tab_security.py         # Security Tests
+    └── tab_performance.py      # Performance Tests
 ```
 
 ---
 
-## 🎯 Key Features
+## 🎯 Notable Implementation Details
 
-- **Structured AI Output** — Every generation is parsed into strongly-typed Pydantic models, not free-form text.
-- **Export Ready** — Download test cases as CSV/Excel, bug reports as Markdown, automation projects as ZIP, and performance scripts as `.js`.
-- **Retry & Resilience** — Built-in exponential backoff protects against transient API failures.
-- **Dark-First UI** — Polished dark theme with custom CSS, stat tiles, badges, and scroll-to-top.
-- **Session Persistence** — Generated outputs survive browser refreshes via `st.session_state`.
-- **No Placeholders** — Automation and performance scripts are generated runnable; no `// TODO` or `fill in here`.
+- **Structured output via Pydantic** — Every LLM response is parsed into a typed schema, not free-form text. This catches malformed outputs early and makes the UI rendering deterministic.
+- **Tenacity-based retry** — Transient API failures are handled with exponential backoff before surfacing to the user.
+- **Per-tab prompt isolation** — Each tab calls its own prompt function with no shared conversation history, which prevents cross-tab content leakage.
+- **Session persistence** — Generated outputs survive browser refreshes via `st.session_state`.
+- **Export-ready outputs** — Test cases export to CSV/Excel, bug reports to Markdown, automation projects to ZIP, k6 scripts to `.js`.
 
 ---
 
@@ -144,32 +201,30 @@ qa-genius/
 
 ## 🗺️ Roadmap
 
-See [`ROADMAP.md`](ROADMAP.md) for planned features and [`IMPROVEMENTS.md`](IMPROVEMENTS.md) for the detailed backlog.
+**v1.1 (in progress)** — addresses the highest-impact items from `IMPROVEMENTS.md`:
+- Reduce false-positive validation findings in Schema Validator
+- Add structured environment fields to Bug Report (eliminate hallucinated OS/build values)
+- Add multi-sprint trend analysis to Quality Analytics
+- Fix correlation gaps in Performance Tests k6 scripts
+- Enforce JavaScript/TypeScript selection in Automation Script
 
-High-level upcoming items:
+**v2.0 (planned)** — production-readiness:
+- Provider abstraction (OpenAI, Anthropic in addition to Gemini)
+- Hosted demo on Streamlit Community Cloud
+- Pytest-based regression suite covering all seven tabs
+- Docker support
+- Response caching to reduce API costs
 
-- [ ] Docker support for one-command deployment
-- [ ] CI/CD pipeline (GitHub Actions)
-- [ ] Unit test suite (`pytest`)
-- [ ] Response caching to reduce API costs
-- [ ] Support for additional LLM providers (OpenAI, Anthropic)
-
----
-
-## 🤝 Contributing
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
+The full backlog is in [`IMPROVEMENTS.md`](IMPROVEMENTS.md).
 
 ---
 
-## 📄 License
-
-This project is licensed under the MIT License.
 
 ---
 
-> **Powered by AI** · Built with Streamlit & LangChain
+## 👋 Feedback
+
+This is a personal project built for portfolio and learning purposes. Issues and feedback are welcome via GitHub Issues. PRs may not be merged but discussions are appreciated.
+
+<!-- TODO: Optionally add your LinkedIn or contact info here. -->
+<!-- Built by [Your Name] · [LinkedIn](https://linkedin.com/in/yourhandle) -->
