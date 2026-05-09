@@ -8,12 +8,11 @@
 ## Table of Contents
 
 1. [Completed ✅](#-completed)
-2. [Critical / High Priority](#-critical--high-priority)
-3. [Code Quality & Architecture](#-medium-priority--code-quality--architecture)
-4. [Features & UX](#-features--ux-improvements)
-5. [DevOps, Testing & Reliability](#-devops-testing--reliability)
-6. [Performance & Scalability](#-performance--scalability)
-7. [Quick Wins Checklist](#-quick-wins-checklist)
+2. [Code Quality & Architecture](#-medium-priority--code-quality--architecture)
+3. [Features & UX](#-features--ux-improvements)
+4. [DevOps, Testing & Reliability](#-devops-testing--reliability)
+5. [Performance & Scalability](#-performance--scalability)
+6. [Quick Wins Checklist](#-quick-wins-checklist)
 
 ---
 
@@ -22,40 +21,18 @@
 | # | Area | Status |
 |---|------|--------|
 | 1 | **Modular Architecture** | ✅ Split from monolith into `app.py`, `models.py`, `prompts.py`, `utils.py`, `constants.py`, and `ui/` package |
-| 2 | **README.md** | ✅ Professional README with install steps, env vars, project structure, and feature overview |
-| 3 | **`.gitignore`** | ✅ Excludes `.env`, `.venv/`, `__pycache__/`, `.streamlit/`, local data files |
-| 4 | **API Key Validation** | ✅ Startup guard checks `GOOGLE_API_KEY` and shows friendly `st.error()` with instructions |
-| 5 | **Retry Logic** | ✅ `tenacity` with exponential backoff on transient API failures |
-| 6 | **External CSS** | ✅ All styles moved to `assets/style.css` and loaded once at startup |
-| 7 | **Session Persistence** | ✅ `st.session_state` preserves outputs across reruns in every tab |
-| 8 | **Excel Export** | ✅ Test Cases tab exports `.xlsx` via `openpyxl` |
-| 9 | **Bug Report Export** | ✅ Download buttons for Markdown and JSON formats |
-| 10 | **JSON Repair** | ✅ Robust `json_repair` library handles malformed LLM JSON output |
-| 11 | **Constants & Mappings** | ✅ `constants.py` centralizes badges, severity orders, and UI strings |
-| 12 | **Dark Theme UI** | ✅ Polished dark mode with custom CSS, stat tiles, and scroll-to-top button |
-| 13 | **Security & Performance Tabs** | ✅ Full `tab_security.py` and `tab_performance.py` modules with exports |
+| 2 | **Retry Logic** | ✅ `tenacity` with exponential backoff on transient API failures |
+| 3 | **External CSS** | ✅ All styles moved to `assets/style.css` and loaded once at startup |
+| 4 | **Session Persistence** | ✅ `st.session_state` preserves outputs across reruns in every tab |
+| 5 | **Excel Export** | ✅ Test Cases tab exports `.xlsx` via `openpyxl` |
+| 6 | **Bug Report Export** | ✅ Download buttons for Markdown and JSON formats |
+| 7 | **JSON Repair** | ✅ Robust `json_repair` library handles malformed LLM JSON output |
+| 8 | **Constants & Mappings** | ✅ `constants.py` centralizes badges, severity orders, and UI strings |
+| 9 | **Dark Theme UI** | ✅ Polished dark mode with custom CSS, stat tiles, and scroll-to-top button |
+| 10 | **Security & Performance Tabs** | ✅ Full `tab_security.py` and `tab_performance.py` modules with exports |
 
 ---
 
-## 🔴 Critical / High Priority
-
-| # | Area | Issue | Suggested Fix |
-|---|------|-------|---------------|
-| 14 | **Bare Exception Handling** | Every tab uses `except Exception as e: st.error(f"Parsing error: {e}")`. This swallows valuable debugging info and handles everything the same way. | Catch specific exceptions:<br>- `json.JSONDecodeError` for invalid JSON<br>- `OutputParserException` for LLM parsing failures<br>- `GoogleAPIError` for API issues |
-| 15 | **Plain Strings Instead of Enums** | Fields like `severity`, `priority`, and `reproducibility_rate` accept any string value from the LLM. | Convert them to `enum.StrEnum` so Pydantic validates allowed values automatically. |
-
----
-
-## 🟡 Medium Priority — Code Quality & Architecture
-
-| # | Area | Issue | Suggested Fix |
-|---|------|-------|---------------|
-| 16 | **No Type Hints** | Some functions still lack return type annotations. | Add type hints to every public function and Pydantic model method. |
-| 17 | **No Docstrings** | Tab render functions and complex utilities lack documentation. | Add Google-style or NumPy-style docstrings to public APIs. |
-| 18 | **Hardcoded Model & Temperature** | `gemini-2.5-flash-lite` and `temperature=0.3` are hardcoded with no user control. | Add a sidebar or settings panel to let users select the model and adjust creativity/precision. |
-| 19 | **Input Sanitization** | Raw user input is injected directly into LLM prompts without length or content checks. | Add max-length validators and strip dangerous characters to prevent prompt injection. |
-
----
 
 ## 🟢 Features & UX Improvements
 
