@@ -47,12 +47,19 @@ def render(model):
             key="perf_users",
         )
     with c3:
-        peak_events = st.multiselect(
-            "Peak Events",
-            ["Black Friday", "Product Launch", "Marketing Campaign", "Daily Peak", "Quarterly Report", "None"],
-            default=["Daily Peak"],
-            key="perf_peaks",
+        peak_event_type = st.selectbox(
+            "Peak Event Type",
+            ["Daily Peak", "Black Friday / Flash Sale", "Live Event Spike", "Cron Job Spike", "Marketing Campaign Launch", "Custom"],
+            key="perf_peak_type",
         )
+        if peak_event_type == "Custom":
+            peak_event_custom = st.text_input(
+                "Custom ramp shape description",
+                placeholder="e.g. sharp 10x ramp over 30s, sustained 2h",
+                key="perf_peak_custom",
+            )
+        else:
+            peak_event_custom = ""
 
     sla_targets = st.text_area(
         "SLA Targets",
@@ -62,6 +69,24 @@ def render(model):
                     'p99 latency < 600ms"',
         height=80,
         key="perf_sla",
+    )
+
+    endpoint_sla = st.text_area(
+        "Per-endpoint SLAs (optional)",
+        placeholder='One per line: endpoint | p95 target | p99 target (optional)\n'
+                    'e.g.\n'
+                    '/api/auth/login | 200ms | 500ms\n'
+                    '/api/products | 300ms | 600ms\n'
+                    '/api/checkout | 400ms | 800ms',
+        height=80,
+        key="perf_endpoint_sla",
+    )
+
+    output_config = st.multiselect(
+        "Metrics Output",
+        ["Console only", "InfluxDB + Grafana", "Prometheus remote write + Grafana", "k6 Cloud", "JSON file"],
+        default=["InfluxDB + Grafana"],
+        key="perf_output",
     )
 
     perf_parser = PydanticOutputParser(pydantic_object=PerformanceTestSuite)
@@ -74,13 +99,16 @@ def render(model):
                 perf_prompt = get_performance_prompt()
                 try:
                     # First get raw text from model, then strip markdown fences if present
+                    peak_desc = peak_event_custom if peak_event_type == "Custom" else peak_event_type
                     raw_chain = perf_prompt | model
                     raw_text = invoke_with_retry(raw_chain, {
                         "user_flows": user_flows,
                         "framework": framework,
                         "expected_users": expected_users or "1000",
-                        "peak_events": ", ".join(peak_events),
+                        "peak_event_type": peak_desc,
                         "sla_targets": sla_targets or "p95 latency < 500ms, error rate < 1%",
+                        "endpoint_slas": endpoint_sla.strip() if endpoint_sla.strip() else "None provided",
+                        "output_config": ", ".join(output_config) if output_config else "Console only",
                         "format_instructions": perf_parser.get_format_instructions(),
                     })
                     if hasattr(raw_text, "content"):
@@ -223,6 +251,21 @@ def render(model):
     lang_map = {"k6": "javascript", "jmeter": "xml", "artillery": "yaml"}
     st.code(suite.script_code, language=lang_map.get(suite.framework.lower(), "text"))
 
+    if suite.sample_csv:
+        st.markdown(
+            '<div class="section-title">📄 Sample users.csv</div>',
+            unsafe_allow_html=True,
+        )
+        st.code(suite.sample_csv, language="csv")
+
+    if suite.grafana_dashboard:
+        st.markdown(
+            '<div class="section-title">📊 Grafana Dashboard</div>',
+            unsafe_allow_html=True,
+        )
+        with st.expander("View Grafana dashboard JSON / reference", expanded=False):
+            st.code(suite.grafana_dashboard, language="json")
+
     # ── Execution Plan ───────────────────────────────────────────────────────
     if suite.execution_plan:
         st.markdown(
@@ -274,6 +317,16 @@ def render(model):
             mime="text/markdown",
             key="perf_plan_dl",
         )
+
+    with e_col3:
+        if suite.grafana_dashboard:
+            st.download_button(
+                label="⬇️ Grafana Dashboard (.json)",
+                data=suite.grafana_dashboard.encode("utf-8"),
+                file_name="grafana-dashboard.json",
+                mime="application/json",
+                key="perf_grafana_dl",
+            )
 
     with e_col4:
         try:

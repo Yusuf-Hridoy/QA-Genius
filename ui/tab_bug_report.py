@@ -30,6 +30,43 @@ def render(model):
         key="bug_input",
     )
 
+    with st.expander("Environment Details (optional)"):
+        env_col1, env_col2 = st.columns(2)
+        with env_col1:
+            device_type = st.selectbox("Device Type", ["Not specified", "Desktop", "Mobile", "Tablet"], key="bug_device")
+            os_version = st.text_input("OS / OS Version", placeholder="e.g. iOS 17.4, Windows 11", key="bug_os")
+            browser_version = st.text_input("Browser / App Version", placeholder="e.g. Safari 17, Chrome 120", key="bug_browser")
+        with env_col2:
+            build_env = st.text_input("Build / Environment", placeholder="e.g. Production, Staging, Build #1234", key="bug_build")
+            bug_url = st.text_input("URL where bug occurred", key="bug_url")
+
+    att_col1, att_col2 = st.columns(2)
+    with att_col1:
+        total_attempts = st.number_input("Total attempts made", min_value=1, value=1, key="bug_total_att")
+    with att_col2:
+        successful_attempts = st.number_input("Successful attempts", min_value=0, value=0, key="bug_succ_att")
+
+    if successful_attempts == 0:
+        computed_repro = "Always"
+    elif successful_attempts < total_attempts:
+        computed_repro = f"Intermittent ({successful_attempts} of {total_attempts})"
+    else:
+        computed_repro = ""
+        st.warning("Successful attempts equals total attempts — this may not be a reproducible bug.")
+
+    env_parts = []
+    if device_type != "Not specified":
+        env_parts.append(f"Device: {device_type}")
+    if os_version.strip():
+        env_parts.append(f"OS: {os_version.strip()}")
+    if browser_version.strip():
+        env_parts.append(f"Browser/App: {browser_version.strip()}")
+    if build_env.strip():
+        env_parts.append(f"Build/Env: {build_env.strip()}")
+    if bug_url.strip():
+        env_parts.append(f"URL: {bug_url.strip()}")
+    env_str = "; ".join(env_parts) if env_parts else "Not provided"
+
     bug_parser = PydanticOutputParser(pydantic_object=BugReport)
 
     if st.button("🐛 Format Bug Report", key="bug_btn"):
@@ -39,9 +76,16 @@ def render(model):
             with st.spinner("Analyzing and formatting bug report..."):
                 bug_prompt = get_bug_prompt()
                 chain = bug_prompt | model | bug_parser
+                full_input = (
+                    f"{raw_bug}\n\n"
+                    f"Environment Details: {env_str}\n"
+                    f"Reproducibility: {computed_repro}\n"
+                    f"Total Attempts: {total_attempts}\n"
+                    f"Successful Attempts: {successful_attempts}"
+                )
                 try:
                     bug = invoke_with_retry(chain, {
-                        "raw_bug": raw_bug,
+                        "raw_bug": full_input,
                         "format_instructions": bug_parser.get_format_instructions(),
                     })
                     st.session_state["bug_result"] = bug
@@ -87,7 +131,7 @@ def render(model):
     )
 
     # ── Impact Analysis ────────────────────────────────────────────────────
-    if bug.business_impact or bug.affected_users or bug.related_areas:
+    if bug.business_impact or bug.affected_users or bug.related_areas or bug.suspected_pattern:
         st.markdown("---")
         st.markdown(
             '<div class="section-title">💼 Impact Analysis</div>',
@@ -96,6 +140,14 @@ def render(model):
 
         imp_col1, imp_col2 = st.columns(2)
         with imp_col1:
+            if bug.suspected_pattern:
+                st.markdown(
+                    f'<div class="glass-card glass-card-accent">'
+                    f'<div class="label" style="color:#a78bfa;">Suspected Pattern</div>'
+                    f'<div class="value">{bug.suspected_pattern}</div>'
+                    f'</div>',
+                    unsafe_allow_html=True,
+                )
             if bug.business_impact:
                 st.markdown(
                     f'<div class="glass-card glass-card-red">'
@@ -129,6 +181,37 @@ def render(model):
                     f'</div>',
                     unsafe_allow_html=True,
                 )
+
+    if bug.investigation_steps:
+        st.markdown("---")
+        st.markdown(
+            '<div class="section-title">🔍 Investigation Steps</div>',
+            unsafe_allow_html=True,
+        )
+        for i, step in enumerate(bug.investigation_steps, 1):
+            st.markdown(
+                f'<div style="padding:0.4rem 0;padding-left:0.5rem;">'
+                f'<span style="display:inline-block;width:1.8rem;height:1.8rem;line-height:1.8rem;'
+                f'text-align:center;border-radius:50%;background:rgba(251,191,36,0.15);'
+                f'color:#fbbf24;font-family:Space Mono,monospace;font-size:0.75rem;'
+                f'margin-right:0.6rem;">{i}</span>'
+                f'<span style="color:#e2e8f0;font-size:0.92rem;">{step}</span></div>',
+                unsafe_allow_html=True,
+            )
+
+    if bug.related_issues:
+        st.markdown("---")
+        st.markdown(
+            '<div class="section-title">🔗 Related / Sub-Issues</div>',
+            unsafe_allow_html=True,
+        )
+        for ri in bug.related_issues:
+            st.markdown(
+                f'<div style="padding:0.4rem 0;padding-left:0.5rem;">'
+                f'<span style="color:#60a5fa;margin-right:0.5rem;">→</span>'
+                f'<span style="color:#e2e8f0;font-size:0.9rem;">{ri}</span></div>',
+                unsafe_allow_html=True,
+            )
 
     # ── Environment & Evidence ─────────────────────────────────────────────
     st.markdown("---")

@@ -38,6 +38,21 @@ def render(model):
         key="tc_input",
     )
 
+    tc_col1, tc_col2 = st.columns([2, 1])
+    with tc_col1:
+        coverage_focus = st.multiselect(
+            "Test Coverage Focus",
+            ["Functional", "Negative", "Boundary", "Edge Case", "Accessibility", "Security", "Performance", "Localization"],
+            default=["Functional", "Negative", "Boundary", "Edge Case"],
+            key="tc_coverage",
+        )
+    with tc_col2:
+        tech_stack = st.text_input(
+            "Tech Stack (optional)",
+            placeholder="e.g. React frontend + Node.js + PostgreSQL",
+            key="tc_stack",
+        )
+
     tc_parser = PydanticOutputParser(pydantic_object=TestCaseList)
 
     if st.button("⚡ Generate Test Cases", key="tc_btn"):
@@ -47,9 +62,14 @@ def render(model):
             with st.spinner("Analyzing requirements and architecting test suite..."):
                 tc_prompt = get_tc_prompt()
                 chain = tc_prompt | model | tc_parser
+                full_input = (
+                    f"User Story / Requirement:\n{user_story}\n\n"
+                    f"Test Coverage Focus: {', '.join(coverage_focus)}\n"
+                    f"Tech Stack: {tech_stack or 'Not provided'}"
+                )
                 try:
                     result = invoke_with_retry(chain, {
-                        "user_story": user_story,
+                        "user_story": full_input,
                         "format_instructions": tc_parser.get_format_instructions(),
                     })
                     st.session_state["tc_result"] = result
@@ -76,7 +96,7 @@ def render(model):
     # ── Summary Dashboard ──────────────────────────────────────────────────
     high_prio_count = sum(1 for tc in test_cases if tc.priority.lower() == "high")
     auto_ready_count = sum(1 for tc in test_cases if tc.automation_feasibility.lower() == "high")
-    smoke_count = sum(1 for tc in test_cases if tc.category.lower() == "smoke")
+    smoke_count = sum(1 for tc in test_cases if any(t.lower() == "smoke" for t in tc.tags))
 
     c1, c2, c3, c4 = st.columns(4)
     with c1:

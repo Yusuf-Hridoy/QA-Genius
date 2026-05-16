@@ -6,11 +6,13 @@ from prompts import get_auto_prompt
 from utils import invoke_with_retry, create_automation_zip
 
 
-def _lang_from_framework(framework: str) -> str:
-    """Determine code block language from framework name."""
+def _lang_from_framework(framework: str, explicit_lang: str = "") -> str:
+    """Determine code block language from framework name and explicit language choice."""
     if "Python" in framework:
         return "python"
-    if "JavaScript" in framework or "TypeScript" in framework:
+    if explicit_lang == "JavaScript":
+        return "javascript"
+    if explicit_lang == "TypeScript" or "JavaScript" in framework or "TypeScript" in framework:
         return "typescript"
     return "python"
 
@@ -60,6 +62,40 @@ def render(model):
             key="framework_select",
         )
 
+    opts_col1, opts_col2, opts_col3, opts_col4 = st.columns(4)
+    with opts_col1:
+        language_choice = st.radio(
+            "Language",
+            ["JavaScript", "TypeScript"],
+            index=0,
+            key="auto_lang",
+        )
+    with opts_col2:
+        structure_choice = st.radio(
+            "Structure",
+            ["Flat scripts (no POM)", "Page Object Model"],
+            index=0,
+            key="auto_struct",
+        )
+    with opts_col3:
+        browser_choice = st.multiselect(
+            "Browsers",
+            ["Chromium", "Firefox", "WebKit"],
+            default=["Chromium"],
+            key="auto_browsers",
+        )
+    with opts_col4:
+        site_type = st.selectbox(
+            "Target Site Type",
+            [
+                "Custom (paste URL above)",
+                "saucedemo.com",
+                "the-internet.herokuapp.com",
+                "automationexercise.com",
+            ],
+            key="auto_site",
+        )
+
     auto_parser = PydanticOutputParser(pydantic_object=AutomationScript)
 
     if st.button("⚙️ Generate Project", key="auto_btn"):
@@ -73,6 +109,10 @@ def render(model):
                     script = invoke_with_retry(chain, {
                         "scenario": scenario_desc,
                         "framework": framework_choice,
+                        "language": language_choice,
+                        "structure": structure_choice,
+                        "browsers": ", ".join(browser_choice) if browser_choice else "Chromium",
+                        "site_type": site_type,
                         "format_instructions": auto_parser.get_format_instructions(),
                     })
                     st.session_state["auto_result"] = script
@@ -87,7 +127,8 @@ def render(model):
         return
 
     script = st.session_state["auto_result"]
-    lang = _lang_from_framework(script.framework)
+    explicit_lang = st.session_state.get("auto_lang", "")
+    lang = _lang_from_framework(script.framework, explicit_lang)
 
     st.markdown("---")
     st.markdown(

@@ -48,18 +48,38 @@ def render(model):
             key="sec_app_type",
         )
     with c2:
-        auth_type = st.selectbox(
+        auth_type = st.multiselect(
             "Authentication",
-            ["JWT / OAuth2", "Session Cookies", "API Keys", "Basic Auth", "SSO / SAML", "None / Public"],
+            ["JWT", "OAuth2", "SAML SSO", "API Keys", "Session Cookies", "Basic Auth", "mTLS"],
+            default=["JWT"],
             key="sec_auth_type",
         )
     with c3:
         sensitive_features = st.multiselect(
             "Sensitive Features",
-            ["Payments", "File Upload", "User Data / PII", "Admin Panel", "Public API", "Chat / Messaging", "Search"],
-            default=["Payments", "User Data / PII"],
+            [
+                "Authentication", "File Upload", "Admin/RBAC", "Third-party APIs",
+                "Search/Enumeration", "Webhooks", "Public Marketing Site (shared origin)",
+                "Multi-Tenancy", "Payments", "User Data / PII", "Admin Panel",
+                "Public API", "Chat / Messaging",
+            ],
+            default=["Authentication", "Payments", "User Data / PII"],
             key="sec_features",
         )
+
+    compliance_context = st.multiselect(
+        "Compliance Context",
+        ["HIPAA (Healthcare)", "PCI-DSS (Payments)", "GDPR (EU users)", "COPPA (Children)", "SOC 2", "None / Not Sure"],
+        default=["None / Not Sure"],
+        key="sec_compliance",
+    )
+
+    infrastructure = st.text_area(
+        "Infrastructure & Hosting (optional)",
+        placeholder="e.g. AWS EKS, Cloudflare CDN, no WAF, secrets in AWS Secrets Manager",
+        height=60,
+        key="sec_infra",
+    )
 
     sec_parser = PydanticOutputParser(pydantic_object=SecurityReport)
 
@@ -69,8 +89,10 @@ def render(model):
         else:
             full_context = (
                 f"Application Type: {app_type}\n"
-                f"Authentication: {auth_type}\n"
-                f"Sensitive Features: {', '.join(sensitive_features)}\n\n"
+                f"Authentication: {', '.join(auth_type)}\n"
+                f"Sensitive Features: {', '.join(sensitive_features)}\n"
+                f"Compliance Context: {', '.join(compliance_context)}\n"
+                f"Infrastructure: {infrastructure or 'Not provided'}\n\n"
                 f"Description:\n{app_desc}"
             )
             with st.spinner("Performing threat modeling and generating OWASP-mapped security tests..."):

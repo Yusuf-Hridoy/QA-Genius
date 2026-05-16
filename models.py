@@ -59,6 +59,9 @@ class BugReport(BaseModel):
     related_areas: Optional[List[str]] = None
     screenshot_annotations: Optional[List[str]] = None
     jira_labels: Optional[List[str]] = None
+    suspected_pattern: Optional[str] = None
+    related_issues: Optional[List[str]] = None
+    investigation_steps: Optional[List[str]] = None
 
 
 class QualityAnalysis(BaseModel):
@@ -80,6 +83,10 @@ class QualityAnalysis(BaseModel):
     flaky_tests: Optional[List[str]] = None
     ci_cd_health: Optional[str] = None
     action_owners: Optional[List[str]] = None
+    quality_score_breakdown: Optional[str] = None
+    sprint_score_breakdown: Optional[str] = None
+    process_concerns: Optional[str] = None
+    trend_table: Optional[str] = None
 
 
 class AutomationScript(BaseModel):
@@ -124,6 +131,7 @@ class SchemaValidationReport(BaseModel):
     extra_fields: Optional[List[str]] = None
     security_concerns: Optional[List[str]] = None
     semantic_issues: Optional[List[str]] = None
+    score_breakdown: Optional[str] = None
 
 
 class VaguePhrase(BaseModel):
@@ -148,6 +156,8 @@ class AmbiguityAnalysis(BaseModel):
     suggested_rewrites: List[str]
     generated_acceptance_criteria: List[str]
     risks: List[str]
+    score_breakdown: Optional[str] = None
+    recommended_split: Optional[List[str]] = None
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -237,3 +247,5 @@ class PerformanceTestSuite(BaseModel):
     setup_instructions: List[str]
     run_command: str
     design_notes: Optional[str] = None
+    grafana_dashboard: Optional[str] = None
+    sample_csv: Optional[str] = None

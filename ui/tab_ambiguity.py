@@ -16,6 +16,19 @@ def render(model):
         unsafe_allow_html=True,
     )
 
+    project_context = st.text_area(
+        "Project Context (optional)",
+        placeholder="e.g. fintech mobile app, B2B healthcare SaaS, internal tooling",
+        height=60,
+        key="amb_context",
+    )
+
+    story_type = st.selectbox(
+        "Story Type",
+        ["User Story", "Technical Story", "Bug Fix Story", "Spike/Research"],
+        key="amb_type",
+    )
+
     user_story = st.text_area(
         "User Story / Requirement",
         placeholder='e.g. "As a user, I want a fast login process so that I can access my account quickly."',
@@ -32,9 +45,14 @@ def render(model):
             with st.spinner("Analyzing story quality and ambiguity..."):
                 amb_prompt = get_ambiguity_prompt()
                 chain = amb_prompt | model | amb_parser
+                full_input = (
+                    f"Story Type: {story_type}\n"
+                    f"Project Context: {project_context or 'Not provided'}\n\n"
+                    f"User Story / Requirement:\n{user_story}"
+                )
                 try:
                     result = invoke_with_retry(chain, {
-                        "user_story": user_story,
+                        "user_story": full_input,
                         "format_instructions": amb_parser.get_format_instructions(),
                     })
                     st.session_state["amb_result"] = result
@@ -68,6 +86,29 @@ def render(model):
         f'</div>',
         unsafe_allow_html=True,
     )
+
+    if result.score_breakdown:
+        st.markdown(
+            f'<div class="glass-card" style="margin-top:0.8rem;">'
+            f'<div class="label" style="color:#60a5fa;">Score Breakdown</div>'
+            f'<div style="color:#e2e8f0;font-size:0.85rem;white-space:pre-wrap;margin-top:0.3rem;">{result.score_breakdown}</div>'
+            f'</div>',
+            unsafe_allow_html=True,
+        )
+
+    if result.recommended_split:
+        st.markdown("---")
+        st.markdown(
+            '<div class="section-title">✂️ Recommended Split</div>',
+            unsafe_allow_html=True,
+        )
+        for i, split in enumerate(result.recommended_split, 1):
+            st.markdown(
+                f'<div style="padding:0.4rem 0;padding-left:1rem;">'
+                f'<span style="color:#a78bfa;font-family:Space Mono,monospace;margin-right:0.5rem;">{i}.</span>'
+                f'<span style="color:#e2e8f0;font-size:0.9rem;">{split}</span></div>',
+                unsafe_allow_html=True,
+            )
 
     # ── INVEST Breakdown ───────────────────────────────────────────────────
     st.markdown("---")

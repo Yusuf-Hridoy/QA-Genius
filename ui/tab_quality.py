@@ -22,24 +22,81 @@ def render(model):
         unsafe_allow_html=True,
     )
 
-    exec_summary = st.text_area(
-        "Test Execution Summary",
-        placeholder='e.g. "Sprint 14: 145 passed, 22 failed, 8 blocked. '
-                    'Failures in payment module (12), login edge cases (6), mobile responsive (4). '
-                    'Blocked tests waiting for sandbox refresh. Same payment failures as Sprint 13."',
-        height=120,
-        key="qa_input",
-    )
+    sprint_id = st.text_input("Sprint / Period Identifier", placeholder="e.g. Sprint 17", key="qa_sprint")
+
+    c1, c2, c3, c4 = st.columns(4)
+    with c1:
+        tests_passed = st.number_input("Tests Passed", min_value=0, value=0, key="qa_passed")
+    with c2:
+        tests_failed = st.number_input("Tests Failed", min_value=0, value=0, key="qa_failed")
+    with c3:
+        tests_blocked = st.number_input("Tests Blocked", min_value=0, value=0, key="qa_blocked")
+    with c4:
+        tests_skipped = st.number_input("Tests Skipped", min_value=0, value=0, key="qa_skipped")
+
+    fb_col1, fb_col2 = st.columns(2)
+    with fb_col1:
+        failure_breakdown = st.text_area(
+            "Failure breakdown (one per line: area — count — root cause)",
+            placeholder="checkout flow — 14 — discount code race condition\nsearch filters — 9 — new feature stabilization",
+            height=80,
+            key="qa_failures",
+        )
+    with fb_col2:
+        blocker_breakdown = st.text_area(
+            "Blocker breakdown (one per line: count — reason — owner)",
+            placeholder="5 — sandbox down — DevOps\n3 — dependency not ready — Backend",
+            height=80,
+            key="qa_blockers",
+        )
+
+    hist_col1, hist_col2 = st.columns(2)
+    with hist_col1:
+        prev_sprints = st.text_area(
+            "Previous sprints data (optional)",
+            placeholder="Sprint 16: 287 executed, 240 passed, 32 failed, ...",
+            height=80,
+            key="qa_history",
+        )
+    with hist_col2:
+        mttr_data = st.text_area(
+            "MTTR by severity (optional)",
+            placeholder="High: 3.2 days\nMedium: 6.8 days\nLow: 14 days",
+            height=80,
+            key="qa_mttr",
+        )
+
+    cap_col1, cap_col2 = st.columns(2)
+    with cap_col1:
+        team_capacity = st.number_input("QA team capacity (FTE-equivalent)", min_value=0.5, value=4.0, step=0.5, key="qa_capacity")
+    with cap_col2:
+        carryover_bugs = st.number_input("Carryover bugs from previous sprints", min_value=0, value=0, key="qa_carryover")
 
     qa_parser = PydanticOutputParser(pydantic_object=QualityAnalysis)
 
     if st.button("📊 Analyse Quality", key="qa_btn"):
-        if not exec_summary.strip():
-            st.warning("Please enter your test execution summary.")
+        total = tests_passed + tests_failed + tests_blocked + tests_skipped
+        if total == 0:
+            st.warning("Please enter test execution counts.")
         else:
             with st.spinner("Computing quality intelligence..."):
                 qa_prompt = get_qa_prompt()
                 chain = qa_prompt | model | qa_parser
+                exec_summary = (
+                    f"Sprint: {sprint_id or 'Unnamed'}\n"
+                    f"Passed: {tests_passed}\n"
+                    f"Failed: {tests_failed}\n"
+                    f"Blocked: {tests_blocked}\n"
+                    f"Skipped: {tests_skipped}\n"
+                    f"Total: {total}\n"
+                    f"Pass Rate: {(tests_passed/total*100):.1f}%\n"
+                    f"Failure Breakdown:\n{failure_breakdown or 'None provided'}\n"
+                    f"Blocker Breakdown:\n{blocker_breakdown or 'None provided'}\n"
+                    f"Previous Sprints:\n{prev_sprints or 'None provided'}\n"
+                    f"MTTR by Severity:\n{mttr_data or 'None provided'}\n"
+                    f"QA Team Capacity: {team_capacity} FTE\n"
+                    f"Carryover Bugs: {carryover_bugs}"
+                )
                 try:
                     qa = invoke_with_retry(chain, {
                         "exec_summary": exec_summary,
@@ -118,8 +175,8 @@ def render(model):
     metrics = [
         ("Defect Density", qa.defect_density or "—"),
         ("MTTR Estimate", qa.mttr or "—"),
-        ("CI/CD Health", qa.ci_cd_health or "—"),
         ("Blocked", f"{qa.blocked} tests"),
+        ("Skipped", f"{qa.total - qa.passed - qa.failed - qa.blocked} tests"),
     ]
     for col, (label, value) in zip(sec_cols, metrics):
         with col:
@@ -133,6 +190,54 @@ def render(model):
                 f'</div>',
                 unsafe_allow_html=True,
             )
+
+    if qa.quality_score_breakdown or qa.sprint_score_breakdown:
+        st.markdown("<div style='margin-top:1rem;'></div>", unsafe_allow_html=True)
+        score_cols = st.columns(2)
+        with score_cols[0]:
+            if qa.quality_score_breakdown:
+                st.markdown(
+                    f'<div class="glass-card">'
+                    f'<div class="label" style="color:#60a5fa;">Quality Health Breakdown</div>'
+                    f'<div style="color:#e2e8f0;font-size:0.85rem;white-space:pre-wrap;margin-top:0.3rem;">{qa.quality_score_breakdown}</div>'
+                    f'</div>',
+                    unsafe_allow_html=True,
+                )
+        with score_cols[1]:
+            if qa.sprint_score_breakdown:
+                st.markdown(
+                    f'<div class="glass-card">'
+                    f'<div class="label" style="color:#60a5fa;">Sprint Health Breakdown</div>'
+                    f'<div style="color:#e2e8f0;font-size:0.85rem;white-space:pre-wrap;margin-top:0.3rem;">{qa.sprint_score_breakdown}</div>'
+                    f'</div>',
+                    unsafe_allow_html=True,
+                )
+
+    if qa.trend_table:
+        st.markdown("---")
+        st.markdown(
+            '<div class="section-title">📈 Sprint Trend</div>',
+            unsafe_allow_html=True,
+        )
+        st.markdown(
+            f'<div class="glass-card">'
+            f'<div style="color:#e2e8f0;font-size:0.85rem;white-space:pre-wrap;">{qa.trend_table}</div>'
+            f'</div>',
+            unsafe_allow_html=True,
+        )
+
+    if qa.process_concerns:
+        st.markdown("---")
+        st.markdown(
+            '<div class="section-title">⚠️ Process Concerns</div>',
+            unsafe_allow_html=True,
+        )
+        st.markdown(
+            f'<div class="glass-card glass-card-red">'
+            f'<div style="color:#e2e8f0;font-size:0.9rem;">{qa.process_concerns}</div>'
+            f'</div>',
+            unsafe_allow_html=True,
+        )
 
     # ── Stats Grid ─────────────────────────────────────────────────────────
     st.markdown("<div style='margin-top:1rem;'></div>", unsafe_allow_html=True)

@@ -38,6 +38,13 @@ def render(model):
             key="schema_input",
         )
 
+    validation_layers = st.multiselect(
+        "Validation Layers",
+        ["Structural (types, formats)", "Semantic (business rules)", "Security (sensitive data, PII)"],
+        default=["Structural (types, formats)", "Semantic (business rules)", "Security (sensitive data, PII)"],
+        key="sv_layers",
+    )
+
     c1, c2 = st.columns([1, 5])
     with c1:
         validate_clicked = st.button("🔍 Validate Schema", key="sv_btn", use_container_width=True)
@@ -72,6 +79,7 @@ def render(model):
                     report = invoke_with_retry(chain, {
                         "json_payload": json.dumps(parsed_json, indent=2),
                         "schema_desc": schema_desc.strip() if schema_desc.strip() else "No schema provided — validate using REST API best practices.",
+                        "validation_layers": ", ".join(validation_layers) if validation_layers else "None selected",
                         "format_instructions": sv_parser.get_format_instructions(),
                     })
                     st.session_state["sv_result"] = report
@@ -125,6 +133,15 @@ def render(model):
             f'</div></div>',
             unsafe_allow_html=True,
         )
+
+        if report.score_breakdown:
+            st.markdown(
+                f'<div class="glass-card" style="margin-top:0.8rem;">'
+                f'<div style="font-family:Space Mono,monospace;font-size:0.7rem;color:#475569;'
+                f'text-transform:uppercase;letter-spacing:0.1em;">Score Breakdown</div>'
+                f'<div style="color:#e2e8f0;font-size:0.85rem;margin-top:0.3rem;white-space:pre-wrap;">{report.score_breakdown}</div></div>',
+                unsafe_allow_html=True,
+            )
 
         st.markdown(
             f'<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:0.8rem;margin-top:0.8rem;">'

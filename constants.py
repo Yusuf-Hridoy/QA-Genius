@@ -39,20 +39,16 @@ PRIORITY_ORDER = {
 # ── Test Case Category ───────────────────────────────────────────────────────
 CATEGORY_BADGE_MAP = {
     "functional": "badge-functional",
-    "regression": "badge-regression",
-    "smoke": "badge-smoke",
     "edge case": "badge-edge",
     "negative": "badge-negative",
     "boundary": "badge-boundary",
 }
 
 CATEGORY_ORDER = {
-    "Smoke": 0,
-    "Functional": 1,
-    "Regression": 2,
-    "Boundary": 3,
-    "Edge Case": 4,
-    "Negative": 5,
+    "Functional": 0,
+    "Boundary": 1,
+    "Edge Case": 2,
+    "Negative": 3,
 }
 
 # ── Automation Feasibility ───────────────────────────────────────────────────
@@ -63,8 +59,10 @@ AUTO_FEASIBILITY_MAP = {
 }
 
 AUTO_EFFORT_MAP = {
-    "quick": "badge-good",
+    "low": "badge-good",
     "moderate": "badge-medium",
+    "high": "badge-risk",
+    "quick": "badge-good",
     "complex": "badge-risk",
 }
 
