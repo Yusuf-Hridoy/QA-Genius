@@ -1,0 +1,29 @@
+# Enforce consistent line endings and treat all text files as UTF-8
+* text=auto eol=lf
+
+# Python files
+*.py text eol=lf
+
+# CSS / HTML / JS
+*.css text eol=lf
+*.html text eol=lf
+*.js text eol=lf
+
+# Markdown
+*.md text eol=lf
+
+# Config files
+*.txt text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.json text eol=lf
+*.toml text eol=lf
+
+# Binary files (do not modify line endings)
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.zip binary
+*.pdf binary
