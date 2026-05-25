@@ -7,10 +7,14 @@ from models import SchemaValidationReport
 from prompts import get_sv_prompt
 from constants import SEVERITY_ORDER
 from utils import (
+    show_error_actions,
+    parse_llm_response,
     invoke_with_retry,
     get_compliance_score_class,
     get_issue_type_badge_class,
 )
+from validators import validate_json_input, ValidationError
+
 
 
 def render(model):
@@ -48,44 +52,40 @@ def render(model):
     c1, c2 = st.columns([1, 5])
     with c1:
         validate_clicked = st.button("🔍 Validate Schema", key="sv_btn", use_container_width=True)
-    with c2:
-        if st.button("✨ Format JSON", key="fmt_json_btn"):
-            if raw_json.strip():
-                try:
-                    formatted = json.dumps(json.loads(raw_json), indent=2)
-                    st.session_state["json_input"] = formatted
-                    st.rerun()
-                except json.JSONDecodeError:
-                    st.toast("Invalid JSON — cannot format", icon="❌")
-            else:
-                st.toast("Nothing to format", icon="⚠️")
 
     sv_parser = PydanticOutputParser(pydantic_object=SchemaValidationReport)
 
     if validate_clicked:
-        if not raw_json.strip():
-            st.warning("Please paste an API response to validate.")
-        else:
-            try:
-                parsed_json = json.loads(raw_json)
-            except json.JSONDecodeError as je:
-                st.error(f"❌ Invalid JSON syntax: {je}")
-                st.stop()
+        try:
+            validated_json = validate_json_input(
+                raw_json, "API Response (JSON)", max_chars=20000
+            )
+        except ValidationError as e:
+            st.error(str(e))
+            return
 
-            with st.spinner("Performing structural, semantic, and security analysis..."):
-                sv_prompt = get_sv_prompt()
-                chain = sv_prompt | model | sv_parser
-                try:
-                    report = invoke_with_retry(chain, {
-                        "json_payload": json.dumps(parsed_json, indent=2),
-                        "schema_desc": schema_desc.strip() if schema_desc.strip() else "No schema provided — validate using REST API best practices.",
-                        "validation_layers": ", ".join(validation_layers) if validation_layers else "None selected",
-                        "format_instructions": sv_parser.get_format_instructions(),
-                    })
-                    st.session_state["sv_result"] = report
-                except Exception as e:
-                    st.error(f"Generation error: {e}")
+        with st.spinner("Performing structural, semantic, and security analysis..."):
+            sv_prompt = get_sv_prompt()
+            raw_chain = sv_prompt | model
+            try:
+                raw = invoke_with_retry(raw_chain, {
+                    "json_payload": json.dumps(validated_json, indent=2),
+                    "schema_desc": schema_desc.strip() if schema_desc.strip() else "No schema provided — validate using REST API best practices.",
+                    "validation_layers": ", ".join(validation_layers) if validation_layers else "None selected",
+                    "format_instructions": sv_parser.get_format_instructions(),
+                })
+                if hasattr(raw, "content"):
+                    raw = raw.content
+                report = parse_llm_response(raw, SchemaValidationReport, tab_name="Schema Validator")
+                if report is None:
+                    show_error_actions("Schema Validator")
                     return
+                st.session_state["sv_result"] = report
+            except Exception as e:
+                st.error(f"Generation error: {e}")
+                show_error_actions("Schema Validator", str(e))
+                return
+
 
     # ─────────────────────────────────────────────────────────────────────────
     # DISPLAY RESULTS
@@ -94,6 +94,24 @@ def render(model):
         return
 
     report = st.session_state["sv_result"]
+
+    try:
+        _render_sv_results(report)
+    except Exception as e:
+        st.error(
+            "The AI response was generated successfully, but couldn't be displayed in the standard view. "
+            "Showing the raw response below."
+        )
+        with st.expander("Raw Response (for debugging)", expanded=False):
+            try:
+                st.json(report.model_dump())
+            except Exception:
+                st.code(str(report))
+        show_error_actions("Schema Validator", str(e))
+
+
+def _render_sv_results(report):
+    """Render schema validation results."""
 
     st.markdown("---")
     st.markdown(

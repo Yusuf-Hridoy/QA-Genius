@@ -6,11 +6,14 @@ from prompts import get_performance_prompt
 from utils import (
     invoke_with_retry,
     repair_llm_json,
+    parse_llm_response,
+    show_error_actions,
     get_perf_framework_badge_class,
     get_load_profile_badge_class,
     get_criticality_badge_class,
     create_performance_zip,
 )
+from validators import validate_text_input, detect_suspicious_content, ValidationError
 
 
 def render(model):
@@ -92,33 +95,44 @@ def render(model):
     perf_parser = PydanticOutputParser(pydantic_object=PerformanceTestSuite)
 
     if st.button("⚡ Generate Performance Suite", key="perf_btn"):
-        if not user_flows.strip():
-            st.warning("Please describe your user flows.")
-        else:
-            with st.spinner("Architecting performance scenarios, load profiles, and generating runnable scripts..."):
-                perf_prompt = get_performance_prompt()
-                try:
-                    # First get raw text from model, then strip markdown fences if present
-                    peak_desc = peak_event_custom if peak_event_type == "Custom" else peak_event_type
-                    raw_chain = perf_prompt | model
-                    raw_text = invoke_with_retry(raw_chain, {
-                        "user_flows": user_flows,
-                        "framework": framework,
-                        "expected_users": expected_users or "1000",
-                        "peak_event_type": peak_desc,
-                        "sla_targets": sla_targets or "p95 latency < 500ms, error rate < 1%",
-                        "endpoint_slas": endpoint_sla.strip() if endpoint_sla.strip() else "None provided",
-                        "output_config": ", ".join(output_config) if output_config else "Console only",
-                        "format_instructions": perf_parser.get_format_instructions(),
-                    })
-                    if hasattr(raw_text, "content"):
-                        raw_text = raw_text.content
-                    cleaned = repair_llm_json(raw_text)
-                    result = perf_parser.parse(cleaned)
-                    st.session_state["perf_result"] = result
-                except Exception as e:
-                    st.error(f"Generation error: {e}")
+        try:
+            validated_flows = validate_text_input(
+                user_flows, "User Flows & API Endpoints", min_chars=30, max_chars=5000
+            )
+            is_suspicious, msg = detect_suspicious_content(validated_flows)
+            if is_suspicious:
+                st.warning(msg + " Please rephrase as a normal QA request.")
+                return
+        except ValidationError as e:
+            st.error(str(e))
+            return
+
+        with st.spinner("Architecting performance scenarios, load profiles, and generating runnable scripts..."):
+            perf_prompt = get_performance_prompt()
+            try:
+                peak_desc = peak_event_custom if peak_event_type == "Custom" else peak_event_type
+                raw_chain = perf_prompt | model
+                raw_text = invoke_with_retry(raw_chain, {
+                    "user_flows": validated_flows,
+                    "framework": framework,
+                    "expected_users": expected_users or "1000",
+                    "peak_event_type": peak_desc,
+                    "sla_targets": sla_targets or "p95 latency < 500ms, error rate < 1%",
+                    "endpoint_slas": endpoint_sla.strip() if endpoint_sla.strip() else "None provided",
+                    "output_config": ", ".join(output_config) if output_config else "Console only",
+                    "format_instructions": perf_parser.get_format_instructions(),
+                })
+                if hasattr(raw_text, "content"):
+                    raw_text = raw_text.content
+                result = parse_llm_response(raw_text, PerformanceTestSuite, tab_name="Performance Tests")
+                if result is None:
+                    show_error_actions("Performance Tests")
                     return
+                st.session_state["perf_result"] = result
+            except Exception as e:
+                st.error(f"Generation error: {e}")
+                show_error_actions("Performance Tests", str(e))
+                return
 
     # ─────────────────────────────────────────────────────────────────────────
     # DISPLAY RESULTS
@@ -127,6 +141,24 @@ def render(model):
         return
 
     result = st.session_state["perf_result"]
+
+    try:
+        _render_perf_results(result)
+    except Exception as e:
+        st.error(
+            "The AI response was generated successfully, but couldn't be displayed in the standard view. "
+            "Showing the raw response below."
+        )
+        with st.expander("Raw Response (for debugging)", expanded=False):
+            try:
+                st.json(result.model_dump())
+            except Exception:
+                st.code(str(result))
+        show_error_actions("Performance Tests", str(e))
+
+
+def _render_perf_results(result):
+    """Render performance test results."""
     suite = result
 
     st.markdown("---")

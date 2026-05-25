@@ -108,9 +108,9 @@ ISSUE_TYPE_BADGE_MAP = {
 
 # ── INVEST Score ─────────────────────────────────────────────────────────────
 INVEST_BADGE_MAP = {
-    "✅ pass": "badge-good",
-    "⚠️ partial": "badge-medium",
-    "❌ fail": "badge-risk",
+    "pass": "badge-good",
+    "partial": "badge-medium",
+    "fail": "badge-risk",
 }
 
 # ── Security Test Type ───────────────────────────────────────────────────────

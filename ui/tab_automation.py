@@ -3,7 +3,13 @@ from langchain_core.output_parsers import PydanticOutputParser
 
 from models import AutomationScript
 from prompts import get_auto_prompt
-from utils import invoke_with_retry, create_automation_zip
+from utils import (
+    invoke_with_retry,
+    parse_llm_response,
+    show_error_actions,
+    create_automation_zip,
+)
+from validators import validate_text_input, detect_suspicious_content, ValidationError
 
 
 def _lang_from_framework(framework: str, explicit_lang: str = "") -> str:
@@ -99,26 +105,43 @@ def render(model):
     auto_parser = PydanticOutputParser(pydantic_object=AutomationScript)
 
     if st.button("⚙️ Generate Project", key="auto_btn"):
-        if not scenario_desc.strip():
-            st.warning("Please describe the test scenario.")
-        else:
-            with st.spinner("Architecting automation project..."):
-                auto_prompt = get_auto_prompt()
-                chain = auto_prompt | model | auto_parser
-                try:
-                    script = invoke_with_retry(chain, {
-                        "scenario": scenario_desc,
-                        "framework": framework_choice,
-                        "language": language_choice,
-                        "structure": structure_choice,
-                        "browsers": ", ".join(browser_choice) if browser_choice else "Chromium",
-                        "site_type": site_type,
-                        "format_instructions": auto_parser.get_format_instructions(),
-                    })
-                    st.session_state["auto_result"] = script
-                except Exception as e:
-                    st.error(f"Generation error: {e}")
+        try:
+            validated_scenario = validate_text_input(
+                scenario_desc, "Test Scenario Description", min_chars=30, max_chars=5000
+            )
+            is_suspicious, msg = detect_suspicious_content(validated_scenario)
+            if is_suspicious:
+                st.warning(msg + " Please rephrase as a normal QA request.")
+                return
+        except ValidationError as e:
+            st.error(str(e))
+            return
+
+        with st.spinner("Architecting automation project..."):
+            auto_prompt = get_auto_prompt()
+            raw_chain = auto_prompt | model
+            try:
+                raw = invoke_with_retry(raw_chain, {
+                    "scenario": validated_scenario,
+                    "framework": framework_choice,
+                    "language": language_choice,
+                    "structure": structure_choice,
+                    "browsers": ", ".join(browser_choice) if browser_choice else "Chromium",
+                    "site_type": site_type,
+                    "format_instructions": auto_parser.get_format_instructions(),
+                })
+                if hasattr(raw, "content"):
+                    raw = raw.content
+                script = parse_llm_response(raw, AutomationScript, tab_name="Automation Script")
+                if script is None:
+                    show_error_actions("Automation Script")
                     return
+                st.session_state["auto_result"] = script
+            except Exception as e:
+                st.error(f"Generation error: {e}")
+                show_error_actions("Automation Script", str(e))
+                return
+
 
     # ─────────────────────────────────────────────────────────────────────────
     # DISPLAY RESULTS
@@ -127,6 +150,24 @@ def render(model):
         return
 
     script = st.session_state["auto_result"]
+
+    try:
+        _render_auto_results(script)
+    except Exception as e:
+        st.error(
+            "The AI response was generated successfully, but couldn't be displayed in the standard view. "
+            "Showing the raw response below."
+        )
+        with st.expander("Raw Response (for debugging)", expanded=False):
+            try:
+                st.json(script.model_dump())
+            except Exception:
+                st.code(str(script))
+        show_error_actions("Automation Script", str(e))
+
+
+def _render_auto_results(script):
+    """Render automation script results."""
     explicit_lang = st.session_state.get("auto_lang", "")
     lang = _lang_from_framework(script.framework, explicit_lang)
 

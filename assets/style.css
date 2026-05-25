@@ -21,7 +21,7 @@ footer { display: none !important; }
         radial-gradient(ellipse at 85% 80%, rgba(59, 130, 246, 0.08) 0%, transparent 55%),
         #0a0a14 !important;
     color: #ffffff;
-    font-family: 'Inter', sans-serif;
+    font-family: 'Inter', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Apple Color Emoji', 'Noto Color Emoji', sans-serif;
     font-size: 1rem;
 }
 

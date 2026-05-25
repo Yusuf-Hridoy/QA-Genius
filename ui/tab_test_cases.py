@@ -5,6 +5,8 @@ from langchain_core.output_parsers import PydanticOutputParser
 from models import TestCaseList
 from prompts import get_tc_prompt
 from utils import (
+    show_error_actions,
+    parse_llm_response,
     invoke_with_retry,
     get_category_badge_class,
     get_priority_badge_class,
@@ -12,6 +14,8 @@ from utils import (
     get_auto_effort_class,
     export_test_cases_to_excel,
 )
+from validators import validate_text_input, detect_suspicious_content, ValidationError
+
 from constants import CATEGORY_ORDER, PRIORITY_ORDER
 
 
@@ -56,26 +60,43 @@ def render(model):
     tc_parser = PydanticOutputParser(pydantic_object=TestCaseList)
 
     if st.button("⚡ Generate Test Cases", key="tc_btn"):
-        if not user_story.strip():
-            st.warning("Please enter a user story or requirement.")
-        else:
-            with st.spinner("Analyzing requirements and architecting test suite..."):
-                tc_prompt = get_tc_prompt()
-                chain = tc_prompt | model | tc_parser
-                full_input = (
-                    f"User Story / Requirement:\n{user_story}\n\n"
-                    f"Test Coverage Focus: {', '.join(coverage_focus)}\n"
-                    f"Tech Stack: {tech_stack or 'Not provided'}"
-                )
-                try:
-                    result = invoke_with_retry(chain, {
-                        "user_story": full_input,
-                        "format_instructions": tc_parser.get_format_instructions(),
-                    })
-                    st.session_state["tc_result"] = result
-                except Exception as e:
-                    st.error(f"Generation error: {e}")
+        try:
+            validated_story = validate_text_input(
+                user_story, "User Story / Feature Requirement", min_chars=30, max_chars=5000
+            )
+            is_suspicious, msg = detect_suspicious_content(validated_story)
+            if is_suspicious:
+                st.warning(msg + " Please rephrase as a normal QA request.")
+                return
+        except ValidationError as e:
+            st.error(str(e))
+            return
+
+        with st.spinner("Analyzing requirements and architecting test suite..."):
+            tc_prompt = get_tc_prompt()
+            raw_chain = tc_prompt | model
+            full_input = (
+                f"User Story / Requirement:\n{validated_story}\n\n"
+                f"Test Coverage Focus: {', '.join(coverage_focus)}\n"
+                f"Tech Stack: {tech_stack or 'Not provided'}"
+            )
+            try:
+                raw = invoke_with_retry(raw_chain, {
+                    "user_story": full_input,
+                    "format_instructions": tc_parser.get_format_instructions(),
+                })
+                if hasattr(raw, "content"):
+                    raw = raw.content
+                result = parse_llm_response(raw, TestCaseList, tab_name="Test Cases")
+                if result is None:
+                    show_error_actions("Test Cases")
                     return
+                st.session_state["tc_result"] = result
+            except Exception as e:
+                st.error(f"Generation error: {e}")
+                show_error_actions("Test Cases", str(e))
+                return
+
 
     # ─────────────────────────────────────────────────────────────────────────
     # DISPLAY RESULTS
@@ -84,6 +105,24 @@ def render(model):
         return
 
     result = st.session_state["tc_result"]
+
+    try:
+        _render_tc_results(result)
+    except Exception as e:
+        st.error(
+            "The AI response was generated successfully, but couldn't be displayed in the standard view. "
+            "Showing the raw response below."
+        )
+        with st.expander("Raw Response (for debugging)", expanded=False):
+            try:
+                st.json(result.model_dump())
+            except Exception:
+                st.code(str(result))
+        show_error_actions("Test Cases", str(e))
+
+
+def _render_tc_results(result):
+    """Render test case results."""
     test_cases = sorted(result.test_cases, key=_sort_key)
     summary = result.summary
 

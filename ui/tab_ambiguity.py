@@ -5,7 +5,14 @@ from langchain_core.output_parsers import PydanticOutputParser
 
 from models import AmbiguityAnalysis
 from prompts import get_ambiguity_prompt
-from utils import invoke_with_retry, get_ambiguity_score_class, get_invest_badge_class
+from utils import (
+    invoke_with_retry,
+    get_ambiguity_score_class,
+    get_invest_badge_class,
+    parse_llm_response,
+    show_error_actions,
+)
+from validators import validate_text_input, detect_suspicious_content, ValidationError
 
 
 def render(model):
@@ -39,26 +46,45 @@ def render(model):
     amb_parser = PydanticOutputParser(pydantic_object=AmbiguityAnalysis)
 
     if st.button("📝 Analyze Story", key="amb_btn"):
-        if not user_story.strip():
-            st.warning("Please enter a user story or requirement.")
-        else:
-            with st.spinner("Analyzing story quality and ambiguity..."):
-                amb_prompt = get_ambiguity_prompt()
-                chain = amb_prompt | model | amb_parser
-                full_input = (
-                    f"Story Type: {story_type}\n"
-                    f"Project Context: {project_context or 'Not provided'}\n\n"
-                    f"User Story / Requirement:\n{user_story}"
-                )
-                try:
-                    result = invoke_with_retry(chain, {
-                        "user_story": full_input,
-                        "format_instructions": amb_parser.get_format_instructions(),
-                    })
-                    st.session_state["amb_result"] = result
-                except Exception as e:
-                    st.error(f"Generation error: {e}")
+        try:
+            validated_story = validate_text_input(
+                user_story, "User Story / Requirement", min_chars=20, max_chars=3000
+            )
+            validated_context = validate_text_input(
+                project_context, "Project Context", min_chars=0, max_chars=1000, required=False
+            )
+            is_suspicious, msg = detect_suspicious_content(validated_story)
+            if is_suspicious:
+                st.warning(msg + " Please rephrase as a normal QA request.")
+                return
+        except ValidationError as e:
+            st.error(str(e))
+            return
+
+        with st.spinner("Analyzing story quality and ambiguity..."):
+            amb_prompt = get_ambiguity_prompt()
+            raw_chain = amb_prompt | model
+            full_input = (
+                f"Story Type: {story_type}\n"
+                f"Project Context: {validated_context or 'Not provided'}\n\n"
+                f"User Story / Requirement:\n{validated_story}"
+            )
+            try:
+                raw = invoke_with_retry(raw_chain, {
+                    "user_story": full_input,
+                    "format_instructions": amb_parser.get_format_instructions(),
+                })
+                if hasattr(raw, "content"):
+                    raw = raw.content
+                result = parse_llm_response(raw, AmbiguityAnalysis, tab_name="Story Analyzer")
+                if result is None:
+                    show_error_actions("Story Analyzer")
                     return
+                st.session_state["amb_result"] = result
+            except Exception as e:
+                st.error(f"Generation error: {e}")
+                show_error_actions("Story Analyzer", str(e))
+                return
 
     # ─────────────────────────────────────────────────────────────────────────
     # DISPLAY RESULTS
@@ -67,6 +93,25 @@ def render(model):
         return
 
     result = st.session_state["amb_result"]
+
+    try:
+        _render_ambiguity_results(result)
+    except Exception as e:
+        st.error(
+            "The AI response was generated successfully, but couldn't be displayed in the standard view. "
+            "Showing the raw response below."
+        )
+        with st.expander("Raw Response (for debugging)", expanded=False):
+            try:
+                st.json(result.model_dump())
+            except Exception:
+                st.code(str(result))
+        show_error_actions("Story Analyzer", str(e))
+
+
+def _render_ambiguity_results(result):
+    """Render ambiguity analysis results."""
+
     score_class = get_ambiguity_score_class(result.ambiguity_score)
 
     st.markdown("---")
@@ -132,7 +177,12 @@ def render(model):
     )
     for name, status in invest_items:
         badge_cls = get_invest_badge_class(status)
-        short = status.split("—")[0].strip() if "—" in status else status
+        # Handle both old em-dash and new double-dash separators
+        short = status
+        for sep in ["--", "—"]:
+            if sep in short:
+                short = short.split(sep)[0].strip()
+                break
         st.markdown(
             f'<div class="stat-tile">'
             f'<span class="badge {badge_cls}" style="font-size:0.75rem;">{short}</span>'

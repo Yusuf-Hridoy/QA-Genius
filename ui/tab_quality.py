@@ -6,12 +6,16 @@ from langchain_core.output_parsers import PydanticOutputParser
 from models import QualityAnalysis
 from prompts import get_qa_prompt
 from utils import (
+    show_error_actions,
+    parse_llm_response,
     invoke_with_retry,
     get_score_class,
     get_sprint_score_class,
     get_trend_badge_class,
     build_list_html,
 )
+from validators import validate_text_input, detect_suspicious_content, ValidationError
+
 
 
 def render(model):
@@ -78,34 +82,43 @@ def render(model):
         total = tests_passed + tests_failed + tests_blocked + tests_skipped
         if total == 0:
             st.warning("Please enter test execution counts.")
-        else:
-            with st.spinner("Computing quality intelligence..."):
-                qa_prompt = get_qa_prompt()
-                chain = qa_prompt | model | qa_parser
-                exec_summary = (
-                    f"Sprint: {sprint_id or 'Unnamed'}\n"
-                    f"Passed: {tests_passed}\n"
-                    f"Failed: {tests_failed}\n"
-                    f"Blocked: {tests_blocked}\n"
-                    f"Skipped: {tests_skipped}\n"
-                    f"Total: {total}\n"
-                    f"Pass Rate: {(tests_passed/total*100):.1f}%\n"
-                    f"Failure Breakdown:\n{failure_breakdown or 'None provided'}\n"
-                    f"Blocker Breakdown:\n{blocker_breakdown or 'None provided'}\n"
-                    f"Previous Sprints:\n{prev_sprints or 'None provided'}\n"
-                    f"MTTR by Severity:\n{mttr_data or 'None provided'}\n"
-                    f"QA Team Capacity: {team_capacity} FTE\n"
-                    f"Carryover Bugs: {carryover_bugs}"
-                )
-                try:
-                    qa = invoke_with_retry(chain, {
-                        "exec_summary": exec_summary,
-                        "format_instructions": qa_parser.get_format_instructions(),
-                    })
-                    st.session_state["qa_result"] = qa
-                except Exception as e:
-                    st.error(f"Generation error: {e}")
+            return
+
+        with st.spinner("Computing quality intelligence..."):
+            qa_prompt = get_qa_prompt()
+            raw_chain = qa_prompt | model
+            exec_summary = (
+                f"Sprint: {sprint_id or 'Unnamed'}\n"
+                f"Passed: {tests_passed}\n"
+                f"Failed: {tests_failed}\n"
+                f"Blocked: {tests_blocked}\n"
+                f"Skipped: {tests_skipped}\n"
+                f"Total: {total}\n"
+                f"Pass Rate: {(tests_passed/total*100):.1f}%\n"
+                f"Failure Breakdown:\n{failure_breakdown or 'None provided'}\n"
+                f"Blocker Breakdown:\n{blocker_breakdown or 'None provided'}\n"
+                f"Previous Sprints:\n{prev_sprints or 'None provided'}\n"
+                f"MTTR by Severity:\n{mttr_data or 'None provided'}\n"
+                f"QA Team Capacity: {team_capacity} FTE\n"
+                f"Carryover Bugs: {carryover_bugs}"
+            )
+            try:
+                raw = invoke_with_retry(raw_chain, {
+                    "exec_summary": exec_summary,
+                    "format_instructions": qa_parser.get_format_instructions(),
+                })
+                if hasattr(raw, "content"):
+                    raw = raw.content
+                qa = parse_llm_response(raw, QualityAnalysis, tab_name="Quality Analytics")
+                if qa is None:
+                    show_error_actions("Quality Analytics")
                     return
+                st.session_state["qa_result"] = qa
+            except Exception as e:
+                st.error(f"Generation error: {e}")
+                show_error_actions("Quality Analytics", str(e))
+                return
+
 
     # ─────────────────────────────────────────────────────────────────────────
     # DISPLAY RESULTS
@@ -114,6 +127,24 @@ def render(model):
         return
 
     qa = st.session_state["qa_result"]
+
+    try:
+        _render_qa_results(qa)
+    except Exception as e:
+        st.error(
+            "The AI response was generated successfully, but couldn't be displayed in the standard view. "
+            "Showing the raw response below."
+        )
+        with st.expander("Raw Response (for debugging)", expanded=False):
+            try:
+                st.json(qa.model_dump())
+            except Exception:
+                st.code(str(qa))
+        show_error_actions("Quality Analytics", str(e))
+
+
+def _render_qa_results(qa):
+    """Render quality analytics results."""
 
     st.markdown("---")
     st.markdown(

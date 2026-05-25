@@ -1,9 +1,24 @@
 
+import json
+import logging
 import os
+import sys
+import time
+from typing import Optional, Type, TypeVar
 
 import streamlit as st
 from langchain_google_genai import ChatGoogleGenerativeAI
+from pydantic import BaseModel, ValidationError
 from tenacity import retry, retry_if_exception, stop_after_attempt, wait_exponential
+
+from json_repair_utils import parse_json_resilient
+
+logger = logging.getLogger(__name__)
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    stream=sys.stdout,
+)
 
 
 def validate_api_key() -> bool:
@@ -188,9 +203,16 @@ def get_ambiguity_score_class(score: int) -> str:
 
 
 def get_invest_badge_class(status: str) -> str:
-    """Map INVEST status to CSS badge class."""
+    """Map INVEST status to CSS badge class.
+
+    Handles plain-text outputs like "PASS", "PARTIAL", "FAIL"
+    and also legacy emoji-prefixed outputs for backward compatibility.
+    """
     from constants import INVEST_BADGE_MAP
-    key = status.lower().strip()
+    # Extract the status word before any explanation/em-dash
+    key = status.split("--")[0].strip().lower()
+    # Strip any emoji prefixes for backward compatibility
+    key = key.replace("\u2705", "").replace("\u26a0\ufe0f", "").replace("\u274c", "").strip()
     return INVEST_BADGE_MAP.get(key, "badge-medium")
 
 
@@ -591,6 +613,237 @@ def render_page_header(title: str, desc: str, icon: str = "") -> None:
         f'</div>',
         unsafe_allow_html=True,
     )
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# ERROR CLASSES
+# ══════════════════════════════════════════════════════════════════════════════
+
+class TransientLLMError(Exception):
+    """Errors that may succeed on retry (network, rate limit, timeout)."""
+    pass
+
+
+class PermanentLLMError(Exception):
+    """Errors that won't succeed on retry (bad request, auth, content policy)."""
+    pass
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# RESILIENT LLM CALLER
+# ══════════════════════════════════════════════════════════════════════════════
+
+def _classify_llm_error(e: Exception) -> Exception:
+    """Classify an LLM exception as transient or permanent."""
+    error_str = str(e).lower()
+
+    if any(kw in error_str for kw in ["timeout", "timed out", "connection", "network"]):
+        logger.warning(f"Transient network error: {type(e).__name__}")
+        raise TransientLLMError(f"Network issue: {e}") from e
+
+    if any(kw in error_str for kw in ["rate limit", "429", "too many requests", "quota"]):
+        logger.warning(f"Rate limit hit: {type(e).__name__}")
+        raise TransientLLMError(f"Rate limited: {e}") from e
+
+    if any(kw in error_str for kw in ["unauthorized", "401", "403", "invalid api key", "authentication"]):
+        logger.error(f"Auth error: {type(e).__name__}")
+        raise PermanentLLMError(f"Authentication failed: {e}") from e
+
+    if any(kw in error_str for kw in ["content_policy", "safety", "harmful", "blocked", "content filter"]):
+        logger.warning(f"Content policy: {type(e).__name__}")
+        raise PermanentLLMError(f"Content policy block: {e}") from e
+
+    # Unknown — treat as transient and retry
+    logger.warning(f"Unknown LLM error (will retry): {type(e).__name__}: {e}")
+    raise TransientLLMError(f"Unexpected error: {e}") from e
+
+
+@retry(
+    stop=stop_after_attempt(3),
+    wait=wait_exponential(multiplier=1, min=2, max=10),
+    retry=retry_if_exception(lambda e: isinstance(e, TransientLLMError)),
+    reraise=True,
+)
+def _call_llm_with_retry(llm, prompt: str) -> str:
+    """Internal: invokes LLM with automatic retry on transient errors."""
+    try:
+        response = llm.invoke(prompt)
+        return response.content
+    except Exception as e:
+        raise _classify_llm_error(e)
+
+
+def call_llm_safely(prompt: str, max_tokens: int = 8192) -> Optional[str]:
+    """
+    Public: call the LLM with full error handling.
+    Returns the response string on success, None on failure (with st.error already shown to user).
+    """
+    try:
+        llm = load_model()
+        return _call_llm_with_retry(llm, prompt)
+
+    except TransientLLMError as e:
+        logger.error(f"All retries exhausted: {e}")
+        st.error(
+            "The AI service is temporarily unavailable. "
+            "Please wait a moment and try again."
+        )
+        return None
+
+    except PermanentLLMError as e:
+        error_str = str(e).lower()
+        if "authentication" in error_str:
+            st.error(
+                "Configuration error: the AI service is not accessible. "
+                "If this persists, please report it on GitHub."
+            )
+        elif "content policy" in error_str:
+            st.error(
+                "Your input was flagged by the AI service's content policy. "
+                "Please rephrase your request without sensitive or restricted topics."
+            )
+        else:
+            st.error(
+                "The AI service rejected this request. "
+                "Try simplifying or rephrasing your input."
+            )
+        return None
+
+    except Exception as e:
+        logger.error(f"Unexpected error in call_llm_safely: {type(e).__name__}", exc_info=True)
+        st.error(
+            "An unexpected error occurred. Please try again with different input. "
+            "If this persists, please report it on GitHub."
+        )
+        return None
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# PYDANTIC-AWARE PARSER WITH FALLBACK
+# ══════════════════════════════════════════════════════════════════════════════
+
+T = TypeVar("T", bound=BaseModel)
+
+
+def parse_llm_response(
+    raw_response: str,
+    schema: Type[T],
+    tab_name: str = "this tab",
+) -> Optional[T]:
+    """
+    Parse LLM response into a Pydantic schema with resilient fallback.
+    Shows user-friendly errors if parsing fails.
+    """
+    if not raw_response or not raw_response.strip():
+        logger.error(f"Empty response from LLM for {tab_name}")
+        st.error(
+            f"The AI returned an empty response for {tab_name}. "
+            f"Please try again with different input."
+        )
+        return None
+
+    # Stage 1: resilient JSON parsing
+    parsed_json = parse_json_resilient(raw_response)
+
+    if parsed_json is None:
+        logger.error(
+            f"JSON parsing failed for {tab_name}. Response preview: "
+            f"{raw_response[:300]}..."
+        )
+        st.error(
+            f"The AI returned a response that couldn't be parsed for {tab_name}. "
+            f"This usually means the input contained complex characters that confused the model. "
+            f"Try simplifying the input or rephrasing it."
+        )
+        return None
+
+    # Stage 2: Pydantic validation
+    try:
+        return schema.model_validate(parsed_json)
+    except ValidationError as e:
+        logger.error(
+            f"Pydantic validation failed for {tab_name}: {e.error_count()} errors. "
+            f"First error: {e.errors()[0] if e.errors() else 'none'}"
+        )
+
+        first_error = e.errors()[0] if e.errors() else {}
+        field_name = ".".join(str(x) for x in first_error.get("loc", ["unknown"]))
+
+        st.error(
+            f"The AI's response was structured incorrectly for {tab_name} "
+            f"(issue with field: `{field_name}`). "
+            f"Please try again — this usually resolves on retry. "
+            f"If it persists, simplify your input."
+        )
+        return None
+
+    except Exception as e:
+        logger.error(f"Unexpected parsing error for {tab_name}: {type(e).__name__}", exc_info=True)
+        st.error(
+            f"An unexpected error occurred while processing the AI response. "
+            f"Please try again."
+        )
+        return None
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# ERROR ACTIONS & LOGGING
+# ══════════════════════════════════════════════════════════════════════════════
+
+def show_error_actions(tab_name: str, error_context: str = ""):
+    """Show user-friendly recovery actions after an error."""
+    col1, col2 = st.columns(2)
+
+    with col1:
+        if st.button("🔄 Try Again", key=f"retry_{tab_name}"):
+            st.rerun()
+
+    with col2:
+        report_url = (
+            f"https://github.com/Yusuf-Hridoy/QA-Genius/issues/new"
+            f"?title=Error+in+{tab_name}"
+            f"&body=Context:%20{error_context[:200]}"
+        )
+        st.markdown(f"[🐛 Report on GitHub]({report_url})")
+
+
+def log_error_event(tab_name: str, error_type: str, **context):
+    """Log a structured error event."""
+    payload = {
+        "event": "error",
+        "tab": tab_name,
+        "error_type": error_type,
+        "timestamp": time.time(),
+        **context,
+    }
+    logger.error(json.dumps(payload))
+
+
+def log_success_event(tab_name: str, duration_ms: int, **context):
+    """Log a successful generation."""
+    payload = {
+        "event": "success",
+        "tab": tab_name,
+        "duration_ms": duration_ms,
+        "timestamp": time.time(),
+        **context,
+    }
+    logger.info(json.dumps(payload))
+
+
+def increment_error_count(tab_name: str, error_type: str):
+    """Track error stats in session state for debugging."""
+    if "error_log" not in st.session_state:
+        st.session_state.error_log = []
+
+    st.session_state.error_log.append({
+        "tab": tab_name,
+        "error_type": error_type,
+        "timestamp": time.time(),
+    })
+
+    # Keep last 50 only
+    st.session_state.error_log = st.session_state.error_log[-50:]
 
 
 def create_automation_zip(script) -> bytes:

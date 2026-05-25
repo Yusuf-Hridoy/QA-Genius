@@ -7,12 +7,15 @@ from prompts import get_security_prompt
 from utils import (
     invoke_with_retry,
     repair_llm_json,
+    parse_llm_response,
+    show_error_actions,
     get_test_type_badge_class,
     get_owasp_status_badge_class,
     get_risk_level_badge_class,
     get_security_score_class,
     export_security_to_excel,
 )
+from validators import validate_text_input, detect_suspicious_content, ValidationError
 from constants import OWASP_SEVERITY_ORDER
 
 
@@ -84,33 +87,45 @@ def render(model):
     sec_parser = PydanticOutputParser(pydantic_object=SecurityReport)
 
     if st.button("🔒 Generate Security Tests", key="sec_btn"):
-        if not app_desc.strip():
-            st.warning("Please enter an application description.")
-        else:
-            full_context = (
-                f"Application Type: {app_type}\n"
-                f"Authentication: {', '.join(auth_type)}\n"
-                f"Sensitive Features: {', '.join(sensitive_features)}\n"
-                f"Compliance Context: {', '.join(compliance_context)}\n"
-                f"Infrastructure: {infrastructure or 'Not provided'}\n\n"
-                f"Description:\n{app_desc}"
+        try:
+            validated_desc = validate_text_input(
+                app_desc, "Application Description", min_chars=50, max_chars=3000
             )
-            with st.spinner("Performing threat modeling and generating OWASP-mapped security tests..."):
-                sec_prompt = get_security_prompt()
-                try:
-                    raw_chain = sec_prompt | model
-                    raw_text = invoke_with_retry(raw_chain, {
-                        "app_desc": full_context,
-                        "format_instructions": sec_parser.get_format_instructions(),
-                    })
-                    if hasattr(raw_text, "content"):
-                        raw_text = raw_text.content
-                    cleaned = repair_llm_json(raw_text)
-                    result = sec_parser.parse(cleaned)
-                    st.session_state["sec_result"] = result
-                except Exception as e:
-                    st.error(f"Generation error: {e}")
+            is_suspicious, msg = detect_suspicious_content(validated_desc)
+            if is_suspicious:
+                st.warning(msg + " Please rephrase as a normal QA request.")
+                return
+        except ValidationError as e:
+            st.error(str(e))
+            return
+
+        full_context = (
+            f"Application Type: {app_type}\n"
+            f"Authentication: {', '.join(auth_type)}\n"
+            f"Sensitive Features: {', '.join(sensitive_features)}\n"
+            f"Compliance Context: {', '.join(compliance_context)}\n"
+            f"Infrastructure: {infrastructure or 'Not provided'}\n\n"
+            f"Description:\n{validated_desc}"
+        )
+        with st.spinner("Performing threat modeling and generating OWASP-mapped security tests..."):
+            sec_prompt = get_security_prompt()
+            try:
+                raw_chain = sec_prompt | model
+                raw_text = invoke_with_retry(raw_chain, {
+                    "app_desc": full_context,
+                    "format_instructions": sec_parser.get_format_instructions(),
+                })
+                if hasattr(raw_text, "content"):
+                    raw_text = raw_text.content
+                result = parse_llm_response(raw_text, SecurityReport, tab_name="Security Tests")
+                if result is None:
+                    show_error_actions("Security Tests")
                     return
+                st.session_state["sec_result"] = result
+            except Exception as e:
+                st.error(f"Generation error: {e}")
+                show_error_actions("Security Tests", str(e))
+                return
 
     # ─────────────────────────────────────────────────────────────────────────
     # DISPLAY RESULTS
@@ -119,6 +134,24 @@ def render(model):
         return
 
     result = st.session_state["sec_result"]
+
+    try:
+        _render_sec_results(result)
+    except Exception as e:
+        st.error(
+            "The AI response was generated successfully, but couldn't be displayed in the standard view. "
+            "Showing the raw response below."
+        )
+        with st.expander("Raw Response (for debugging)", expanded=False):
+            try:
+                st.json(result.model_dump())
+            except Exception:
+                st.code(str(result))
+        show_error_actions("Security Tests", str(e))
+
+
+def _render_sec_results(result):
+    """Render security test results."""
     test_cases = sorted(result.test_cases, key=_sort_key)
     summary = result.summary
 

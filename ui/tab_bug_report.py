@@ -6,12 +6,16 @@ from langchain_core.output_parsers import PydanticOutputParser
 from models import BugReport
 from prompts import get_bug_prompt
 from utils import (
+    show_error_actions,
+    parse_llm_response,
     invoke_with_retry,
     get_severity_badge_class,
     get_root_cause_badge_class,
     get_regression_risk_class,
     build_steps_html,
 )
+from validators import validate_text_input, detect_suspicious_content, ValidationError
+
 
 
 def render(model):
@@ -70,28 +74,45 @@ def render(model):
     bug_parser = PydanticOutputParser(pydantic_object=BugReport)
 
     if st.button("🐛 Format Bug Report", key="bug_btn"):
-        if not raw_bug.strip():
-            st.warning("Please enter some bug notes.")
-        else:
-            with st.spinner("Analyzing and formatting bug report..."):
-                bug_prompt = get_bug_prompt()
-                chain = bug_prompt | model | bug_parser
-                full_input = (
-                    f"{raw_bug}\n\n"
-                    f"Environment Details: {env_str}\n"
-                    f"Reproducibility: {computed_repro}\n"
-                    f"Total Attempts: {total_attempts}\n"
-                    f"Successful Attempts: {successful_attempts}"
-                )
-                try:
-                    bug = invoke_with_retry(chain, {
-                        "raw_bug": full_input,
-                        "format_instructions": bug_parser.get_format_instructions(),
-                    })
-                    st.session_state["bug_result"] = bug
-                except Exception as e:
-                    st.error(f"Generation error: {e}")
+        try:
+            validated_bug = validate_text_input(
+                raw_bug, "Raw Bug Notes", min_chars=20, max_chars=3000
+            )
+            is_suspicious, msg = detect_suspicious_content(validated_bug)
+            if is_suspicious:
+                st.warning(msg + " Please rephrase as a normal QA request.")
+                return
+        except ValidationError as e:
+            st.error(str(e))
+            return
+
+        with st.spinner("Analyzing and formatting bug report..."):
+            bug_prompt = get_bug_prompt()
+            raw_chain = bug_prompt | model
+            full_input = (
+                f"{validated_bug}\n\n"
+                f"Environment Details: {env_str}\n"
+                f"Reproducibility: {computed_repro}\n"
+                f"Total Attempts: {total_attempts}\n"
+                f"Successful Attempts: {successful_attempts}"
+            )
+            try:
+                raw = invoke_with_retry(raw_chain, {
+                    "raw_bug": full_input,
+                    "format_instructions": bug_parser.get_format_instructions(),
+                })
+                if hasattr(raw, "content"):
+                    raw = raw.content
+                bug = parse_llm_response(raw, BugReport, tab_name="Bug Report")
+                if bug is None:
+                    show_error_actions("Bug Report")
                     return
+                st.session_state["bug_result"] = bug
+            except Exception as e:
+                st.error(f"Generation error: {e}")
+                show_error_actions("Bug Report", str(e))
+                return
+
 
     # ─────────────────────────────────────────────────────────────────────────
     # DISPLAY RESULTS
@@ -100,6 +121,24 @@ def render(model):
         return
 
     bug = st.session_state["bug_result"]
+
+    try:
+        _render_bug_results(bug)
+    except Exception as e:
+        st.error(
+            "The AI response was generated successfully, but couldn't be displayed in the standard view. "
+            "Showing the raw response below."
+        )
+        with st.expander("Raw Response (for debugging)", expanded=False):
+            try:
+                st.json(bug.model_dump())
+            except Exception:
+                st.code(str(bug))
+        show_error_actions("Bug Report", str(e))
+
+
+def _render_bug_results(bug):
+    """Render bug report results."""
 
     st.markdown("---")
     st.markdown(
