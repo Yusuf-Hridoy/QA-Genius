@@ -187,6 +187,21 @@ qa-genius/
 
 
 
+## 🛡️ Resilience & Error Handling
+
+Recent improvements harden the app against real-world LLM failures:
+
+| Layer | What It Does | Files |
+|-------|-------------|-------|
+| **Input Validation** | Length checks, suspicious-content detection, and total-size caps for every tab. | `validators.py` |
+| **LLM Call Wrapping** | 3 automatic retries with exponential backoff. Errors classified as *transient* (network, rate limit) or *permanent* (auth, content policy). | `utils.py` |
+| **JSON & Pydantic Resilience** | 5-stage JSON repair for malformed LLM outputs (markdown fences, unescaped quotes, prose wrappers). Falls back to raw JSON display if parsing still fails. | `json_repair_utils.py`, `utils.py` |
+| **Display Fallbacks** | Every tab wraps its render logic in try/except. If the AI response parses but fails to render, users see the raw data + "Try Again" / "Report on GitHub" actions. | `ui/tab_*.py` |
+| **Structured Logging** | JSON-structured error and success events for debugging. Session-state error tracking. | `utils.py` |
+| **Plain-Text INVEST Scoring** | Replaced emoji-based status indicators (`✅ Pass / ⚠️ Partial / ❌ Fail`) with plain text (`PASS / PARTIAL / FAIL`) to eliminate cross-platform font/encoding issues. | `prompts.py`, `constants.py` |
+
+---
+
 ## 🗺️ Roadmap
 
 **v1.1 (in progress)** — addresses the highest-impact items from `IMPROVEMENTS.md`:
