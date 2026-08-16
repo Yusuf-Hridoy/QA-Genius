@@ -49,6 +49,8 @@ st.markdown(_FORCE_DARK_JS, unsafe_allow_html=True)
 # ══════════════════════════════════════════════════════════════════════════════
 def _load_css() -> str:
     css_path = Path(__file__).parent / "assets" / "style.css"
+    if not css_path.exists():
+        return ""
     with open(css_path, "r", encoding="utf-8") as f:
         return f"<style>{f.read()}</style>"
 
