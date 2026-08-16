@@ -11,6 +11,7 @@ from utils import (
     get_invest_badge_class,
     parse_llm_response,
     show_error_actions,
+    show_char_counter,
 )
 from validators import validate_text_input, detect_suspicious_content, ValidationError
 
@@ -25,7 +26,7 @@ def render(model):
 
     project_context = st.text_area(
         "Project Context (optional)",
-        placeholder="e.g. fintech mobile app, B2B healthcare SaaS, internal tooling",
+        placeholder="e.g. fintech mobile app with KYC compliance, regulated by RBI",
         height=60,
         key="amb_context",
     )
@@ -38,10 +39,12 @@ def render(model):
 
     user_story = st.text_area(
         "User Story / Requirement",
-        placeholder='e.g. "As a user, I want a fast login process so that I can access my account quickly."',
+        placeholder='e.g. "As a customer, I want to reset my password if I forget it, so I can regain access to my account."',
+        max_chars=3000,
         height=120,
         key="amb_input",
     )
+    show_char_counter(user_story, 3000)
 
     amb_parser = PydanticOutputParser(pydantic_object=AmbiguityAnalysis)
 

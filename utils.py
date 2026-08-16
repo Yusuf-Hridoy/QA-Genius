@@ -42,6 +42,26 @@ def show_api_key_error() -> None:
     st.stop()
 
 
+def show_char_counter(text: str, max_chars: int) -> None:
+    """Display a color-coded character counter below an input field."""
+    current = len(text) if text else 0
+
+    if current >= max_chars:
+        color = "#FF6B6B"  # red
+    elif current >= max_chars * 0.8:
+        color = "#FFA500"  # orange
+    else:
+        color = "#888888"  # gray
+
+    st.markdown(
+        f'<div style="text-align: right; font-size: 0.75rem; '
+        f'color: {color}; margin-top: -0.5rem; margin-bottom: 0.75rem;">'
+        f'{current} / {max_chars} characters'
+        f'</div>',
+        unsafe_allow_html=True,
+    )
+
+
 def _is_retryable(exc: Exception) -> bool:
     """Return True for transient errors that merit a retry."""
     # Network-level errors
