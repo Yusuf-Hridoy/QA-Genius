@@ -12,7 +12,7 @@ jobs:
       - name: Ping Streamlit app
         run: |
           echo "Pinging app..."
-          HTTP_CODE=$(curl -L -s -o /dev/null -w "%{http_code}" https://testing-genius-suite.streamlit.app/)
+          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" https://testing-genius-suite.streamlit.app/)
           echo "Response code: $HTTP_CODE"
           if [ "$HTTP_CODE" -lt 200 ] || [ "$HTTP_CODE" -ge 400 ]; then
             echo "App did not respond successfully"
