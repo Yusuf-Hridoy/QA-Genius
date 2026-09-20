@@ -158,7 +158,7 @@ Every request schema accepts `instructions?: string` (≤ 1000 chars) appended t
 
 | Phase | Scope | Status | Delivered / notes |
 |---|---|---|---|
-| 1 | Foundation: shell, look D, BYOK, provider layer, 4 generators, streaming, exports, tests, CI, live URL | **in progress** | — |
+| 1 | Foundation: shell, look D, BYOK, provider layer, 4 generators, streaming, exports, tests, CI, live URL | **done** (2026-09-19, live URL pending owner deploy) | Full app in `web/`: shell + key manager + 4 generators streaming with repair/re-ask, client-side exports, 123 unit/component tests (87% stmts on lib/**), 21 e2e tests green, CI workflow. `pnpm check`, `build`, `e2e` green locally. Vercel import + real-key run (Checkpoints B/C) left to owner. |
 | 2 | Requirements pipeline: chaining, traceability, Ambiguity Duel, refine with diff, share links, gap chips | planned | — |
 | 3 | Automation compiles-clean; Bug desk multimodal, GitHub duplicate check + issue creation | planned | — |
 | 4 | Quality insights: report/trace parsing, history, flaky detection, narrative, drafted bugs | planned | — |
@@ -171,6 +171,9 @@ Decision records go here too, dated, one line each:
 - 2026-09-19 — Look D chosen from seven rendered options.
 - 2026-09-19 — Schema Validator and Security Tests removed from scope (moved to the author's API project).
 - 2026-09-19 — BYOK only; no demo key pool.
+- 2026-09-19 — ai SDK v7 has no useObject; custom `use-object-stream.ts` client hook implements the same progressive-JSON contract.
+- 2026-09-19 — `xlsx-js-style` replaces `xlsx` (cell styling for the Test Cases sheet).
+- 2026-09-19 — git hooks set via `scripts/set-hooks.mjs` (`core.hooksPath=web/.husky`); husky runtime removed (monorepo layout).
 
 ---
 
@@ -191,7 +194,8 @@ Parked NFR expansions (to be discussed after Phase 5, in this order of likely va
 7. NFR scorecard — ISO 25010 categories, measured where possible, exportable PDF.
 
 Agent-added deferrals (append below with phase and date):
-- 
+- phase-1 (2026-09-19) — Vercel project import, production URL, and the Checkpoint B/C real-key verification run: the app is fully tested with mocks locally; deploying needs the owner's Vercel account.
+- phase-1 (2026-09-19) — `zod-to-json-schema` package is installed but unused (Zod v4 `z.toJSONSchema` is used); revisit after Phase 2.
 
 ---
 
