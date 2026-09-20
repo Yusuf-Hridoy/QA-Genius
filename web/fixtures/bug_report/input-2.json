@@ -1,0 +1,11 @@
+{
+  "raw_bug": "Admin order export downloads a CSV where every non-ASCII character (shopper names, street addresses with accents) is replaced by a diamond question mark. Excel opens it with the wrong encoding warning. Seen on every export above roughly 500 rows, smaller exports look fine.",
+  "device_type": "Desktop",
+  "os_version": "Windows 11",
+  "browser_version": "Chrome 131",
+  "build_env": "Staging, release 2026.09-rc1",
+  "bug_url": "https://staging.aurora-shop.dev/admin/orders",
+  "total_attempts": 6,
+  "successful_attempts": 6,
+  "instructions": ""
+}

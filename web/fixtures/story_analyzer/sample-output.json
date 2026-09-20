@@ -1,0 +1,68 @@
+{
+  "ambiguity_score": 68,
+  "clarity_label": "Highly Ambiguous",
+  "invest_overall": "PARTIAL  --  Security intent is clear but unlock behaviour and thresholds are undefined",
+  "invest_independent": "PARTIAL  --  Depends on the password reset flow for the unlock path",
+  "invest_negotiable": "PASS",
+  "invest_valuable": "PASS  --  Account security value is clear to shoppers and the business",
+  "invest_estimable": "FAIL  --  'several' and 'some time' have no measurable boundaries",
+  "invest_small": "PARTIAL  --  Lockout and unlock could be two separate stories",
+  "invest_testable": "FAIL  --  QA cannot verify 'several failed attempts' or 'quickly'",
+  "vague_phrases": [
+    {
+      "phrase": "several failed login attempts",
+      "severity": "High",
+      "suggestion": "'Several' is undefined. QA cannot write a boundary test and developers will pick an arbitrary number.",
+      "replacement": "account locks after exactly 5 consecutive failed login attempts within 15 minutes"
+    },
+    {
+      "phrase": "it may unlock after some time",
+      "severity": "High",
+      "suggestion": "'May' and 'some time' make the unlock behaviour undecidable and untestable.",
+      "replacement": "the account unlocks automatically after 30 minutes, or immediately after a successful password reset"
+    },
+    {
+      "phrase": "stays secure",
+      "severity": "Medium",
+      "suggestion": "No measurable security criterion is given.",
+      "replacement": "no further login attempts are accepted for the locked account and the shopper is notified by email"
+    }
+  ],
+  "missing_elements": [
+    "No acceptance criteria defined",
+    "No error message copy for the locked-account state",
+    "No decision on whether failed-attempt counters reset after a successful login",
+    "No rate limiting or CAPTCHA behaviour for repeated attempts",
+    "No notification to the shopper when the account locks",
+    "No admin or support-agent unlock path",
+    "No audit logging requirement"
+  ],
+  "suggested_rewrites": [
+    "Replace 'several failed login attempts' with an exact threshold: '5 consecutive failed attempts within 15 minutes'.",
+    "Decide the unlock rule explicitly: automatic after 30 minutes, or via password reset; remove 'may'.",
+    "Add the locked-account user experience: error message copy, email notification, and support contact path.",
+    "Split into two stories: lockout enforcement and unlock/reset flow, so each is estimable and testable."
+  ],
+  "generated_acceptance_criteria": [
+    "Scenario: Account locks after consecutive failed attempts\n  Given a registered shopper is on the login page\n  When they enter a wrong password 5 consecutive times within 15 minutes\n  Then the account is locked\n  And the shopper sees 'Account locked. Reset your password or try again later.'\n  And a notification email is sent to the registered address",
+    "Scenario: Successful login resets the failed-attempt counter\n  Given a shopper has 3 recorded failed attempts\n  When they log in with the correct password\n  Then the failed-attempt counter is reset to 0",
+    "Scenario: Locked account rejects further attempts\n  Given a shopper account is locked\n  When they submit any credentials\n  Then no authentication is attempted\n  And the failed-attempt counter does not increase",
+    "Scenario: Automatic unlock after the lockout window\n  Given a shopper account was locked more than 30 minutes ago\n  When they log in with the correct password\n  Then the account is unlocked\n  And the shopper is authenticated",
+    "Scenario: Unlock via password reset\n  Given a shopper account is locked\n  When the shopper completes the password reset flow\n  Then the account is unlocked immediately\n  And the failed-attempt counter is reset",
+    "Scenario: Failed attempts across different sessions accumulate\n  Given a shopper has 4 failed attempts from a desktop session\n  When they fail once more from a mobile session within 15 minutes\n  Then the account is locked",
+    "Scenario: Lockout events are audit logged\n  Given a shopper account becomes locked\n  Then an audit log entry records the timestamp, IP address, and user agent"
+  ],
+  "risks": [
+    "An undefined attempt threshold will lead to inconsistent lockout behaviour and brute-force exposure if set too high.",
+    "Without a decision on counter resets, a persistent attacker can keep a victim locked out indefinitely.",
+    "Missing notification emails mean locked shoppers will contact support without self-service options.",
+    "If unlock behaviour is not specified, developers may ship a random choice that breaks the support runbook."
+  ],
+  "score_breakdown": "Vague phrases: 13 points\nMissing acceptance criteria: 10 points\nMissing error handling: 10 points\nINVEST failures: 10 points\nINVEST partials: 10 points\nMissing security/non-functional considerations: 10 points\nMissing dependencies/pre-conditions: 5 points\nTotal: 68/100",
+  "recommended_split": [
+    "Story A: Lock the shopper account after N consecutive failed attempts and show a locked-account message.",
+    "Story B: Notify the shopper by email when the account is locked.",
+    "Story C: Unlock the account automatically after a time window or via password reset.",
+    "Story D: Audit-log lockout and unlock events for the admin console."
+  ]
+}

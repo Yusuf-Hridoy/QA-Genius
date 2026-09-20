@@ -1,0 +1,6 @@
+{
+  "user_story": "As a shopper, I want my account to lock after 5 consecutive failed login attempts within 15 minutes so that my account stays secure. The account unlocks automatically after 30 minutes or immediately after a successful password reset, and the shopper is notified by email when the account locks.",
+  "coverage_focus": ["Functional", "Negative", "Boundary", "Edge Case"],
+  "tech_stack": "Next.js, Node API, Postgres",
+  "instructions": ""
+}

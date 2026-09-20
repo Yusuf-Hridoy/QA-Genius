@@ -1,0 +1,41 @@
+{
+  "title": "Checkout pay button unresponsive after coupon application — cart total resets to 0.00",
+  "severity": "High",
+  "reproducibility_rate": "Often",
+  "environment_details": "Device: Desktop; OS: macOS 14.5; Browser/App: Safari 17.5; Build/Env: Staging, release 2026.09-rc2; URL: https://staging.aurora-shop.dev/checkout",
+  "steps_to_reproduce": [
+    "Log in as a registered shopper on https://staging.aurora-shop.dev",
+    "Add any item to the cart and open the checkout page",
+    "Apply a valid coupon code in the coupon field",
+    "Observe the cart total after the coupon is applied",
+    "Click the Pay button once and wait for the spinner",
+    "Click the Pay button a second time within 2 seconds"
+  ],
+  "actual_result": "After the coupon is applied the cart total renders 0.00. The first Pay click shows no spinner and triggers no network request; a second click is also ignored. The page recovers only after a full refresh, which also loses the applied coupon.",
+  "expected_result": "The discounted total is displayed after the coupon is applied. The first Pay click disables the button, shows a spinner, and issues a POST /api/checkout. Duplicate clicks while a request is in flight are ignored. The cart total never displays 0.00 for a non-empty cart.",
+  "suggested_fix": "Check the coupon application handler for an unhandled promise rejection that resets the pricing state. Ensure the Pay button's disabled state is bound to the checkout request status, and guard the click handler against concurrent invocations.",
+  "root_cause_category": "[Component: Unknown  --  investigation required] State Management Issue and Third-Party Service Dependency are equally plausible from the notes",
+  "business_impact": "High  --  Blocks checkout for Safari shoppers who use coupons during the current staging validation window; if shipped, affects an estimated 18% of sessions and all coupon campaigns.",
+  "affected_users": "Safari users on desktop who apply a coupon before paying; not reproduced in Chrome",
+  "regression_risk": "High  --  Checkout is the core revenue path and the fix touches shared pricing state also used by the cart drawer and order review.",
+  "workaround": "Ask shoppers to refresh the checkout page and re-enter the coupon, then click Pay exactly once and wait for the confirmation screen.",
+  "related_areas": ["Cart drawer pricing", "Coupon validation API", "Order review page totals"],
+  "screenshot_annotations": [
+    "Checkout page showing 0.00 total after the coupon is applied",
+    "Pay button after the first click with no spinner and no network activity",
+    "Safari Web Inspector console showing any uncaught errors after the coupon call",
+    "Network tab showing the coupon request response and the missing checkout request"
+  ],
+  "jira_labels": ["checkout", "coupon", "safari", "frontend", "regression"],
+  "suspected_pattern": "State Management Issue — the pricing state appears to be reset by the coupon response handler and never re-fetched, which also explains why the pay action never fires.",
+  "related_issues": [
+    "Cart total of 0.00 after coupon application is a separate rendering defect worth its own ticket if the root cause differs from the unresponsive pay button."
+  ],
+  "investigation_steps": [
+    "Open Safari Web Inspector and reproduce while watching the console for uncaught errors after POST /api/coupons/apply",
+    "In the Network tab, compare the coupon apply response payload between Safari and Chrome",
+    "Inspect the checkout store state after the coupon response to confirm the totals slice is reset",
+    "Query the Node API logs for staging around the reproduction timestamp and correlate request ids",
+    "Replay the coupon flow with the API throttled to 3G to check for a race between the pricing refresh and the pay handler binding"
+  ]
+}

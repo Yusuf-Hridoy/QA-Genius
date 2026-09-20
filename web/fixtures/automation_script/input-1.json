@@ -1,0 +1,9 @@
+{
+  "scenario": "On https://staging.aurora-shop.dev/login, verify the account lockout flow: after 5 consecutive failed login attempts within 15 minutes the account is locked, a lock notification email is sent, and the locked account shows the reset-password prompt on the next login attempt. Also verify the account unlocks automatically after 30 minutes or immediately after a successful password reset.",
+  "framework": "Playwright (JavaScript)",
+  "language": "TypeScript",
+  "structure": "Page Object Model",
+  "browsers": ["Chromium"],
+  "site_type": "Custom (paste URL above)",
+  "instructions": ""
+}

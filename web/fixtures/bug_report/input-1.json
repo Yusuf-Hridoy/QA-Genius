@@ -1,0 +1,11 @@
+{
+  "raw_bug": "Checkout pay button stops responding after applying a coupon on staging. Clicking it a second time does nothing, no spinner, no network call. Cart total shows 0.00 until the page is refreshed. Happened 3 of 5 attempts in Safari, could not reproduce in Chrome so far.",
+  "device_type": "Desktop",
+  "os_version": "macOS 14.5",
+  "browser_version": "Safari 17.5",
+  "build_env": "Staging, release 2026.09-rc2",
+  "bug_url": "https://staging.aurora-shop.dev/checkout",
+  "total_attempts": 5,
+  "successful_attempts": 3,
+  "instructions": ""
+}

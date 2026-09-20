@@ -1,0 +1,6 @@
+{
+  "user_story": "As a shopper, I want my account to lock after several failed login attempts so that my account stays secure, and it may unlock after some time or stay locked until I reset my password.",
+  "story_type": "User Story",
+  "project_context": "E-commerce storefront with guest checkout and an admin console. Auth is handled by a Node API backed by Postgres.",
+  "instructions": ""
+}

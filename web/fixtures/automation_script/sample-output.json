@@ -1,0 +1,25 @@
+{
+  "framework": "Playwright (JavaScript)",
+  "project_structure": [
+    "playwright.config.ts",
+    "package.json",
+    "pages/login-page.ts",
+    "tests/lockout.spec.ts",
+    ".env.example"
+  ],
+  "page_object_file_name": "pages/login-page.ts",
+  "page_object_code": "import { expect, type Locator, type Page } from '@playwright/test';\n\nexport class LoginPage {\n  readonly page: Page;\n  readonly emailInput: Locator;\n  readonly passwordInput: Locator;\n  readonly signInButton: Locator;\n  readonly lockoutMessage: Locator;\n  readonly resetPasswordLink: Locator;\n\n  constructor(page: Page) {\n    this.page = page;\n    this.emailInput = page.getByTestId('login-email');\n    this.passwordInput = page.getByTestId('login-password');\n    this.signInButton = page.getByRole('button', { name: 'Sign in' });\n    this.lockoutMessage = page.getByTestId('account-locked-message');\n    this.resetPasswordLink = page.getByRole('link', { name: 'Reset your password' });\n  }\n\n  async goto() {\n    await this.page.goto('/login');\n  }\n\n  async login(email: string, password: string) {\n    await this.emailInput.fill(email);\n    await this.passwordInput.fill(password);\n    await this.signInButton.click();\n  }\n\n  async expectLocked() {\n    await expect(this.lockoutMessage).toBeVisible();\n    await expect(this.resetPasswordLink).toBeVisible();\n  }\n}\n",
+  "test_file_name": "tests/lockout.spec.ts",
+  "test_code": "import { test, expect } from '@playwright/test';\nimport { LoginPage } from '../pages/login-page';\n\nconst SHOPPER = 'aurora.shopper@example.com';\nconst WRONG_PASSWORD = 'WrongPass123!';\n\ntest.describe('Account lockout', () => {\n  test('locks the account after 5 consecutive failed attempts', async ({ page }) => {\n    const login = new LoginPage(page);\n    await login.goto();\n\n    for (let attempt = 1; attempt <= 5; attempt++) {\n      await login.login(SHOPPER, WRONG_PASSWORD);\n    }\n\n    await login.expectLocked();\n  });\n\n  test('rejects further attempts on a locked account', async ({ page }) => {\n    const login = new LoginPage(page);\n    await login.goto();\n    await login.login(SHOPPER, WRONG_PASSWORD);\n    await login.expectLocked();\n  });\n});\n",
+  "config_file_name": "playwright.config.ts",
+  "config_code": "import { defineConfig, devices } from '@playwright/test';\n\nexport default defineConfig({\n  testDir: './tests',\n  fullyParallel: true,\n  forbidOnly: !!process.env.CI,\n  retries: process.env.CI ? 1 : 0,\n  workers: process.env.CI ? 2 : undefined,\n  reporter: 'html',\n  use: {\n    baseURL: process.env.BASE_URL ?? 'https://staging.aurora-shop.dev',\n    trace: 'retain-on-failure',\n    screenshot: 'only-on-failure',\n  },\n  projects: [\n    {\n      name: 'chromium',\n      use: { ...devices['Desktop Chrome'] },\n    },\n  ],\n});\n",
+  "setup_instructions": [
+    "mkdir aurora-lockout-tests && cd aurora-lockout-tests",
+    "npm init -y && npm install --save-dev @playwright/test",
+    "npx playwright install",
+    "Copy pages/, tests/, and playwright.config.ts into the project",
+    "Set BASE_URL in .env (see .env.example) if not targeting staging"
+  ],
+  "execution_command": "npx playwright test --project=chromium",
+  "design_notes": "Locators prefer data-testid with role-based fallbacks. Each test is independent and seeds its own lockout state through the UI. Screenshot and trace capture are enabled on failure via the config."
+}

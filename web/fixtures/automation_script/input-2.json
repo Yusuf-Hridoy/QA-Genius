@@ -1,0 +1,9 @@
+{
+  "scenario": "On saucedemo.com, verify a standard user can log in, sort products by price low to high, add the two cheapest items to the cart, complete checkout with valid details, and see the order confirmation. Also verify locked_out_user sees the lockout error and cannot proceed.",
+  "framework": "Playwright (JavaScript)",
+  "language": "TypeScript",
+  "structure": "Flat scripts (no POM)",
+  "browsers": ["Chromium", "Firefox"],
+  "site_type": "saucedemo.com",
+  "instructions": ""
+}

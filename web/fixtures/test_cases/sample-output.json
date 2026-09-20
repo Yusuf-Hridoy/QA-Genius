@@ -1,0 +1,182 @@
+{
+  "test_cases": [
+    {
+      "id": "TC-001",
+      "title": "Account locks after 5 consecutive failed login attempts",
+      "category": "Functional",
+      "pre_conditions": "A registered shopper account aurora.shopper@example.com exists, is active, and has 0 recorded failed attempts; the shopper is on https://staging.aurora-shop.dev/login",
+      "steps": [
+        "Enter 'aurora.shopper@example.com' in the email field",
+        "Enter an incorrect password and submit the login form",
+        "Repeat the incorrect password submission 4 more times within 15 minutes",
+        "Observe the response after the 5th failed attempt"
+      ],
+      "expected_result": "After the 5th consecutive failure the account is locked; the shopper sees 'Account locked. Reset your password or try again later.'; a notification email is sent to aurora.shopper@example.com; no authentication occurs",
+      "priority": "High",
+      "test_data": "email=aurora.shopper@example.com, wrong_password=WrongPass123!",
+      "bdd_scenario": "Scenario: Account locks after 5 consecutive failed attempts\n  Given a registered shopper is on the login page\n  When they submit an incorrect password 5 consecutive times within 15 minutes\n  Then the account is locked\n  And the shopper sees the locked-account message\n  And a notification email is sent",
+      "automation_feasibility": "High",
+      "automation_effort": "Moderate",
+      "tags": ["login", "lockout", "security", "smoke", "regression"],
+      "traceability": "lock after 5 consecutive failed login attempts"
+    },
+    {
+      "id": "TC-002",
+      "title": "Account unlocks automatically after 30 minutes",
+      "category": "Functional",
+      "pre_conditions": "Shopper account aurora.shopper@example.com is locked and the lock timestamp is more than 30 minutes old",
+      "steps": [
+        "Navigate to https://staging.aurora-shop.dev/login",
+        "Enter 'aurora.shopper@example.com' and the correct password",
+        "Submit the login form"
+      ],
+      "expected_result": "The account is unlocked automatically; the shopper is authenticated and redirected to the account dashboard; the failed-attempt counter is reset to 0",
+      "priority": "High",
+      "test_data": "email=aurora.shopper@example.com, correct_password=ValidPass456!",
+      "bdd_scenario": "Scenario: Automatic unlock after the lockout window\n  Given a shopper account was locked more than 30 minutes ago\n  When they log in with the correct password\n  Then the account is unlocked\n  And the shopper is redirected to the dashboard",
+      "automation_feasibility": "High",
+      "automation_effort": "Moderate",
+      "tags": ["login", "lockout", "unlock", "regression"],
+      "traceability": "unlocks automatically after 30 minutes"
+    },
+    {
+      "id": "TC-003",
+      "title": "Locked account rejects any further login attempts",
+      "category": "Negative",
+      "pre_conditions": "Shopper account aurora.shopper@example.com is locked",
+      "steps": [
+        "Navigate to https://staging.aurora-shop.dev/login",
+        "Enter 'aurora.shopper@example.com' and the correct password",
+        "Submit the login form twice in quick succession"
+      ],
+      "expected_result": "No authentication is attempted for the locked account; the locked-account message is shown; the failed-attempt counter does not increase; no session token is issued",
+      "priority": "High",
+      "test_data": "email=aurora.shopper@example.com",
+      "bdd_scenario": "Scenario: Locked account rejects further attempts\n  Given a shopper account is locked\n  When they submit valid credentials\n  Then no authentication occurs\n  And the failed-attempt counter does not increase",
+      "automation_feasibility": "High",
+      "automation_effort": "Low",
+      "tags": ["login", "lockout", "negative", "regression"],
+      "traceability": "account stays secure"
+    },
+    {
+      "id": "TC-004",
+      "title": "SQL injection in the login email field is rejected",
+      "category": "Negative",
+      "pre_conditions": "The shopper is on the login page",
+      "steps": [
+        "Enter \"' OR '1'='1\" in the email field",
+        "Enter any password and submit the form",
+        "Repeat with the password field"
+      ],
+      "expected_result": "The login is rejected with a generic validation message; no account is authenticated; the Postgres audit log records no successful authentication; input is handled as data, never executed",
+      "priority": "High",
+      "test_data": "email=' OR '1'='1, password=x' OR '1'='1",
+      "bdd_scenario": "Scenario: Injection attempt in the login form is rejected\n  Given a shopper is on the login page\n  When they submit an SQL injection string in the email or password field\n  Then the login is rejected\n  And no account is authenticated",
+      "automation_feasibility": "High",
+      "automation_effort": "Low",
+      "tags": ["login", "security", "injection", "regression"],
+      "traceability": "account stays secure"
+    },
+    {
+      "id": "TC-005",
+      "title": "4 failed attempts do not lock the account; 5th attempt within 15 minutes does",
+      "category": "Boundary",
+      "pre_conditions": "A registered active shopper account with 0 failed attempts exists",
+      "steps": [
+        "Submit an incorrect password 4 times within 15 minutes",
+        "Submit the correct password and verify login succeeds",
+        "Log out, then submit an incorrect password 5 times within 15 minutes"
+      ],
+      "expected_result": "After 4 failures the account still authenticates with the correct password; exactly at the 5th consecutive failure within the window the account locks; the boundary value 5 is enforced precisely",
+      "priority": "High",
+      "test_data": "email=aurora.shopper@example.com",
+      "bdd_scenario": "Scenario: Lockout boundary at exactly 5 attempts\n  Given a registered shopper with no failed attempts\n  When they fail 4 times and then log in successfully\n  Then the account is not locked\n  When they later fail 5 times within 15 minutes\n  Then the account locks",
+      "automation_feasibility": "Medium",
+      "automation_effort": "Moderate",
+      "tags": ["login", "lockout", "boundary", "regression"],
+      "traceability": "5 consecutive failed login attempts within 15 minutes"
+    },
+    {
+      "id": "TC-006",
+      "title": "Failed attempts older than 15 minutes fall outside the window",
+      "category": "Boundary",
+      "pre_conditions": "A registered active shopper account exists; the test environment clock can be observed or the attempt records are inspectable in Postgres",
+      "steps": [
+        "Record 4 failed attempts more than 15 minutes ago",
+        "Submit one more incorrect password now",
+        "Submit the correct password"
+      ],
+      "expected_result": "The new failure counts as the 1st within the current 15-minute window; the account does not lock; login with the correct password succeeds",
+      "priority": "Medium",
+      "test_data": "email=aurora.shopper@example.com",
+      "bdd_scenario": "Scenario: Stale failures outside the 15-minute window\n  Given 4 failed attempts recorded more than 15 minutes ago\n  When the shopper fails once more\n  Then the account does not lock\n  And a correct login succeeds",
+      "automation_feasibility": "Low",
+      "automation_effort": "High",
+      "tags": ["login", "lockout", "boundary", "time-window"],
+      "traceability": "within 15 minutes"
+    },
+    {
+      "id": "TC-007",
+      "title": "Failed attempts accumulate across different browsers and sessions",
+      "category": "Edge Case",
+      "pre_conditions": "A registered active shopper account exists; two browsers (Chromium and Firefox) are available",
+      "steps": [
+        "In Chromium, submit an incorrect password 3 times",
+        "In Firefox, submit an incorrect password 2 more times within the same 15-minute window",
+        "Observe the account state"
+      ],
+      "expected_result": "The account locks because failures accumulate per account, not per session; the shopper sees the locked-account message in both browsers; a single notification email is sent",
+      "priority": "Medium",
+      "test_data": "email=aurora.shopper@example.com",
+      "bdd_scenario": "Scenario: Cross-session accumulation of failed attempts\n  Given a shopper fails 3 times in one browser\n  When they fail 2 more times in another browser within 15 minutes\n  Then the account locks\n  And exactly one notification email is sent",
+      "automation_feasibility": "High",
+      "automation_effort": "Moderate",
+      "tags": ["login", "lockout", "edge-case", "sessions", "regression"],
+      "traceability": "5 consecutive failed login attempts within 15 minutes"
+    },
+    {
+      "id": "TC-008",
+      "title": "Lockout email link reuse after unlock does not re-lock or error",
+      "category": "Edge Case",
+      "pre_conditions": "Shopper account is locked; a lockout notification email with an account link is in the inbox; the account is unlocked via password reset before the link is opened",
+      "steps": [
+        "Complete the password reset flow to unlock the account",
+        "Open the lockout notification email and click the account link",
+        "Attempt to log in with the new password"
+      ],
+      "expected_result": "The link opens the account page without errors; the account remains unlocked; login with the new password succeeds; no duplicate or stale lock state exists in Postgres",
+      "priority": "Medium",
+      "test_data": "email=aurora.shopper@example.com",
+      "bdd_scenario": "Scenario: Stale lockout email after unlock\n  Given the account was unlocked via password reset\n  When the shopper opens the old lockout email link\n  Then the account page loads without errors\n  And the account stays unlocked",
+      "automation_feasibility": "Manual-only",
+      "automation_effort": "High",
+      "tags": ["login", "lockout", "email", "edge-case"],
+      "traceability": "notified by email when the account locks"
+    }
+  ],
+  "summary": {
+    "total_generated": 8,
+    "category_breakdown": [
+      { "category": "Functional", "count": 2 },
+      { "category": "Negative", "count": 2 },
+      { "category": "Boundary", "count": 2 },
+      { "category": "Edge Case", "count": 2 }
+    ],
+    "priority_breakdown": [
+      { "priority": "High", "count": 4 },
+      { "priority": "Medium", "count": 4 }
+    ],
+    "automation_coverage_potential": "75%  --  Six of eight cases are automatable against staging; the time-window boundary case needs clock control and the stale-email case is manual-only.",
+    "coverage_gaps": [
+      "Load behaviour of the login endpoint under lockout hammering is not covered (performance focus not selected)",
+      "Accessibility of the locked-account message with screen readers is not covered",
+      "Admin/support-agent forced unlock flow is out of scope of this story"
+    ],
+    "recommendations": [
+      "Automate TC-001, TC-003, TC-004, and TC-007 as Playwright smoke tests in CI",
+      "Add a contract test for the failed-attempt counter reset on successful login",
+      "Confirm the email template and sender address for lockout notifications with the team",
+      "Load-test the login endpoint with concurrent lockout attempts before release"
+    ]
+  }
+}

@@ -68,3 +68,8 @@ web/test-results
 web/playwright-report
 web/coverage
 
+# The v1 rules above (*.json, lib/) must not swallow v2 source files.
+!web/**/*.json
+!web/lib/
+!web/lib/**
+

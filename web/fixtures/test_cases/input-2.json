@@ -1,0 +1,6 @@
+{
+  "user_story": "As a shopper, I want the cart to accept quantity changes between 1 and 10 per item so that I can buy the amount I need. Quantities above 10 should show a message and keep the previous valid quantity. The cart total and line totals must update whenever the quantity changes.",
+  "coverage_focus": ["Functional", "Negative", "Boundary", "Edge Case"],
+  "tech_stack": "Next.js, Node API, Postgres",
+  "instructions": ""
+}
