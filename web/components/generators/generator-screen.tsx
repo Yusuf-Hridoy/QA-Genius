@@ -6,6 +6,7 @@ import { REGISTRY, type GeneratorKind } from '@/lib/generators/kinds';
 import { buildByokHeaders } from '@/lib/llm/byok';
 import { useKeysStore } from '@/lib/store/keys';
 import { useObjectStream } from '@/lib/client/use-object-stream';
+import type { FinalObjectSchema } from '@/lib/client/use-object-stream';
 import { showApiErrorToast, showNoKeyToast, showSuspiciousToast } from '@/lib/client/api-error';
 import { Button } from '@/components/ui/button';
 import { Pill } from '@/components/ui/pill';
@@ -65,7 +66,7 @@ export function GeneratorScreen({
 
   const { object, submit, isLoading, error, stop, meta, stopped, setObject } = useObjectStream<
     Record<string, unknown>
-  >(`/api/generate/${kind}`);
+  >(`/api/generate/${kind}`, def.outputSchema as unknown as FinalObjectSchema);
 
   const [values, setValues] = useState<Record<string, unknown>>({});
   const [lastInput, setLastInput] = useState<Record<string, unknown>>({});

@@ -99,4 +99,42 @@ describe('useObjectStream', () => {
     });
     expect(result.current.isLoading).toBe(false);
   });
+
+  it('surfaces bad_model_output when the final object fails the schema', async () => {
+    fetchMock.mockResolvedValue(streamResponse('{"ok":false}'));
+    const { result } = renderHook(() =>
+      useObjectStream('/api/generate/ping', {
+        safeParse: (data: unknown) => ({
+          success: (data as { ok?: boolean })?.ok === true,
+        }),
+      }),
+    );
+
+    await act(async () => {
+      await result.current.submit({}, {});
+    });
+
+    await waitFor(() => {
+      expect(result.current.isLoading).toBe(false);
+    });
+    expect(result.current.error?.code).toBe('bad_model_output');
+    expect(result.current.error?.status).toBe(502);
+  });
+
+  it('reports no error when the final object passes the schema', async () => {
+    fetchMock.mockResolvedValue(streamResponse('{"ok":true}'));
+    const { result } = renderHook(() =>
+      useObjectStream('/api/generate/ping', { safeParse: () => ({ success: true }) }),
+    );
+
+    await act(async () => {
+      await result.current.submit({}, {});
+    });
+
+    await waitFor(() => {
+      expect(result.current.isLoading).toBe(false);
+    });
+    expect(result.current.error).toBeNull();
+    expect(result.current.object).toEqual({ ok: true });
+  });
 });

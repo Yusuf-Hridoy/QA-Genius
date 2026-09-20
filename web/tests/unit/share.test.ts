@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
+import { deflateSync, strToU8 } from 'fflate';
 import {
   MAX_BYTES,
+  MAX_INFLATED_BYTES,
   WARN_BYTES,
   decodeShare,
   encodeShare,
@@ -11,6 +13,14 @@ import {
 } from '@/lib/share/codec';
 import { newRun } from '@/lib/store/run';
 import type { Run } from '@/lib/pipeline/types';
+
+/** Minimal fragment encoder for hostile payloads (mirrors the codec). */
+function toFragment(payload: Record<string, unknown>): string {
+  const bytes = deflateSync(strToU8(JSON.stringify(payload)));
+  let binary = '';
+  for (let i = 0; i < bytes.length; i += 1) binary += String.fromCharCode(bytes[i] as number);
+  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
 
 function sampleRun(): Run {
   const run = newRun('Aurora Storefront');
@@ -76,5 +86,46 @@ describe('share codec', () => {
     expect(fragmentBytes(fragment)).toBeLessThan(WARN_BYTES);
     expect(MAX_BYTES).toBeGreaterThan(WARN_BYTES);
     expect(formatKilobytes(14 * 1024)).toBe('14 KB');
+  });
+
+  it('rejects a malformed run payload', () => {
+    const project = { name: 'Aurora Storefront', stack: 'Next.js' };
+    // Run id must be a string.
+    expect(() => decodeShare(toFragment({ v: 1, kind: 'run', run: { id: 42 }, project }))).toThrow(
+      ShareDecodeError,
+    );
+    // Test-case output must match the generator schema.
+    expect(() =>
+      decodeShare(
+        toFragment({
+          v: 1,
+          kind: 'run',
+          run: {
+            id: 'run-1',
+            createdAt: '2026-09-20T00:00:00.000Z',
+            updatedAt: '2026-09-20T00:00:00.000Z',
+            projectName: 'Aurora Storefront',
+            testCases: {
+              input: {
+                user_story:
+                  'As a shopper, I want cart quantity limits so the warehouse can fulfil orders.',
+              },
+              output: { nonsense: true },
+            },
+          },
+          project,
+        }),
+      ),
+    ).toThrow(ShareDecodeError);
+  });
+
+  it('rejects an inflated payload over 2 MB', () => {
+    // Highly compressible: tiny fragment, huge inflated output.
+    const bytes = deflateSync(strToU8('x'.repeat(MAX_INFLATED_BYTES + 1)));
+    let binary = '';
+    for (let i = 0; i < bytes.length; i += 1) binary += String.fromCharCode(bytes[i] as number);
+    const fragment = btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+    expect(fragmentBytes(fragment)).toBeLessThan(MAX_BYTES);
+    expect(() => decodeShare(fragment)).toThrow(ShareDecodeError);
   });
 });

@@ -1,12 +1,51 @@
 import { z } from 'zod';
 import { deflateSync, inflateSync, strFromU8, strToU8 } from 'fflate';
 import type { Run } from '@/lib/pipeline/types';
+import { AmbiguityAnalysis } from '@/lib/generators/story-analyzer/schema';
+import { StoryAnalyzerRequest } from '@/lib/generators/story-analyzer/request';
+import { TestCaseList } from '@/lib/generators/test-cases/schema';
+import { TestCasesRequest } from '@/lib/generators/test-cases/request';
+import { SharedDuelResult } from './shared-run';
+
+/**
+ * Shared run payload, validated on decode. Output sections reuse the
+ * generator output schemas; inputs reuse the request schemas.
+ */
+export const SharedRun = z.object({
+  id: z.string(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+  projectName: z.string(),
+  story: z.object({ input: StoryAnalyzerRequest, output: AmbiguityAnalysis.optional() }).optional(),
+  duel: SharedDuelResult.optional(),
+  criteria: z
+    .object({
+      items: z.array(z.object({ id: z.string(), text: z.string() })),
+      source: z.enum(['story', 'manual']),
+      manualStory: z.string().optional(),
+    })
+    .optional(),
+  testCases: z
+    .object({
+      input: TestCasesRequest,
+      output: TestCaseList.optional(),
+      history: z.array(TestCaseList).optional(),
+      selectedIds: z.array(z.string()).optional(),
+    })
+    .optional(),
+  suite: z.object({ fileName: z.string(), importedAt: z.string(), count: z.number() }).optional(),
+  automation: z
+    .object({ scenarioPrefill: z.string(), truncated: z.boolean(), updatedAt: z.string() })
+    .optional(),
+});
+
+export type SharedRun = z.infer<typeof SharedRun>;
 
 /** Share payload envelope. Versioned; unknown versions are rejected. */
 export const SharePayload = z.object({
   v: z.literal(1),
   kind: z.literal('run'),
-  run: z.unknown(),
+  run: SharedRun,
   project: z.object({ name: z.string(), stack: z.string() }),
 });
 
@@ -14,6 +53,8 @@ export type SharePayload = z.infer<typeof SharePayload>;
 
 export const WARN_BYTES = 64 * 1024;
 export const MAX_BYTES = 200 * 1024;
+/** Cap on the inflated payload: links are small by construction. */
+export const MAX_INFLATED_BYTES = 2 * 1024 * 1024;
 
 function bytesToBase64Url(bytes: Uint8Array): string {
   let binary = '';
@@ -59,9 +100,18 @@ export function encodeShare(run: Run, project: { name: string; stack: string }):
 /** Inverse of encodeShare. Throws ShareDecodeError on any invalid input. */
 export function decodeShare(fragment: string): SharePayload {
   if (!fragment) throw new ShareDecodeError('The share link is empty.');
+  let inflated: Uint8Array;
+  try {
+    inflated = inflateSync(base64UrlToBytes(fragment));
+  } catch {
+    throw new ShareDecodeError('The share link could not be read.');
+  }
+  if (inflated.length > MAX_INFLATED_BYTES) {
+    throw new ShareDecodeError('The share link is too large to open.');
+  }
   let json: string;
   try {
-    json = strFromU8(inflateSync(base64UrlToBytes(fragment)));
+    json = strFromU8(inflated);
   } catch {
     throw new ShareDecodeError('The share link could not be read.');
   }

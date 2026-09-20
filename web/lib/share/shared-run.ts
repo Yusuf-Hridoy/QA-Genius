@@ -6,7 +6,8 @@ import { DuelFork } from '@/lib/duel/duel-compare/schema';
 import type { AcceptanceCriterion, Run } from '@/lib/pipeline/types';
 import type { DuelResult } from '@/lib/duel/types';
 
-const SharedDuelResult = z.object({
+/** Shared duel result, validated on decode (also used by the share codec). */
+export const SharedDuelResult = z.object({
   a: StoryInterpretation,
   b: StoryInterpretation,
   forks: z.array(DuelFork),

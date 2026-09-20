@@ -19,12 +19,28 @@ export type ApiError = Error & {
   status?: number;
 };
 
+/** Minimal shape of the kind's Zod output schema, for final validation. */
+export type FinalObjectSchema = {
+  safeParse(data: unknown): { success: boolean };
+};
+
+function badModelOutput(): ApiError {
+  const error = new Error(
+    "The model returned output that couldn't be read. Try again or switch tier.",
+  ) as ApiError;
+  error.code = 'bad_model_output';
+  error.status = 502;
+  return error;
+}
+
 /**
  * Client for POST /api/generate/[kind]. Replaces the AI SDK's useObject
  * (removed in ai v7): consumes the partial-JSON text stream and updates
  * state progressively. BYOK headers go in fetch headers, never the body.
+ * When a schema is provided, the final object is validated after the stream
+ * closes; invalid output (or no chunks at all) surfaces bad_model_output.
  */
-export function useObjectStream<T>(api: string) {
+export function useObjectStream<T>(api: string, schema?: FinalObjectSchema) {
   const [object, setObject] = useState<T | undefined>(undefined);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<ApiError | null>(null);
@@ -91,6 +107,15 @@ export function useObjectStream<T>(api: string) {
             setObject(partial as T);
           }
         }
+        if (!controller.signal.aborted) {
+          const finalObject = parsePartialJson(accumulated);
+          const valid =
+            finalObject !== undefined &&
+            (schema === undefined || schema.safeParse(finalObject).success);
+          if (!valid) {
+            setError(badModelOutput());
+          }
+        }
         setMeta({ ...responseMeta, latencyMs: Math.round(performance.now() - startedAt) });
       } catch (e) {
         if (e instanceof Error && e.name === 'AbortError') {
@@ -102,7 +127,7 @@ export function useObjectStream<T>(api: string) {
         setIsLoading(false);
       }
     },
-    [api],
+    [api, schema],
   );
 
   const stop = useCallback(() => {

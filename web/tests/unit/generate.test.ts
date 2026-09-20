@@ -15,7 +15,9 @@ vi.mock('ai', async (importOriginal) => {
 });
 
 import { z } from 'zod';
+import { APICallError } from 'ai';
 import { generateStream } from '@/lib/llm/generate';
+import { POST } from '@/app/api/generate/[kind]/route';
 import { REGISTRY } from '@/lib/generators/kinds';
 import { BadModelOutputError, InputTooLargeError } from '@/lib/llm/errors';
 import type { Byok } from '@/lib/llm/byok';
@@ -39,6 +41,21 @@ async function readResponseBody(response: Response): Promise<string> {
   return response.text();
 }
 
+/** Text-delta parts for the mocked primary stream. */
+async function* textDeltas(chunks: string[]): AsyncGenerator<{ type: string; textDelta: string }> {
+  for (const textDelta of chunks) yield { type: 'text-delta', textDelta };
+}
+
+/** First-chunk read throws a provider 401. */
+async function* throwProvider401(): AsyncGenerator<never> {
+  throw new APICallError({
+    message: 'Unauthorized',
+    url: 'https://generativelanguage.googleapis.com/',
+    requestBodyValues: {},
+    statusCode: 401,
+  });
+}
+
 beforeEach(() => {
   generateTextMock.mockReset();
   streamObjectMock.mockReset();
@@ -46,10 +63,7 @@ beforeEach(() => {
 
 describe('generateStream primary path', () => {
   it('streams via streamObject with the qag headers and no-store', async () => {
-    streamObjectMock.mockReturnValue({
-      toTextStreamResponse: (options: { headers: Record<string, string> }) =>
-        new Response('{"ok":true}', { headers: options.headers }),
-    });
+    streamObjectMock.mockReturnValue({ fullStream: textDeltas(['{"ok":', 'true}']) });
 
     const response = await generateStream({
       kind: 'story_analyzer',
@@ -66,13 +80,12 @@ describe('generateStream primary path', () => {
     expect(response.headers.get('x-qag-request-id')).toBe('req-1');
     expect(response.headers.get('Cache-Control')).toBe('no-store');
     expect(streamObjectMock).toHaveBeenCalledOnce();
+    // First chunk plus remainder stream through unchanged.
+    expect(await readResponseBody(response)).toBe('{"ok":true}');
   });
 
   it('sets x-qag-suspicious and continues on injection-like input', async () => {
-    streamObjectMock.mockReturnValue({
-      toTextStreamResponse: (options: { headers: Record<string, string> }) =>
-        new Response('{}', { headers: options.headers }),
-    });
+    streamObjectMock.mockReturnValue({ fullStream: textDeltas(['{}']) });
 
     const response = await generateStream({
       kind: 'story_analyzer',
@@ -83,6 +96,23 @@ describe('generateStream primary path', () => {
 
     expect(response.headers.get('x-qag-suspicious')).toBe('1');
     expect(streamObjectMock).toHaveBeenCalledOnce();
+  });
+
+  it('returns 401 invalid_key when the primary stream throws a 401', async () => {
+    streamObjectMock.mockReturnValue({ fullStream: throwProvider401() });
+
+    const response = await POST(
+      new Request('http://localhost/api/generate/ping', {
+        method: 'POST',
+        headers: { 'x-llm-provider': 'gemini', 'x-llm-key': 'test-key-123456789' },
+        body: '{}',
+      }),
+      { params: Promise.resolve({ kind: 'ping' }) },
+    );
+
+    expect(response.status).toBe(401);
+    const body = (await response.json()) as { error: string };
+    expect(body.error).toBe('invalid_key');
   });
 });
 
@@ -125,6 +155,7 @@ describe('generateStream fallback and re-ask', () => {
     expect(secondPrompt.prompt).toContain(
       'Your previous response was not valid JSON for the required schema.',
     );
+    expect(secondPrompt.prompt).toContain('{"ambiguity_score":"not a number"}');
     expect(response.headers.get('x-qag-repaired')).toBe('1');
   });
 
@@ -186,10 +217,7 @@ describe('key hygiene', () => {
       vi.spyOn(console, 'error').mockImplementation(() => {}),
     ];
 
-    streamObjectMock.mockReturnValue({
-      toTextStreamResponse: (options: { headers: Record<string, string> }) =>
-        new Response('{}', { headers: options.headers }),
-    });
+    streamObjectMock.mockReturnValue({ fullStream: textDeltas(['{}']) });
     await generateStream({
       kind: 'story_analyzer',
       body: validStoryBody,

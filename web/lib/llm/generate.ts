@@ -34,9 +34,10 @@ function collectSuspiciousAndSize(body: unknown): { suspicious: boolean; totalCh
   return { suspicious, totalChars };
 }
 
-function reAskSuffix(issues: string): string {
+function reAskSuffix(issues: string, rawExcerpt: string): string {
   return (
     `\n\nYour previous response was not valid JSON for the required schema. Errors:\n${issues}\n` +
+    `Your previous response (first 4000 characters):\n${rawExcerpt.slice(0, 4000)}\n` +
     'Return ONLY the corrected JSON object.'
   );
 }
@@ -51,6 +52,55 @@ function formatIssues(error: unknown): string {
   }
   if (error instanceof Error) return error.message;
   return String(error);
+}
+
+/** A stream part as yielded by the SDK result's fullStream. */
+type FullStreamPart = { type: string; textDelta?: string; error?: unknown };
+
+/**
+ * Pull the first stream part before committing to a 200 response, so provider
+ * errors (401/429/safety blocks) surface here and map to the JSON error
+ * contract instead of truncating a stream.
+ *
+ * Two SDK constraints shape this: a result exposes a single-consumption
+ * stream (touching partialObjectStream would lock out the text), and the
+ * text/partial transforms swallow error chunks — so the first chunk is read
+ * from fullStream, where error parts arrive as values and are rethrown
+ * explicitly. The remainder is pumped from the same iterator; only text
+ * deltas travel the wire, exactly like toTextStreamResponse.
+ */
+async function streamFirstChunkResponse(
+  result: { fullStream: AsyncIterable<FullStreamPart> },
+  headers: Record<string, string>,
+): Promise<Response> {
+  const iterator = result.fullStream[Symbol.asyncIterator]();
+  const first = await iterator.next();
+  if (!first.done && first.value?.type === 'error') {
+    throw first.value.error;
+  }
+  const encoder = new TextEncoder();
+  const body = new ReadableStream<Uint8Array>({
+    async start(controller) {
+      try {
+        if (!first.done && first.value?.type === 'text-delta' && first.value.textDelta) {
+          controller.enqueue(encoder.encode(first.value.textDelta));
+        }
+        for (;;) {
+          const next = await iterator.next();
+          if (next.done) break;
+          if (next.value?.type === 'text-delta' && next.value.textDelta) {
+            controller.enqueue(encoder.encode(next.value.textDelta));
+          }
+        }
+        controller.close();
+      } catch (error) {
+        controller.error(error);
+      }
+    },
+  });
+  return new Response(body, {
+    headers: { 'Content-Type': 'text/plain; charset=utf-8', ...headers },
+  });
 }
 
 /** Respond with the whole object as a single-chunk text stream (client path is identical to streaming). */
@@ -125,7 +175,7 @@ export async function generateStream(input: GenerateInput): Promise<Response> {
         temperature,
         maxOutputTokens: 8192,
       });
-      return result.toTextStreamResponse({ headers: baseHeaders });
+      return await streamFirstChunkResponse(result, baseHeaders);
     } catch (error) {
       if (!isJsonModeUnsupported(error)) throw error;
       // fall through to the fallback path
@@ -135,20 +185,14 @@ export async function generateStream(input: GenerateInput): Promise<Response> {
   // 7. Fallback path: plain text + extract/repair/parse.
   const startedAt = Date.now();
   const fallbackPrompt = `${user}\n\nRespond with ONLY the JSON object.`;
-  let rawText: string;
-  try {
-    const textResult = await generateText({
-      model,
-      system,
-      prompt: fallbackPrompt,
-      temperature,
-      maxOutputTokens: 8192,
-    });
-    rawText = textResult.text;
-  } catch (error) {
-    // Provider errors from the fallback surface to the caller (mapped in the route).
-    throw error;
-  }
+  const textResult = await generateText({
+    model,
+    system,
+    prompt: fallbackPrompt,
+    temperature,
+    maxOutputTokens: 8192,
+  });
+  const rawText = textResult.text;
 
   let value: unknown;
   try {
@@ -158,22 +202,16 @@ export async function generateStream(input: GenerateInput): Promise<Response> {
     const issues = formatIssues(
       firstError instanceof Error && firstError.cause ? firstError.cause : firstError,
     );
-    let secondText: string;
-    try {
-      const second = await generateText({
-        model,
-        system,
-        prompt: fallbackPrompt + reAskSuffix(issues),
-        temperature,
-        maxOutputTokens: 8192,
-      });
-      secondText = second.text;
-    } catch (error) {
-      throw error;
-    }
+    const second = await generateText({
+      model,
+      system,
+      prompt: fallbackPrompt + reAskSuffix(issues, rawText),
+      temperature,
+      maxOutputTokens: 8192,
+    });
+    const secondText = second.text;
     try {
       value = repairAndParse(secondText, def.outputSchema as z.ZodType).value;
-      rawText = secondText;
     } catch {
       throw new BadModelOutputError(secondText);
     }
