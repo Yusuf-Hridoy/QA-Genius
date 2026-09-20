@@ -71,11 +71,22 @@ export function buildTestCasesPrompt(req: TestCasesRequest): { system: string; u
     true,
   );
   // Assembly ported verbatim from v1 ui/tab_test_cases.py.
-  const user = withInstructions(
+  let user =
     `User Story / Requirement:\n${req.user_story}\n\n` +
-      `Test Coverage Focus: ${req.coverage_focus.join(', ')}\n` +
-      `Tech Stack: ${req.tech_stack || 'Not provided'}`,
-    req.instructions,
-  );
+    `Test Coverage Focus: ${req.coverage_focus.join(', ')}\n` +
+    `Tech Stack: ${req.tech_stack || 'Not provided'}`;
+  // Phase 2: pipeline criteria are appended without touching the system prompt.
+  if (req.criteria && req.criteria.length > 0) {
+    user +=
+      '\n\nAcceptance criteria (use these ids in the "traceability" field, e.g. "AC-2" or "AC-1, AC-3"):\n' +
+      req.criteria.map((c) => `${c.id}: ${c.text}`).join('\n');
+  }
+  // Phase 2: refine loop sends back a compact id — title list of the previous output.
+  if (req.previous && req.previous.length > 0) {
+    user +=
+      '\n\nPrevious test cases (revise; keep ids for cases you keep, reuse ids for changed cases, new ids for new cases):\n' +
+      req.previous.map((p) => `${p.id} — ${p.title}`).join('\n');
+  }
+  user = withInstructions(user, req.instructions);
   return { system, user };
 }

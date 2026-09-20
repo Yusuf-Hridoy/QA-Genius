@@ -15,9 +15,8 @@ test.describe('exports', () => {
     await page.route('**/api/generate/test_cases', (route) =>
       streamObjectFixture(route, loadFixture('test_cases')),
     );
-    await page.goto('/requirements');
+    await page.goto('/requirements/test-cases');
     await waitForApp(page);
-    await page.getByRole('tab', { name: 'Test cases' }).click();
     await page.getByRole('button', { name: 'Load example' }).click();
     await page.getByRole('button', { name: 'Generate' }).click();
     await expect(page.getByTestId('test-case-card')).toHaveCount(8);

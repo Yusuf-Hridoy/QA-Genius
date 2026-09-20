@@ -1,4 +1,4 @@
-# NOTES — QA-Genius v2, Phase 1
+# NOTES — QA-Genius v2, Phases 1–2
 
 Working decisions and version records. Mirrors `AGENTS.md` §9 (decisions) and §10 (deferrals).
 
@@ -21,6 +21,17 @@ Working decisions and version records. Mirrors `AGENTS.md` §9 (decisions) and �
 | `lucide-react`              | ^1.47.0  | icon names differ from older versions (e.g. `FileArchive`, no `FileZip`)                                                                                      |
 | `sonner`                    | ^2.0.8   | toasts                                                                                                                                                        |
 | `vitest`                    | ^5.0.1   | with `@vitest/coverage-v8`                                                                                                                                    |
+
+## Installed versions, Phase 2 additions (2026-09-20)
+
+| Package              | Version | Note                                                                               |
+| -------------------- | ------- | ---------------------------------------------------------------------------------- |
+| `@dnd-kit/core`      | ^6.3.1  | criteria drag reorder (Pointer + Keyboard sensors, `closestCenter`)                |
+| `@dnd-kit/sortable`  | ^10.0.0 | `SortableContext` + `useSortable` + `arrayMove` semantics for the criteria list    |
+| `@dnd-kit/utilities` | ^3.2.2  | `CSS.Translate` for sortable transforms (transitive via sortable, pinned explicit) |
+| `diff`               | ^9.0.0  | `diffWords` for title/expected/criteria word diffs (ships its own types)           |
+| `fflate`             | ^0.8.3  | `deflateSync`/`inflateSync` for share-link payloads                                |
+| `idb`                | ^8.0.3  | IndexedDB wrapper for existing-suite rows (`qag` db, `suiteRows` store)            |
 
 ## Model ids verified against provider docs (2026-09-19)
 
@@ -45,3 +56,13 @@ Mirrors `AGENTS.md` §10. Phase-1-specific items:
 
 - **Vercel deploy + live-key verification (Checkpoints B and C).** The app builds clean and every API behavior is unit/e2e tested with mocks; importing the repo into Vercel (root `web`, branch `v2`) and running the four generators with real keys remains a manual step for the owner.
 - **`zod-to-json-schema` package** remains installed but unused (Zod v4's built-in `z.toJSONSchema` is used instead). Kept for potential JSON-Schema draft differences; remove in a cleanup pass if still unused after Phase 2.
+
+## Decisions taken during Phase 2 implementation
+
+- **2026-09-20 — Run store without zustand persist middleware.** `lib/store/run.ts` reads/writes `sessionStorage`/`localStorage` manually (guarded for SSR) so the current run, recents cap (10 entries, 1 MB total, oldest evicted), and corruption fallbacks stay unit-testable as pure helpers (`evictRecents`, `loadCurrent`, `loadRecents`).
+- **2026-09-20 — GeneratorScreen extension props instead of a fork.** Pipeline handoffs reuse `GeneratorScreen` via `initialValues`, `onResult`, `autoSubmitOnMount` (one-shot, StrictMode-safe), `formSummary` (collapsible), `resultHeader`/`renderResult`/`resultFooter` slots, and `restoredResult` (adopted runs). Bug desk is untouched.
+- **2026-09-20 — Per-kind temperature on the registry.** `GeneratorDef.temperature` (default 0.3) carries the duel's 0.8 (interpretations) and 0.2 (compare); all Phase 1 kinds keep 0.3.
+- **2026-09-20 — Refine posts outside the streaming screen.** `lib/client/generate-one.ts` collects the final object for duel/refine flows; `TestCasesRefinePanel`/`StoryRefinePanel` diff before accepting, and acceptance rewrites the screen from sessionStorage so exports follow the accepted version.
+- **2026-09-20 — `xlsx-js-style` reader needs Uint8Array.** Its bundler build misparses raw ArrayBuffers, so `parseXlsx` normalizes to `Uint8Array` first (caught by the CSV/XLSX parity test).
+- **2026-09-20 — Share page hydrates like the shell.** `/share` sets `data-hydrated` after mount so Playwright clicks wait for handlers; gap chips there come from the viewer's own suite for the same project.
+- **2026-09-20 — Suite fixture tuning is score-driven.** `aurora-suite.csv`/`.xlsx` (20 rows, 12 overlapping) were tuned against the real matcher: 6 covered, TC-007/TC-008 gaps; the unit test pins those sets.

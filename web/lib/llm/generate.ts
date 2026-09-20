@@ -101,6 +101,7 @@ export async function generateStream(input: GenerateInput): Promise<Response> {
   const { system, user } = def.buildPrompt(req);
   const modelId = resolveModel(byok.provider, byok.tier, byok.model);
   const model = createModel(byok.provider, byok.apiKey, modelId, byok.baseUrl);
+  const temperature = def.temperature ?? 0.3;
 
   const baseHeaders: Record<string, string> = {
     'x-qag-request-id': requestId,
@@ -121,7 +122,7 @@ export async function generateStream(input: GenerateInput): Promise<Response> {
         schema: def.outputSchema as z.ZodType,
         system,
         prompt: user,
-        temperature: 0.3,
+        temperature,
         maxOutputTokens: 8192,
       });
       return result.toTextStreamResponse({ headers: baseHeaders });
@@ -140,7 +141,7 @@ export async function generateStream(input: GenerateInput): Promise<Response> {
       model,
       system,
       prompt: fallbackPrompt,
-      temperature: 0.3,
+      temperature,
       maxOutputTokens: 8192,
     });
     rawText = textResult.text;
@@ -163,7 +164,7 @@ export async function generateStream(input: GenerateInput): Promise<Response> {
         model,
         system,
         prompt: fallbackPrompt + reAskSuffix(issues),
-        temperature: 0.3,
+        temperature,
         maxOutputTokens: 8192,
       });
       secondText = second.text;

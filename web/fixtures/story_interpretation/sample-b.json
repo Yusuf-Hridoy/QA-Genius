@@ -1,0 +1,41 @@
+{
+  "actors": ["shopper, including guests checking out and social-login users"],
+  "preconditions": ["Shopper has attempted to sign in at least once", "Auth service is reachable"],
+  "rules": [
+    {
+      "topic": "Lockout threshold",
+      "reading": "The account locks after 5 or more failed login attempts within a day.",
+      "sourcePhrase": "several failed login attempts"
+    },
+    {
+      "topic": "Unlock timing",
+      "reading": "The account unlocks automatically after 30 minutes; password reset is an alternative.",
+      "sourcePhrase": "it may unlock after some time or stay locked until I reset my password"
+    },
+    {
+      "topic": "Lockout scope",
+      "reading": "All sign-in methods for the account are paused, with a helpful message.",
+      "sourcePhrase": "my account to lock"
+    }
+  ],
+  "numbers": [
+    {
+      "name": "Failed attempt threshold",
+      "value": "5 within 24 hours",
+      "sourcePhrase": "several failed login attempts"
+    },
+    {
+      "name": "Automatic unlock window",
+      "value": "30 minutes",
+      "sourcePhrase": "it may unlock after some time"
+    }
+  ],
+  "outcomes": [
+    "Account is temporarily paused with guidance on next steps",
+    "Shopper can sign in again after the window or via password reset"
+  ],
+  "assumptions": [
+    "Failed attempts are counted across devices for the same account",
+    "Rate limiting already caps rapid guessing before lockout"
+  ]
+}

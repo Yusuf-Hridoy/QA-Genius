@@ -15,9 +15,8 @@ test.describe('automation generation', () => {
   });
 
   test('language radio hides for Python frameworks; file tree works', async ({ page }) => {
-    await page.goto('/requirements');
+    await page.goto('/requirements/automation');
     await waitForApp(page);
-    await page.getByRole('tab', { name: 'Automation' }).click();
 
     await page.getByRole('radio', { name: 'Playwright (Python)' }).check();
     await expect(page.getByText('Language', { exact: true })).toBeHidden();

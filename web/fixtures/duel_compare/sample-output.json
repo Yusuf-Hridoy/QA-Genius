@@ -1,0 +1,32 @@
+{
+  "forks": [
+    {
+      "topic": "Lockout threshold",
+      "readingA": "The account locks after exactly 3 consecutive failed login attempts.",
+      "readingB": "The account locks after 5 or more failed login attempts within a day.",
+      "sourcePhrase": "several failed login attempts",
+      "severity": "high",
+      "suggestedRewrite": "locks after 5 consecutive failed login attempts"
+    },
+    {
+      "topic": "Unlock timing",
+      "readingA": "The account stays locked until the shopper resets the password; no automatic unlock.",
+      "readingB": "The account unlocks automatically after 30 minutes; password reset is an alternative.",
+      "sourcePhrase": "it may unlock after some time or stay locked until I reset my password",
+      "severity": "high",
+      "suggestedRewrite": "unlocks automatically after 30 minutes, or immediately after a password reset"
+    },
+    {
+      "topic": "Lockout scope",
+      "readingA": "Only password logins count; SSO and social logins are unaffected.",
+      "readingB": "All sign-in methods for the account are paused, with a helpful message.",
+      "sourcePhrase": "my account to lock",
+      "severity": "medium",
+      "suggestedRewrite": "locks password sign-in for my account"
+    }
+  ],
+  "agreements": [
+    "Both readings agree the lockout protects account security after repeated failures.",
+    "Both readings agree the shopper regains access through password reset."
+  ]
+}

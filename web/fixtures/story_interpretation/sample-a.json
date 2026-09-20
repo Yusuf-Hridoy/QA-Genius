@@ -1,0 +1,44 @@
+{
+  "actors": ["registered shopper with an active account"],
+  "preconditions": [
+    "Shopper has an active account on staging.aurora-shop.dev",
+    "Shopper is on the login page"
+  ],
+  "rules": [
+    {
+      "topic": "Lockout threshold",
+      "reading": "The account locks after exactly 3 consecutive failed login attempts.",
+      "sourcePhrase": "several failed login attempts"
+    },
+    {
+      "topic": "Unlock timing",
+      "reading": "The account stays locked until the shopper resets the password; no automatic unlock.",
+      "sourcePhrase": "it may unlock after some time or stay locked until I reset my password"
+    },
+    {
+      "topic": "Lockout scope",
+      "reading": "Only password logins count; SSO and social logins are unaffected.",
+      "sourcePhrase": "my account to lock"
+    }
+  ],
+  "numbers": [
+    {
+      "name": "Failed attempt threshold",
+      "value": "3",
+      "sourcePhrase": "several failed login attempts"
+    },
+    {
+      "name": "Automatic unlock window",
+      "value": "never; manual reset only",
+      "sourcePhrase": "it may unlock after some time"
+    }
+  ],
+  "outcomes": [
+    "Account is locked and password logins are rejected",
+    "Shopper must reset the password to regain access"
+  ],
+  "assumptions": [
+    "Failed attempts are counted consecutively per account, not per device",
+    "A successful login resets the failed-attempt counter"
+  ]
+}

@@ -7,6 +7,9 @@ import { buildAutomationPrompt } from '@/lib/generators/automation-script/prompt
 import { StoryAnalyzerRequest } from '@/lib/generators/story-analyzer/request';
 import { TestCasesRequest } from '@/lib/generators/test-cases/request';
 import { BugReportRequest } from '@/lib/generators/bug-report/request';
+import { buildStoryInterpretationPrompt } from '@/lib/duel/story-interpretation/prompt';
+import { buildDuelComparePrompt } from '@/lib/duel/duel-compare/prompt';
+import { StoryInterpretationRequest } from '@/lib/duel/story-interpretation/request';
 import { AutomationRequest } from '@/lib/generators/automation-script/request';
 
 describe('story analyzer prompt', () => {
@@ -70,6 +73,48 @@ describe('test cases prompt', () => {
   });
 });
 
+describe('test cases pipeline appendices', () => {
+  const base = TestCasesRequest.parse({
+    user_story: 'As a shopper, I want cart quantity limits so the warehouse can fulfil orders.',
+    coverage_focus: ['Functional', 'Negative'],
+    tech_stack: 'Next.js, Node API, Postgres',
+  });
+
+  it('omits the criteria and previous blocks when absent', () => {
+    const { user } = buildTestCasesPrompt(base);
+    expect(user).not.toContain('Acceptance criteria');
+    expect(user).not.toContain('Previous test cases');
+  });
+
+  it('appends the criteria block exactly', () => {
+    const { user } = buildTestCasesPrompt({
+      ...base,
+      criteria: [
+        { id: 'AC-1', text: 'Cart holds at most 10 units per SKU' },
+        { id: 'AC-2', text: 'Over-limit quantities show a notice' },
+      ],
+    });
+    expect(user).toContain(
+      'Acceptance criteria (use these ids in the "traceability" field, e.g. "AC-2" or "AC-1, AC-3"):\n' +
+        'AC-1: Cart holds at most 10 units per SKU\n' +
+        'AC-2: Over-limit quantities show a notice',
+    );
+  });
+
+  it('appends the previous block for the refine loop', () => {
+    const { user } = buildTestCasesPrompt({
+      ...base,
+      previous: [{ id: 'TC-001', title: 'Happy path checkout' }],
+      instructions: 'Make the negative cases stricter',
+    });
+    expect(user).toContain(
+      'Previous test cases (revise; keep ids for cases you keep, reuse ids for changed cases, new ids for new cases):\n' +
+        'TC-001 — Happy path checkout',
+    );
+    expect(user).toContain('ADDITIONAL INSTRUCTIONS FROM USER:\nMake the negative cases stricter');
+  });
+});
+
 describe('bug report prompt', () => {
   const req = BugReportRequest.parse({
     raw_bug: 'Checkout button does nothing on the second click in Safari',
@@ -119,6 +164,55 @@ describe('automation prompt', () => {
     });
     const { user } = buildAutomationPrompt(req);
     expect(user).toContain('Language: Python');
+  });
+});
+
+describe('duel prompts', () => {
+  const story =
+    'As a shopper, I want my account to lock after several failed login attempts so that my account stays secure.';
+
+  function interpretationReq(persona: 'A' | 'B') {
+    return StoryInterpretationRequest.parse({ user_story: story, persona });
+  }
+
+  it('personas A and B differ only in the intended line', () => {
+    const a = buildStoryInterpretationPrompt(interpretationReq('A'));
+    const b = buildStoryInterpretationPrompt(interpretationReq('B'));
+    expect(a.system).toContain('strictest reading');
+    expect(b.system).toContain('most permissive reading');
+    expect(a.system.replace('strictest', 'X')).not.toBe(b.system.replace('most permissive', 'X'));
+    expect(a.user).toBe(b.user.replace('Persona: B', 'Persona: A'));
+  });
+
+  it('tells the model to copy source phrases exactly', () => {
+    const { system } = buildStoryInterpretationPrompt(interpretationReq('A'));
+    expect(system).toContain('EXACTLY as it appears in the story text');
+  });
+
+  it('freezes the duel system prompts', () => {
+    expect(buildStoryInterpretationPrompt(interpretationReq('A')).system).toMatchSnapshot();
+    const compare = buildDuelComparePrompt({
+      user_story: story,
+      a: {
+        actors: [],
+        preconditions: [],
+        rules: [],
+        numbers: [],
+        outcomes: [],
+        assumptions: [],
+      },
+      b: {
+        actors: [],
+        preconditions: [],
+        rules: [],
+        numbers: [],
+        outcomes: [],
+        assumptions: [],
+      },
+    });
+    expect(compare.system).toMatchSnapshot();
+    expect(compare.user).toContain('Reading A:');
+    expect(compare.user).toContain('Reading B:');
   });
 });
 

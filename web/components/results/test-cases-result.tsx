@@ -2,6 +2,8 @@
 
 import { useMemo, useState } from 'react';
 import type { TestCase } from '@/lib/generators/test-cases/schema';
+import { parseTraceabilityRefs } from '@/lib/traceability/parse';
+import type { SuiteMatch } from '@/lib/suite/match';
 import { Card, CardHeader } from '@/components/ui/card';
 import { GherkinBlock } from './gherkin-block';
 import { MetricCard } from '@/components/ui/metric-card';
@@ -106,13 +108,97 @@ function FilterChip({
   );
 }
 
-function TestCaseCard({ testCase }: { testCase: TestCase }) {
+export type TestCaseSelection = {
+  selected: string[];
+  onToggle: (id: string) => void;
+};
+
+function truncate(text: string, max: number): string {
+  return text.length > max ? `${text.slice(0, max)}…` : text;
+}
+
+/** Deterministic traceability chips: parsed AC-n ids, else the raw text. */
+function TraceChips({
+  traceability,
+  onCriterionClick,
+}: {
+  traceability: string;
+  onCriterionClick?: (id: string) => void;
+}) {
+  const refs = parseTraceabilityRefs(traceability ?? '');
+  const rest = (traceability ?? '')
+    .replace(/AC-\d+/gi, '')
+    .replace(/^[,\s;]+|[,\s;]+$/g, '')
+    .trim();
+  if (refs.length === 0 && !rest) return null;
+  return (
+    <div className="mt-2 flex flex-wrap gap-1" data-testid="trace-chips">
+      {refs.map((id) =>
+        onCriterionClick ? (
+          <button
+            key={id}
+            type="button"
+            onClick={() => onCriterionClick(id)}
+            aria-label={`Show ${id} in acceptance criteria`}
+            className="rounded-full"
+          >
+            <Pill tone="accent">{id}</Pill>
+          </button>
+        ) : (
+          <Pill key={id} tone="accent">
+            {id}
+          </Pill>
+        ),
+      )}
+      {rest ? <Pill tone="neutral">{truncate(rest, 24)}</Pill> : null}
+    </div>
+  );
+}
+
+function SuiteChip({ match }: { match: SuiteMatch }) {
+  if (match.status === 'gap') {
+    return (
+      <span data-testid="suite-chip">
+        <Pill tone="bad">gap · not in your suite</Pill>
+      </span>
+    );
+  }
+  return (
+    <span title={`${match.title} · score ${match.score.toFixed(2)}`} data-testid="suite-chip">
+      <Pill tone={match.status === 'covered' ? 'neutral' : 'warn'}>
+        {match.status} · {match.suiteId}
+      </Pill>
+    </span>
+  );
+}
+
+function TestCaseCard({
+  testCase,
+  selection,
+  match,
+  onCriterionClick,
+}: {
+  testCase: TestCase;
+  selection?: TestCaseSelection;
+  match?: SuiteMatch;
+  onCriterionClick?: (id: string) => void;
+}) {
   const tags = arr<string>(testCase.tags);
   const steps = arr<string>(testCase.steps);
+  const checked = selection?.selected.includes(testCase.id) ?? false;
   return (
     <Card data-testid="test-case-card">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h3 className="min-w-0 flex-1 text-[14px] font-medium">
+          {selection ? (
+            <input
+              type="checkbox"
+              checked={checked}
+              onChange={() => selection.onToggle(testCase.id)}
+              aria-label={`Select ${testCase.id}`}
+              className="mr-2 h-4 w-4 align-middle accent-[var(--accent)]"
+            />
+          ) : null}
           <span className="mr-2 font-mono text-[12px] text-muted">{testCase.id}</span>
           {testCase.title}
         </h3>
@@ -173,6 +259,12 @@ function TestCaseCard({ testCase }: { testCase: TestCase }) {
           Validates: “{testCase.traceability}”
         </p>
       ) : null}
+      <TraceChips traceability={testCase.traceability} onCriterionClick={onCriterionClick} />
+      {match ? (
+        <div className="mt-2 flex flex-wrap gap-1">
+          <SuiteChip match={match} />
+        </div>
+      ) : null}
     </Card>
   );
 }
@@ -193,7 +285,22 @@ function TestCasesSkeleton() {
   );
 }
 
-export function TestCasesResult({ data, isLoading }: ResultProps) {
+export function TestCasesResult({
+  data,
+  isLoading,
+  selection,
+  suiteMatches,
+  gapsOnly,
+  onGapsOnlyChange,
+  onCriterionClick,
+}: ResultProps & {
+  selection?: TestCaseSelection;
+  /** Existing-suite matches by test case id; enables the match chip + gaps filter. */
+  suiteMatches?: Record<string, SuiteMatch>;
+  gapsOnly?: boolean;
+  onGapsOnlyChange?: (gapsOnly: boolean) => void;
+  onCriterionClick?: (id: string) => void;
+}) {
   const [categoryFilter, setCategoryFilter] = useState<string[]>([]);
   const [priorityFilter, setPriorityFilter] = useState<string[]>([]);
   const [feasibilityFilter, setFeasibilityFilter] = useState<string[]>([]);
@@ -222,13 +329,16 @@ export function TestCasesResult({ data, isLoading }: ResultProps) {
   const automationPotential = str(summary.automation_coverage_potential);
 
   const categoriesPresent = CATEGORY_ORDER.filter((c) => cases.some((tc) => tc.category === c));
-  const hasFilters = categoryFilter.length + priorityFilter.length + feasibilityFilter.length > 0;
+  const hasFilters =
+    categoryFilter.length + priorityFilter.length + feasibilityFilter.length > 0 ||
+    gapsOnly === true;
 
   const filtered = cases.filter(
     (tc) =>
       (categoryFilter.length === 0 || categoryFilter.includes(tc.category)) &&
       (priorityFilter.length === 0 || priorityFilter.includes(tc.priority)) &&
-      (feasibilityFilter.length === 0 || feasibilityFilter.includes(tc.automation_feasibility)),
+      (feasibilityFilter.length === 0 || feasibilityFilter.includes(tc.automation_feasibility)) &&
+      (gapsOnly !== true || suiteMatches?.[tc.id]?.status === 'gap'),
   );
   const sorted = sortCases(filtered);
 
@@ -239,6 +349,7 @@ export function TestCasesResult({ data, isLoading }: ResultProps) {
     setCategoryFilter([]);
     setPriorityFilter([]);
     setFeasibilityFilter([]);
+    onGapsOnlyChange?.(false);
   };
 
   return (
@@ -303,6 +414,13 @@ export function TestCasesResult({ data, isLoading }: ResultProps) {
             onClick={() => toggle(feasibilityFilter, setFeasibilityFilter, feasibility)}
           />
         ))}
+        {suiteMatches ? (
+          <FilterChip
+            label="Gaps only"
+            active={gapsOnly === true}
+            onClick={() => onGapsOnlyChange?.(!(gapsOnly === true))}
+          />
+        ) : null}
         {hasFilters ? (
           <button
             type="button"
@@ -316,7 +434,13 @@ export function TestCasesResult({ data, isLoading }: ResultProps) {
 
       <div className="flex flex-col gap-3">
         {sorted.map((tc) => (
-          <TestCaseCard key={tc.id} testCase={tc} />
+          <TestCaseCard
+            key={tc.id}
+            testCase={tc}
+            selection={selection}
+            match={suiteMatches?.[tc.id]}
+            onCriterionClick={onCriterionClick}
+          />
         ))}
         {cases.length === 0 && isLoading ? (
           <>

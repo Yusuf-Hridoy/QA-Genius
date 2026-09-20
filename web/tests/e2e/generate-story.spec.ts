@@ -16,10 +16,10 @@ test.describe('story analyzer generation', () => {
 
   test('renders INVEST, acceptance criteria, and copy', async ({ page, context }) => {
     await context.grantPermissions(['clipboard-read', 'clipboard-write']);
-    await page.goto('/requirements');
+    await page.goto('/requirements/story');
     await waitForApp(page);
 
-    await page.getByRole('button', { name: 'Load example' }).click();
+    await page.getByRole('button', { name: 'Load example' }).first().click();
     await page.getByRole('button', { name: 'Generate' }).click();
 
     // INVEST table with six dimension rows.

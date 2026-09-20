@@ -8,9 +8,9 @@ import {
 
 test.describe('error states', () => {
   test('generate without a key shows a toast with an Open settings action', async ({ page }) => {
-    await page.goto('/requirements');
+    await page.goto('/requirements/story');
     await waitForApp(page);
-    await page.getByRole('button', { name: 'Load example' }).click();
+    await page.getByRole('button', { name: 'Load example' }).first().click();
     await page.getByRole('button', { name: 'Generate' }).click();
     const toast = page.getByText('Add an API key to generate.');
     await expect(toast).toBeVisible();
@@ -27,9 +27,9 @@ test.describe('error states', () => {
         details: { retryAfter: 30 },
       }),
     );
-    await page.goto('/requirements');
+    await page.goto('/requirements/story');
     await waitForApp(page);
-    await page.getByRole('button', { name: 'Load example' }).click();
+    await page.getByRole('button', { name: 'Load example' }).first().click();
     await page.getByRole('button', { name: 'Generate' }).click();
     await expect(
       page.getByText(
@@ -67,9 +67,9 @@ test.describe('error states', () => {
       });
     });
 
-    await page.goto('/requirements');
+    await page.goto('/requirements/story');
     await waitForApp(page);
-    await page.getByRole('button', { name: 'Load example' }).click();
+    await page.getByRole('button', { name: 'Load example' }).first().click();
     await page.getByRole('button', { name: 'Generate' }).click();
     await expect(page.getByText('Ambiguity 12/100')).toBeVisible();
 
@@ -85,7 +85,7 @@ test.describe('error states', () => {
 
   test('client-side validation shows inline field errors', async ({ page }) => {
     await page.addInitScript(SEED_KEY_SCRIPT);
-    await page.goto('/requirements');
+    await page.goto('/requirements/story');
     await waitForApp(page);
     await page.getByLabel('User Story / Requirement').fill('too short');
     await page.getByRole('button', { name: 'Generate' }).click();

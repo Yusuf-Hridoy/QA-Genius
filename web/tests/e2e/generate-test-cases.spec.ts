@@ -15,9 +15,8 @@ test.describe('test cases generation', () => {
   });
 
   test('generates, filters, and shows the footer', async ({ page }) => {
-    await page.goto('/requirements');
+    await page.goto('/requirements/test-cases');
     await waitForApp(page);
-    await page.getByRole('tab', { name: 'Test cases' }).click();
 
     // Idle empty state.
     await expect(page.getByText('Generate test cases')).toBeVisible();

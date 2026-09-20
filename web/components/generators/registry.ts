@@ -85,4 +85,24 @@ export const GENERATOR_UI: Record<GeneratorKind, GeneratorUi> = {
     emptyHeadline: '',
     emptyDescription: '',
   },
+  story_interpretation: {
+    // Internal duel kind; never renders as a screen.
+    Form: StoryAnalyzerForm,
+    Result: StoryResult,
+    Exports: StoryExports,
+    example: {},
+    emptyIcon: FileText,
+    emptyHeadline: '',
+    emptyDescription: '',
+  },
+  duel_compare: {
+    // Internal duel kind; never renders as a screen.
+    Form: StoryAnalyzerForm,
+    Result: StoryResult,
+    Exports: StoryExports,
+    example: {},
+    emptyIcon: FileText,
+    emptyHeadline: '',
+    emptyDescription: '',
+  },
 };

@@ -1,7 +1,7 @@
 # AGENTS.md — QA-Genius v2
 
 > **Read this file completely before writing a single line of code, in every phase, every session.**
-> This is the single source of truth for the project. Phase briefs tell you *what to build this phase*; this file tells you *what the project is, how it is built, and the rules that never change*. If a phase brief and this file disagree, stop and ask — do not guess.
+> This is the single source of truth for the project. Phase briefs tell you _what to build this phase_; this file tells you _what the project is, how it is built, and the rules that never change_. If a phase brief and this file disagree, stop and ask — do not guess.
 > At the end of every phase, update §9 (Phase log) and §10 (Deferred) in this file as part of the phase's definition of done.
 
 ---
@@ -10,7 +10,7 @@
 
 QA-Genius is a personal, open-source portfolio product by Yusuf Ahmed: an AI workspace for QA engineers that turns plain-language inputs (user stories, bug notes, HAR files, test reports) into structured, reviewable QA artifacts — and, unlike a chat window, **shows its evidence**: forks, scores, badges, diffs and real measurements instead of paragraphs.
 
-**Identity line (use it in README, meta tags, demos):** *"The QA workspace that shows its evidence."*
+**Identity line (use it in README, meta tags, demos):** _"The QA workspace that shows its evidence."_
 
 **v1** (the code at the repo root) is a Python/Streamlit app with eight isolated tabs. It is being replaced, not refactored. It stays untouched on `main` until Phase 6 retires it into a `v1-streamlit` branch.
 
@@ -35,23 +35,23 @@ QA-Genius is a personal, open-source portfolio product by Yusuf Ahmed: an AI wor
 
 ## 3. Stack (pinned — do not substitute without a §9 entry)
 
-| Concern | Choice |
-|---|---|
-| Framework | Next.js 15, App Router, React 19 |
-| Language | TypeScript 5, `strict: true`, no `any` |
-| Package manager | pnpm (pinned via `packageManager`) |
-| Styling | Tailwind CSS v4 + shadcn/ui, themed with the tokens in §4 |
-| Fonts | `next/font/google`: Plus Jakarta Sans (display), Instrument Sans (body), JetBrains Mono (mono) |
-| LLM | Vercel AI SDK (`ai`) + `@ai-sdk/google`, `@ai-sdk/groq`, `@ai-sdk/openai`, `@ai-sdk/anthropic`, `@ai-sdk/openai-compatible` |
-| Schemas | Zod; `zod-to-json-schema` for the `/api/generators` contract |
-| JSON repair | `jsonrepair` |
-| Client state | React state; `zustand` (persisted to `localStorage`) for keys and project context; IndexedDB (`idb`) for run history from Phase 4 |
-| Exports | `xlsx` (SheetJS), `jszip`, `papaparse` |
-| Code display | `shiki` |
-| Icons | `lucide-react` |
-| Tests | Vitest + Testing Library; Playwright |
-| Lint/format | ESLint (next + typescript-eslint), Prettier, husky + lint-staged |
-| Hosting | Vercel Hobby, root directory `web`, production branch `v2` until Phase 6 |
+| Concern         | Choice                                                                                                                            |
+| --------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| Framework       | Next.js 15, App Router, React 19                                                                                                  |
+| Language        | TypeScript 5, `strict: true`, no `any`                                                                                            |
+| Package manager | pnpm (pinned via `packageManager`)                                                                                                |
+| Styling         | Tailwind CSS v4 + shadcn/ui, themed with the tokens in §4                                                                         |
+| Fonts           | `next/font/google`: Plus Jakarta Sans (display), Instrument Sans (body), JetBrains Mono (mono)                                    |
+| LLM             | Vercel AI SDK (`ai`) + `@ai-sdk/google`, `@ai-sdk/groq`, `@ai-sdk/openai`, `@ai-sdk/anthropic`, `@ai-sdk/openai-compatible`       |
+| Schemas         | Zod; `zod-to-json-schema` for the `/api/generators` contract                                                                      |
+| JSON repair     | `jsonrepair`                                                                                                                      |
+| Client state    | React state; `zustand` (persisted to `localStorage`) for keys and project context; IndexedDB (`idb`) for run history from Phase 4 |
+| Exports         | `xlsx` (SheetJS), `jszip`, `papaparse`                                                                                            |
+| Code display    | `shiki`                                                                                                                           |
+| Icons           | `lucide-react`                                                                                                                    |
+| Tests           | Vitest + Testing Library; Playwright                                                                                              |
+| Lint/format     | ESLint (next + typescript-eslint), Prettier, husky + lint-staged                                                                  |
+| Hosting         | Vercel Hobby, root directory `web`, production branch `v2` until Phase 6                                                          |
 
 **Why TypeScript and not Python (decision record):** one runtime and one deploy on Vercel; the AI SDK provides structured streaming across all providers in one call; streaming reaches React natively; the author's automation stack is Playwright TypeScript; simpler to explain. v1's prompts and schemas were ported verbatim so nothing of the prompt engineering was lost. Python is not coming back into `web/`.
 
@@ -62,14 +62,30 @@ QA-Genius is a personal, open-source portfolio product by Yusuf Ahmed: an AI wor
 Chosen after seven rendered options. Light-only until dark mode is un-parked. All colors are CSS variables in `app/globals.css`, mirrored into Tailwind; **no raw hex in components** (CI greps for it).
 
 ```css
---bg:#F0EEE9; --side:#E7E4DD; --card:#FBFAF7; --card-2:#F3F1EC;
---border:#D9D5CC; --border-strong:#C8C3B8;
---text:#1B1F1C; --text-2:#555C56; --muted:#858C85;
---accent:#1F5E46; --accent-ink:#FFFFFF; --accent-soft:#DDEBE3;
---ok-bg:#DDEBE3; --ok-fg:#1F5E46;  --warn-bg:#F6E9CF; --warn-fg:#845708;
---bad-bg:#F7DEDA; --bad-fg:#9B3227; --info-bg:#E2E8F0; --info-fg:#354B6E;
---hl-bg:#F6E9CF; --hl-fg:#845708;
---radius:8px; --radius-card:12px;
+--bg: #f0eee9;
+--side: #e7e4dd;
+--card: #fbfaf7;
+--card-2: #f3f1ec;
+--border: #d9d5cc;
+--border-strong: #c8c3b8;
+--text: #1b1f1c;
+--text-2: #555c56;
+--muted: #858c85;
+--accent: #1f5e46;
+--accent-ink: #ffffff;
+--accent-soft: #ddebe3;
+--ok-bg: #ddebe3;
+--ok-fg: #1f5e46;
+--warn-bg: #f6e9cf;
+--warn-fg: #845708;
+--bad-bg: #f7deda;
+--bad-fg: #9b3227;
+--info-bg: #e2e8f0;
+--info-fg: #354b6e;
+--hl-bg: #f6e9cf;
+--hl-fg: #845708;
+--radius: 8px;
+--radius-card: 12px;
 ```
 
 Rules: cards `--card` + 1px `--border` + 12px radius; metric cards `--card-2`, no border; pills 11px/500, full radius, always a semantic bg/fg pair; sidebar 232px `--side`, active item `--card` bg + `--accent` text; headings and metric numbers in the display font (15/22/28px, 600); body 13–14px; mono 12px for IDs/code/keys; focus ring `0 0 0 3px var(--accent-soft)`; no shadows otherwise; body text contrast ≥ 4.5:1.
@@ -80,13 +96,13 @@ Rules: cards `--card` + 1px `--border` + 12px radius; metric cards `--card-2`, n
 
 Four workspaces in the sidebar. Everything else hangs off them.
 
-| Workspace | Route | Contains (final state) |
-|---|---|---|
-| **Requirements** | `/requirements` | Story Analyzer (+ Ambiguity Duel) → Acceptance criteria → Test Cases (traceability, gap chips vs uploaded suite, refine with diff) → Automation (generate Playwright, compiles-clean check). Exports: CSV, XLSX, `.feature`, ZIP. Shareable result links. |
-| **Bug desk** | `/bug-desk` | Bug Report from notes + screenshot/log drop; duplicate check against GitHub issues; create issue with the user's own token; Markdown export. |
-| **Quality insights** | `/quality-insights` | Upload Playwright JSON / JUnit XML / `trace.zip`; deterministic metrics, run history, flaky detection; LLM narrative; drafted bugs with failure screenshots. |
-| **Non-functional** | `/non-functional` | Performance: HAR → k6 (correlation, think-times, smoke/load/stress, SLO thresholds) → run locally → `result.json` → charts, outlier explanation, run comparison, drafted bug. Further NFR areas are parked (§10). |
-| Settings | `/settings/keys` | BYOK key manager (add, test, default, delete), project context card. |
+| Workspace            | Route               | Contains (final state)                                                                                                                                                                                                                                    |
+| -------------------- | ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Requirements**     | `/requirements`     | Story Analyzer (+ Ambiguity Duel) → Acceptance criteria → Test Cases (traceability, gap chips vs uploaded suite, refine with diff) → Automation (generate Playwright, compiles-clean check). Exports: CSV, XLSX, `.feature`, ZIP. Shareable result links. |
+| **Bug desk**         | `/bug-desk`         | Bug Report from notes + screenshot/log drop; duplicate check against GitHub issues; create issue with the user's own token; Markdown export.                                                                                                              |
+| **Quality insights** | `/quality-insights` | Upload Playwright JSON / JUnit XML / `trace.zip`; deterministic metrics, run history, flaky detection; LLM narrative; drafted bugs with failure screenshots.                                                                                              |
+| **Non-functional**   | `/non-functional`   | Performance: HAR → k6 (correlation, think-times, smoke/load/stress, SLO thresholds) → run locally → `result.json` → charts, outlier explanation, run comparison, drafted bug. Further NFR areas are parked (§10).                                         |
+| Settings             | `/settings/keys`    | BYOK key manager (add, test, default, delete), project context card.                                                                                                                                                                                      |
 
 **Removed from v1 on purpose (do not re-add):** Schema Validator, Security Tests — they belong to the author's API-focused project, not here. The v1 Quality Analytics (prose in → numbers out) is replaced by Quality Insights (files in → computed numbers out).
 
@@ -127,16 +143,16 @@ Fallback: provider rejects structured output → `generateText` + `jsonrepair` +
 
 ## 7. Generators — the registry
 
-| kind | Workspace | Tier | Input (summary) | Output schema (v1 name) |
-|---|---|---|---|---|
-| `story_analyzer` | Requirements | fast | user story, context | `AmbiguityAnalysis` |
-| `test_cases` | Requirements | fast | story/requirement, coverage focus, tech stack | `TestCaseList` |
-| `automation_script` | Requirements | reasoning | test cases or story, framework, language, pattern | `AutomationScript` |
-| `bug_report` | Bug desk | fast | raw notes, environment fields (+ screenshot from Phase 3) | `BugReport` |
-| `quality_narrative` | Quality insights | reasoning | computed metrics JSON (Phase 4) | new |
-| `performance_k6` | Non-functional | reasoning | parsed HAR + profile + SLA (Phase 5) | rebuilt from v1 `PerformanceTestSuite` |
-| `performance_narrative` | Non-functional | fast | computed k6 metrics JSON (Phase 5) | new |
-| `ping` | internal | fast | none | `{ ok: true }` |
+| kind                    | Workspace        | Tier      | Input (summary)                                           | Output schema (v1 name)                |
+| ----------------------- | ---------------- | --------- | --------------------------------------------------------- | -------------------------------------- |
+| `story_analyzer`        | Requirements     | fast      | user story, context                                       | `AmbiguityAnalysis`                    |
+| `test_cases`            | Requirements     | fast      | story/requirement, coverage focus, tech stack             | `TestCaseList`                         |
+| `automation_script`     | Requirements     | reasoning | test cases or story, framework, language, pattern         | `AutomationScript`                     |
+| `bug_report`            | Bug desk         | fast      | raw notes, environment fields (+ screenshot from Phase 3) | `BugReport`                            |
+| `quality_narrative`     | Quality insights | reasoning | computed metrics JSON (Phase 4)                           | new                                    |
+| `performance_k6`        | Non-functional   | reasoning | parsed HAR + profile + SLA (Phase 5)                      | rebuilt from v1 `PerformanceTestSuite` |
+| `performance_narrative` | Non-functional   | fast      | computed k6 metrics JSON (Phase 5)                        | new                                    |
+| `ping`                  | internal         | fast      | none                                                      | `{ ok: true }`                         |
 
 Every request schema accepts `instructions?: string` (≤ 1000 chars) appended to the user prompt as `ADDITIONAL INSTRUCTIONS FROM USER:` — the refine loop uses it.
 
@@ -154,19 +170,20 @@ Every request schema accepts `instructions?: string` (≤ 1000 chars) appended t
 
 ---
 
-## 9. Phase log  (update at the end of every phase)
+## 9. Phase log (update at the end of every phase)
 
-| Phase | Scope | Status | Delivered / notes |
-|---|---|---|---|
-| 1 | Foundation: shell, look D, BYOK, provider layer, 4 generators, streaming, exports, tests, CI, live URL | **done** (2026-09-19, live URL pending owner deploy) | Full app in `web/`: shell + key manager + 4 generators streaming with repair/re-ask, client-side exports, 123 unit/component tests (87% stmts on lib/**), 21 e2e tests green, CI workflow. `pnpm check`, `build`, `e2e` green locally. Vercel import + real-key run (Checkpoints B/C) left to owner. |
-| 2 | Requirements pipeline: chaining, traceability, Ambiguity Duel, refine with diff, share links, gap chips | planned | — |
-| 3 | Automation compiles-clean; Bug desk multimodal, GitHub duplicate check + issue creation | planned | — |
-| 4 | Quality insights: report/trace parsing, history, flaky detection, narrative, drafted bugs | planned | — |
-| 5 | Non-functional: Performance (HAR → k6 → result.json analysis) | planned | — |
-| 6 | Launch: eval harness, MCP endpoint, README/ARCH, demo video, retire v1 | planned | — |
-| 7+ | NFR expansions (see §10) | to be discussed | — |
+| Phase | Scope                                                                                                   | Status                                               | Delivered / notes                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| ----- | ------------------------------------------------------------------------------------------------------- | ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 1     | Foundation: shell, look D, BYOK, provider layer, 4 generators, streaming, exports, tests, CI, live URL  | **done** (2026-09-19, live URL pending owner deploy) | Full app in `web/`: shell + key manager + 4 generators streaming with repair/re-ask, client-side exports, 123 unit/component tests (87% stmts on lib/**), 21 e2e tests green, CI workflow. `pnpm check`, `build`, `e2e` green locally. Vercel import + real-key run (Checkpoints B/C) left to owner.                                                                                                                                                                                                                                                                                                                     |
+| 2     | Requirements pipeline: chaining, traceability, Ambiguity Duel, refine with diff, share links, gap chips | **done** (2026-09-20, live URL pending owner deploy) | Stepper (`/requirements/story`, `/criteria`, `/test-cases`, `/automation`) over a client-side Run (sessionStorage + localStorage recents); criteria editor with dnd-kit reorder; AC traceability chips + coverage with uncovered recovery; duel (2 internal kinds, temp 0.8/0.2) with inline highlights and apply-rewrite; refine with deterministic diff + accept/keep/undo; fragment-based `/share` with size caps; suite upload (IndexedDB) with matcher chips and gaps export. 194 unit tests (86.5% stmts on lib/**), 28 e2e green. `pnpm check`, `build`, `e2e` green locally. Live checkpoint runs left to owner. |
+| 3     | Automation compiles-clean; Bug desk multimodal, GitHub duplicate check + issue creation                 | planned                                              | —                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| 4     | Quality insights: report/trace parsing, history, flaky detection, narrative, drafted bugs               | planned                                              | —                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| 5     | Non-functional: Performance (HAR → k6 → result.json analysis)                                           | planned                                              | —                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| 6     | Launch: eval harness, MCP endpoint, README/ARCH, demo video, retire v1                                  | planned                                              | —                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| 7+    | NFR expansions (see §10)                                                                                | to be discussed                                      | —                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 
 Decision records go here too, dated, one line each:
+
 - 2026-09-19 — TypeScript-only on Vercel; Python backend dropped (reasons in §3).
 - 2026-09-19 — Look D chosen from seven rendered options.
 - 2026-09-19 — Schema Validator and Security Tests removed from scope (moved to the author's API project).
@@ -174,17 +191,24 @@ Decision records go here too, dated, one line each:
 - 2026-09-19 — ai SDK v7 has no useObject; custom `use-object-stream.ts` client hook implements the same progressive-JSON contract.
 - 2026-09-19 — `xlsx-js-style` replaces `xlsx` (cell styling for the Test Cases sheet).
 - 2026-09-19 — git hooks set via `scripts/set-hooks.mjs` (`core.hooksPath=web/.husky`); husky runtime removed (monorepo layout).
+- 2026-09-20 — Run is client-only (sessionStorage current + localStorage recents, 10 entries / 1 MB cap); no server storage added in Phase 2.
+- 2026-09-20 — Per-kind sampling temperature on the registry (`temperature`, default 0.3); duel uses 0.8/0.2.
+- 2026-09-20 — Test-cases request gains optional `criteria` (≤ 40 × 500 chars) and `previous` (≤ 60) user-prompt blocks; verbatim v1 system prompts untouched, snapshots unchanged.
+- 2026-09-20 — Run gains `automation` prefill, `manualStory`, and `selectedIds` fields (additive; generator output schemas unchanged).
+- 2026-09-20 — `SuiteMatch` lives in `lib/suite/match.ts` (lib never imports from components).
 
 ---
 
-## 10. Deferred / parked  (append; never silently drop)
+## 10. Deferred / parked (append; never silently drop)
 
 Parked by decision (not Vercel-compatible or out of scope for now):
+
 - Dark mode (tokens are structured to allow a `[data-theme="dark"]` block).
 - Execution of generated tests in the user's own CI ("proof runs"), mutation testing, invariant monitors, drift detection via webhooks — all need runners or background jobs.
 - Demo key pool / server-side keys.
 
 Parked NFR expansions (to be discussed after Phase 5, in this order of likely value):
+
 1. Web vitals and load — real LCP/INP/CLS via PageSpeed Insights API, field vs lab, "what to fix first".
 2. Accessibility — Lighthouse a11y findings mapped to WCAG 2.2 + generated Playwright + axe-core regression test file.
 3. SLO Forge — vague NFRs → measurable SLOs; Little's-law capacity math feeding the k6 config.
@@ -194,12 +218,17 @@ Parked NFR expansions (to be discussed after Phase 5, in this order of likely va
 7. NFR scorecard — ISO 25010 categories, measured where possible, exportable PDF.
 
 Agent-added deferrals (append below with phase and date):
+
 - phase-1 (2026-09-19) — Vercel project import, production URL, and the Checkpoint B/C real-key verification run: the app is fully tested with mocks locally; deploying needs the owner's Vercel account.
 - phase-1 (2026-09-19) — `zod-to-json-schema` package is installed but unused (Zod v4 `z.toJSONSchema` is used); revisit after Phase 2.
+- phase-2 (2026-09-20) — Checkpoint A/B live runs with a real key (pipeline, duel, refine, share link in a private window, suite upload): all covered by mocked e2e locally; needs the owner's deployment + key.
+- phase-2 (2026-09-20) — `zod-to-json-schema` still installed and unused; remove in a cleanup pass.
+- phase-2 (2026-09-20) — Share-page gap chips use the viewer's own suite for the same project; embedding the sharer's matches in the payload was not implemented.
+- phase-2 (2026-09-20) — Story refine has no undo history (only test cases keep `history`); criteria edits after a duel rewrite do not invalidate the stored duel.
 
 ---
 
-## 11. Phase report format  (paste this back at the end of each phase)
+## 11. Phase report format (paste this back at the end of each phase)
 
 ```
 Phase N report
