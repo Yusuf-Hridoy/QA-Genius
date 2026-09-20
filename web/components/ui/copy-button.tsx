@@ -32,7 +32,7 @@ export function CopyButton({
       onClick={onCopy}
       aria-label={label}
       className={cn(
-        'rounded-[var(--radius)] p-1.5 text-muted transition-colors duration-[var(--dur)] hover:bg-card hover:text-text',
+        'rounded-[var(--qg-radius)] p-1.5 text-muted transition-colors duration-[var(--qg-dur)] hover:bg-card hover:text-text',
         className,
       )}
     >

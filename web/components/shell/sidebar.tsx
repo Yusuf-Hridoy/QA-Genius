@@ -24,7 +24,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
         onClick={onNavigate}
         className="mb-3 flex items-center gap-2 px-1 py-1"
       >
-        <span className="flex h-7 w-7 items-center justify-center rounded-[var(--radius)] bg-accent">
+        <span className="flex h-7 w-7 items-center justify-center rounded-[var(--qg-radius)] bg-accent">
           <Check className="h-4 w-4 text-accent-ink" aria-hidden />
         </span>
         <span className="font-display text-[17px] font-semibold">QA-Genius</span>
@@ -40,7 +40,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
               onClick={onNavigate}
               aria-current={active ? 'page' : undefined}
               className={cn(
-                'flex items-center gap-2.5 rounded-[var(--radius)] px-2.5 py-2 text-[13px] font-medium transition-colors duration-[var(--dur)]',
+                'flex items-center gap-2.5 rounded-[var(--qg-radius)] px-2.5 py-2 text-[13px] font-medium transition-colors duration-[var(--qg-dur)]',
                 active ? 'bg-card text-accent' : 'text-text-2 hover:bg-card-2',
               )}
             >
@@ -63,7 +63,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
       <Link
         href="/settings/keys"
         onClick={onNavigate}
-        className="flex items-center gap-2.5 rounded-[var(--radius)] px-2.5 py-2 text-[13px] font-medium text-text-2 transition-colors duration-[var(--dur)] hover:bg-card-2"
+        className="flex items-center gap-2.5 rounded-[var(--qg-radius)] px-2.5 py-2 text-[13px] font-medium text-text-2 transition-colors duration-[var(--qg-dur)] hover:bg-card-2"
       >
         <Settings className="h-[18px] w-[18px]" aria-hidden />
         Settings

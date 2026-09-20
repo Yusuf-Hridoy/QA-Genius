@@ -56,7 +56,7 @@ export function CodeBlock({
   return (
     <div
       className={cn(
-        'relative overflow-hidden rounded-[var(--radius)] border border-border bg-card-2',
+        'relative overflow-hidden rounded-[var(--qg-radius)] border border-border bg-card-2',
         className,
       )}
     >

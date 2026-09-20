@@ -1,96 +1,96 @@
 @import 'tailwindcss';
 
 :root {
-  /* surfaces */
-  --bg: #f0eee9;
-  --side: #e7e4dd;
-  --card: #fbfaf7;
-  --card-2: #f3f1ec;
-  --border: #d9d5cc;
-  --border-strong: #c8c3b8;
-  /* text */
-  --text: #1b1f1c;
-  --text-2: #555c56;
-  --muted: #858c85;
-  /* accent */
-  --accent: #1f5e46;
-  --accent-hover: #17503b;
-  --accent-ink: #ffffff;
-  --accent-soft: #ddebe3;
-  /* semantic pairs */
-  --ok-bg: #ddebe3;
-  --ok-fg: #1f5e46;
-  --warn-bg: #f6e9cf;
-  --warn-fg: #845708;
-  --bad-bg: #f7deda;
-  --bad-fg: #9b3227;
-  --info-bg: #e2e8f0;
-  --info-fg: #354b6e;
-  --hl-bg: #f6e9cf;
-  --hl-fg: #845708;
-  /* shape and motion */
-  --radius: 8px;
-  --radius-card: 12px;
-  --ring: 0 0 0 3px var(--accent-soft);
-  --dur: 150ms;
+  /* look D surfaces */
+  --qg-bg: #f0eee9;
+  --qg-side: #e7e4dd;
+  --qg-card: #fbfaf7;
+  --qg-card-2: #f3f1ec;
+  --qg-border: #d9d5cc;
+  --qg-border-strong: #c8c3b8;
+  /* look D text */
+  --qg-text: #1b1f1c;
+  --qg-text-2: #555c56;
+  --qg-muted: #858c85;
+  /* look D accent */
+  --qg-accent: #1f5e46;
+  --qg-accent-hover: #17503b;
+  --qg-accent-ink: #ffffff;
+  --qg-accent-soft: #ddebe3;
+  /* look D semantic pairs */
+  --qg-ok-bg: #ddebe3;
+  --qg-ok-fg: #1f5e46;
+  --qg-warn-bg: #f6e9cf;
+  --qg-warn-fg: #845708;
+  --qg-bad-bg: #f7deda;
+  --qg-bad-fg: #9b3227;
+  --qg-info-bg: #e2e8f0;
+  --qg-info-fg: #354b6e;
+  --qg-hl-bg: #f6e9cf;
+  --qg-hl-fg: #845708;
+  /* look D shape and motion */
+  --qg-radius: 8px;
+  --qg-radius-card: 12px;
+  --qg-ring: 0 0 0 3px var(--qg-accent-soft);
+  --qg-dur: 150ms;
 
-  /* shadcn re-theme — point at the look D tokens */
-  --background: var(--bg);
-  --foreground: var(--text);
-  --card: var(--card);
-  --card-foreground: var(--text);
-  --popover: var(--card);
-  --popover-foreground: var(--text);
-  --primary: var(--accent);
-  --primary-foreground: var(--accent-ink);
-  --secondary: var(--card-2);
-  --secondary-foreground: var(--text);
-  --muted: var(--card-2);
-  --muted-foreground: var(--muted);
-  --accent: var(--card-2);
-  --accent-foreground: var(--text);
-  --destructive: var(--bad-fg);
+  /* shadcn aliases — point at the look D tokens, never the reverse */
+  --background: var(--qg-bg);
+  --foreground: var(--qg-text);
+  --card: var(--qg-card);
+  --card-foreground: var(--qg-text);
+  --popover: var(--qg-card);
+  --popover-foreground: var(--qg-text);
+  --primary: var(--qg-accent);
+  --primary-foreground: var(--qg-accent-ink);
+  --secondary: var(--qg-card-2);
+  --secondary-foreground: var(--qg-text);
+  --muted: var(--qg-card-2);
+  --muted-foreground: var(--qg-muted);
+  --accent: var(--qg-card-2);
+  --accent-foreground: var(--qg-text);
+  --destructive: var(--qg-bad-fg);
   --destructive-foreground: #ffffff;
-  --border: var(--border);
-  --input: var(--border-strong);
-  --ring: var(--accent-soft);
-  --radius: var(--radius);
+  --border: var(--qg-border);
+  --input: var(--qg-border-strong);
+  --ring: var(--qg-accent-soft);
+  --radius: var(--qg-radius);
 }
 
 @theme inline {
-  --color-bg: var(--bg);
-  --color-side: var(--side);
-  --color-card: var(--card);
-  --color-card-2: var(--card-2);
-  --color-border: var(--border);
-  --color-border-strong: var(--border-strong);
-  --color-text: var(--text);
-  --color-text-2: var(--text-2);
-  --color-muted: var(--muted);
-  --color-accent: var(--accent);
-  --color-accent-hover: var(--accent-hover);
-  --color-accent-ink: var(--accent-ink);
-  --color-accent-soft: var(--accent-soft);
-  --color-ok-bg: var(--ok-bg);
-  --color-ok-fg: var(--ok-fg);
-  --color-warn-bg: var(--warn-bg);
-  --color-warn-fg: var(--warn-fg);
-  --color-bad-bg: var(--bad-bg);
-  --color-bad-fg: var(--bad-fg);
-  --color-info-bg: var(--info-bg);
-  --color-info-fg: var(--info-fg);
-  --color-hl-bg: var(--hl-bg);
-  --color-hl-fg: var(--hl-fg);
+  --color-bg: var(--qg-bg);
+  --color-side: var(--qg-side);
+  --color-card: var(--qg-card);
+  --color-card-2: var(--qg-card-2);
+  --color-border: var(--qg-border);
+  --color-border-strong: var(--qg-border-strong);
+  --color-text: var(--qg-text);
+  --color-text-2: var(--qg-text-2);
+  --color-muted: var(--qg-muted);
+  --color-accent: var(--qg-accent);
+  --color-accent-hover: var(--qg-accent-hover);
+  --color-accent-ink: var(--qg-accent-ink);
+  --color-accent-soft: var(--qg-accent-soft);
+  --color-ok-bg: var(--qg-ok-bg);
+  --color-ok-fg: var(--qg-ok-fg);
+  --color-warn-bg: var(--qg-warn-bg);
+  --color-warn-fg: var(--qg-warn-fg);
+  --color-bad-bg: var(--qg-bad-bg);
+  --color-bad-fg: var(--qg-bad-fg);
+  --color-info-bg: var(--qg-info-bg);
+  --color-info-fg: var(--qg-info-fg);
+  --color-hl-bg: var(--qg-hl-bg);
+  --color-hl-fg: var(--qg-hl-fg);
   --font-display: var(--font-display);
   --font-body: var(--font-body);
   --font-mono: var(--font-mono);
-  --radius-control: var(--radius);
-  --radius-card: var(--radius-card);
+  --radius-control: var(--qg-radius);
+  --radius-card: var(--qg-radius-card);
 }
 
 body {
-  background: var(--bg);
-  color: var(--text);
+  background: var(--qg-bg);
+  color: var(--qg-text);
   font-family: var(--font-body);
   font-size: 14px;
   line-height: 1.5;
@@ -104,5 +104,6 @@ h3 {
 
 *:focus-visible {
   outline: none;
-  box-shadow: var(--ring);
+  box-shadow: var(--qg-ring);
 }
+/* probe */

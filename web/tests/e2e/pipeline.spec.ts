@@ -1,10 +1,28 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Locator, type Page } from '@playwright/test';
 import {
   loadFixture,
   SEED_KEY_SCRIPT,
   streamObjectFixture,
   waitForApp,
 } from './helpers/stream-fixture';
+
+/**
+ * Click a pipeline handoff button and wait for the navigation. A dev-server
+ * rebuild landing between the click and the route commit can drop the client
+ * navigation, so retry the click once if the URL does not change. Run state
+ * survives in sessionStorage, making the retry safe.
+ */
+async function clickAndNavigate(page: Page, button: Locator, url: RegExp): Promise<void> {
+  await button.click();
+  const arrived = await page
+    .waitForURL(url, { timeout: 5000 })
+    .then(() => true)
+    .catch(() => false);
+  if (!arrived) {
+    await button.click();
+    await expect(page).toHaveURL(url);
+  }
+}
 
 test.describe('requirements pipeline', () => {
   test.beforeEach(async ({ page }) => {
@@ -37,8 +55,7 @@ test.describe('requirements pipeline', () => {
     // Handoff to step 2.
     const handOff = page.getByRole('button', { name: 'Use these acceptance criteria' });
     await expect(handOff).toBeEnabled();
-    await handOff.click();
-    await expect(page).toHaveURL(/\/requirements\/criteria$/);
+    await clickAndNavigate(page, handOff, /\/requirements\/criteria$/);
 
     // Step 2 — criteria ids AC-1..n.
     const rows = page.getByTestId('criterion-row');
@@ -62,8 +79,11 @@ test.describe('requirements pipeline', () => {
     );
 
     // Handoff to step 3: auto-generates.
-    await page.getByRole('button', { name: 'Generate test cases' }).click();
-    await expect(page).toHaveURL(/\/requirements\/test-cases$/);
+    await clickAndNavigate(
+      page,
+      page.getByRole('button', { name: 'Generate test cases' }),
+      /\/requirements\/test-cases$/,
+    );
     const cards = page.getByTestId('test-case-card');
     await expect(cards).toHaveCount(8);
 
@@ -76,8 +96,7 @@ test.describe('requirements pipeline', () => {
     await cards.nth(1).getByRole('checkbox').check();
     const prefill = page.getByRole('button', { name: 'Generate automation for selected' });
     await expect(prefill).toBeEnabled();
-    await prefill.click();
-    await expect(page).toHaveURL(/\/requirements\/automation$/);
+    await clickAndNavigate(page, prefill, /\/requirements\/automation$/);
     const scenario = page.getByLabel('Test Scenario Description');
     const titles = loadFixture('test_cases').test_cases as Array<{ title: string }>;
     await expect(scenario).toContainText(titles[0].title.slice(0, 30));

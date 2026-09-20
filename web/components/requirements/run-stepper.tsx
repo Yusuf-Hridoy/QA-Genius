@@ -24,7 +24,7 @@ export function RunStepper({
         const pill = (
           <span
             className={cn(
-              'inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[12px] font-medium transition-colors duration-[var(--dur)]',
+              'inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[12px] font-medium transition-colors duration-[var(--qg-dur)]',
               status === 'done' && 'border-border bg-card-2 text-text',
               isCurrent && 'border-accent bg-accent-soft text-accent',
               status === 'todo' && !isCurrent && 'border-border bg-transparent text-muted',

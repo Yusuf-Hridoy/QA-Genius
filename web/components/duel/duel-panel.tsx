@@ -43,7 +43,7 @@ function HighlightedStory({ story, forks }: { story: string; forks: DuelFork[] }
         <span
           role="tooltip"
           id={tipId}
-          className="absolute left-0 top-full z-10 hidden w-64 rounded-[var(--radius)] border border-border bg-card p-2 text-left text-[12px] font-normal text-text shadow-none group-hover:block group-focus:block"
+          className="absolute left-0 top-full z-10 hidden w-64 rounded-[var(--qg-radius)] border border-border bg-card p-2 text-left text-[12px] font-normal text-text shadow-none group-hover:block group-focus:block"
         >
           <span className="font-medium">{fork?.topic ?? 'Fork'}</span>
           <span className="mt-1 block text-text-2">Strict: {fork?.readingA}</span>
@@ -85,7 +85,7 @@ function AlignedRows({
             key={key}
             className="grid gap-2 md:grid-cols-2"
             style={
-              differs ? { borderLeft: '2px solid var(--accent)', paddingLeft: '8px' } : undefined
+              differs ? { borderLeft: '2px solid var(--qg-accent)', paddingLeft: '8px' } : undefined
             }
             data-testid="duel-aligned-row"
           >
@@ -170,7 +170,7 @@ export function DuelPanel({
             {duel.forks.map((fork, i) => (
               <li
                 key={i}
-                className="rounded-[var(--radius)] border border-border bg-card-2 p-2.5"
+                className="rounded-[var(--qg-radius)] border border-border bg-card-2 p-2.5"
                 data-testid="duel-fork"
               >
                 <div className="flex flex-wrap items-center gap-2">

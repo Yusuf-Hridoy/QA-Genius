@@ -32,7 +32,7 @@ export function ProjectCard() {
     <>
       <button
         onClick={openDialog}
-        className="w-full rounded-[10px] border border-border bg-card p-3 text-left transition-colors duration-[var(--dur)] hover:bg-card-2"
+        className="w-full rounded-[10px] border border-border bg-card p-3 text-left transition-colors duration-[var(--qg-dur)] hover:bg-card-2"
         aria-label="Edit project"
       >
         <div className="flex items-center justify-between">

@@ -205,7 +205,7 @@ export function GeneratorScreen({
       }
     >
       {formCollapsed ? (
-        <div className="w-full rounded-[var(--radius-card)] border border-border bg-card p-3">
+        <div className="w-full rounded-[var(--qg-radius-card)] border border-border bg-card p-3">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <p className="text-[13px] text-text-2">{formSummary}</p>
             <Button variant="secondary" onClick={() => setFormOpen(true)}>

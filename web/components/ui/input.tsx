@@ -4,7 +4,7 @@ import { forwardRef, type InputHTMLAttributes, type TextareaHTMLAttributes } fro
 import { cn } from '@/lib/utils/cn';
 
 const CONTROL_CLASSES =
-  'w-full rounded-[var(--radius)] border border-border-strong bg-card px-3 text-[14px] text-text placeholder:text-muted focus-visible:outline-none';
+  'w-full rounded-[var(--qg-radius)] border border-border-strong bg-card px-3 text-[14px] text-text placeholder:text-muted focus-visible:outline-none';
 
 export const Input = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputElement>>(
   function Input({ className, ...props }, ref) {

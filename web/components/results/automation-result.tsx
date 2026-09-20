@@ -95,7 +95,7 @@ export function AutomationResult({ data, isLoading }: ResultProps) {
                         onClick={() => setSelected(name)}
                         aria-current={isActive ? 'true' : undefined}
                         className={cn(
-                          'w-full truncate rounded-[var(--radius)] px-2 py-1.5 text-left font-mono text-[12px] transition-colors duration-[var(--dur)]',
+                          'w-full truncate rounded-[var(--qg-radius)] px-2 py-1.5 text-left font-mono text-[12px] transition-colors duration-[var(--qg-dur)]',
                           isActive
                             ? 'bg-accent-soft text-accent'
                             : isFile
@@ -147,7 +147,7 @@ export function AutomationResult({ data, isLoading }: ResultProps) {
       ) : null}
 
       {designNotes ? (
-        <details className="rounded-[var(--radius-card)] border border-border bg-card px-4 py-3">
+        <details className="rounded-[var(--qg-radius-card)] border border-border bg-card px-4 py-3">
           <summary className="cursor-pointer text-[13px] font-medium">Design notes</summary>
           <p className="mt-2 text-[13px] leading-[1.7] text-text-2">{designNotes}</p>
         </details>

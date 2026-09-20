@@ -69,7 +69,7 @@ export function ShareButton({
             readOnly
             value={link}
             onFocus={(e) => e.target.select()}
-            className="w-full rounded-[var(--radius)] border border-border bg-card-2 px-2.5 py-2 font-mono text-[12px] text-text"
+            className="w-full rounded-[var(--qg-radius)] border border-border bg-card-2 px-2.5 py-2 font-mono text-[12px] text-text"
           />
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-[12px] text-muted">Link is {formatKilobytes(bytes)}</span>

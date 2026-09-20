@@ -29,7 +29,7 @@ function renderLine(line: string, index: number) {
 export function GherkinBlock({ code, title }: { code: string; title?: string }) {
   const text = code.replace(/\\n/g, '\n');
   return (
-    <div className="overflow-hidden rounded-[var(--radius)] border border-border bg-card-2">
+    <div className="overflow-hidden rounded-[var(--qg-radius)] border border-border bg-card-2">
       <div className="flex items-center justify-between border-b border-border px-3 py-1.5">
         <span className="font-mono text-[12px] text-muted">{title ?? 'gherkin'}</span>
         <CopyButton text={text} />

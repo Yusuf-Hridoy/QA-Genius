@@ -36,7 +36,7 @@ function MappingSelect({
       <select
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="rounded-[var(--radius)] border border-border bg-card px-2 py-1.5 text-[13px] font-normal"
+        className="rounded-[var(--qg-radius)] border border-border bg-card px-2 py-1.5 text-[13px] font-normal"
       >
         {optional ? <option value="">Not mapped</option> : null}
         {headers.map((h) => (

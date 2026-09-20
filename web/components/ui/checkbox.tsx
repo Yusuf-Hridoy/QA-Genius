@@ -31,7 +31,7 @@ export function Checkbox({
         checked={checked}
         disabled={disabled}
         onChange={(e) => onCheckedChange(e.target.checked)}
-        className="h-4 w-4 rounded-[3px] border-border-strong accent-[var(--accent)]"
+        className="h-4 w-4 rounded-[3px] border-border-strong accent-[var(--qg-accent)]"
       />
       {label}
     </label>

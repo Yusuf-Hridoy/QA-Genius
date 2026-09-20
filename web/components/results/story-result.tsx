@@ -49,9 +49,9 @@ function StorySkeleton() {
         <Skeleton className="h-5 w-36" />
         <Skeleton className="h-5 w-40 rounded-full" />
       </div>
-      <Skeleton className="h-40 w-full rounded-[var(--radius-card)]" />
-      <Skeleton className="h-32 w-full rounded-[var(--radius-card)]" />
-      <Skeleton className="h-48 w-full rounded-[var(--radius-card)]" />
+      <Skeleton className="h-40 w-full rounded-[var(--qg-radius-card)]" />
+      <Skeleton className="h-32 w-full rounded-[var(--qg-radius-card)]" />
+      <Skeleton className="h-48 w-full rounded-[var(--qg-radius-card)]" />
     </div>
   );
 }
@@ -130,7 +130,7 @@ export function StoryResult({ data, isLoading }: ResultProps) {
             {vaguePhrases.map((vp, i) => (
               <li key={i} className="flex flex-col gap-1">
                 <div className="flex flex-wrap items-center gap-2">
-                  <code className="rounded-[var(--radius)] bg-hl-bg px-1.5 py-0.5 font-mono text-[12px] text-hl-fg">
+                  <code className="rounded-[var(--qg-radius)] bg-hl-bg px-1.5 py-0.5 font-mono text-[12px] text-hl-fg">
                     {vp.phrase}
                   </code>
                   <Pill tone={severityTone(vp.severity)}>{vp.severity}</Pill>
@@ -214,7 +214,7 @@ export function StoryResult({ data, isLoading }: ResultProps) {
       ) : null}
 
       {scoreBreakdown ? (
-        <details className="rounded-[var(--radius-card)] border border-border bg-card px-4 py-3">
+        <details className="rounded-[var(--qg-radius-card)] border border-border bg-card px-4 py-3">
           <summary className="cursor-pointer text-[13px] font-medium">
             How the score was computed
           </summary>

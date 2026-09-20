@@ -34,7 +34,7 @@ export function RadioGroup<T extends string>({
               value={option.value}
               checked={value === option.value}
               onChange={() => onChange(option.value)}
-              className="h-4 w-4 border-border-strong accent-[var(--accent)]"
+              className="h-4 w-4 border-border-strong accent-[var(--qg-accent)]"
             />
             {option.label}
           </label>

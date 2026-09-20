@@ -75,7 +75,7 @@ export default function CriteriaStepPage() {
             onChange={(e) => setManualStory(e.target.value)}
             rows={4}
             placeholder="As a shopper, I want to save items for later so I can buy them next visit."
-            className="w-full rounded-[var(--radius)] border border-border bg-card px-2.5 py-2 text-[13px] text-text focus-visible:outline-none"
+            className="w-full rounded-[var(--qg-radius)] border border-border bg-card px-2.5 py-2 text-[13px] text-text focus-visible:outline-none"
           />
           <p className="text-[12px] text-muted">
             Start from scratch: describe the story, then list criteria below.

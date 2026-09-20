@@ -12,7 +12,7 @@ export function StoryAnalyzerForm({ value, errors, onField }: FormProps) {
   const instructions = fieldValue(value, 'instructions');
 
   return (
-    <div className="flex flex-col gap-3 rounded-[var(--radius-card)] border border-border bg-card p-4">
+    <div className="flex flex-col gap-3 rounded-[var(--qg-radius-card)] border border-border bg-card p-4">
       <FormField label="User Story / Requirement" error={errors.user_story}>
         <Textarea
           value={userStory}

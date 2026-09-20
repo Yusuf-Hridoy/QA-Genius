@@ -29,7 +29,7 @@ export function BugReportForm({ value, errors, onField }: FormProps) {
   );
 
   return (
-    <div className="flex flex-col gap-3 rounded-[var(--radius-card)] border border-border bg-card p-4">
+    <div className="flex flex-col gap-3 rounded-[var(--qg-radius-card)] border border-border bg-card p-4">
       <FormField label="Raw Bug Notes" error={errors.raw_bug}>
         <Textarea
           value={rawBug}

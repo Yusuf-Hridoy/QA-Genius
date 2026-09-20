@@ -33,7 +33,7 @@ export function AutomationForm({ value, errors, onField }: FormProps) {
   };
 
   return (
-    <div className="flex flex-col gap-3 rounded-[var(--radius-card)] border border-border bg-card p-4">
+    <div className="flex flex-col gap-3 rounded-[var(--qg-radius-card)] border border-border bg-card p-4">
       <FormField
         label="Test Scenario Description"
         error={errors.scenario}

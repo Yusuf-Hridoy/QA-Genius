@@ -39,7 +39,7 @@ export function Dialog({
         aria-modal="true"
         aria-label={title}
         className={cn(
-          'w-full max-w-md rounded-[var(--radius-card)] border border-border bg-card p-4',
+          'w-full max-w-md rounded-[var(--qg-radius-card)] border border-border bg-card p-4',
           className,
         )}
         onClick={(e) => e.stopPropagation()}
@@ -49,7 +49,7 @@ export function Dialog({
           <button
             onClick={() => onOpenChange(false)}
             aria-label="Close dialog"
-            className="rounded-[var(--radius)] p-1 text-text-2 hover:bg-card-2"
+            className="rounded-[var(--qg-radius)] p-1 text-text-2 hover:bg-card-2"
           >
             <X className="h-4 w-4" aria-hidden />
           </button>

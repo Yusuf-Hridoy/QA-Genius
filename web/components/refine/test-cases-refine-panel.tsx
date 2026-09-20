@@ -131,7 +131,7 @@ export function TestCasesRefinePanel({
   }
 
   return (
-    <div className="flex flex-col gap-2 rounded-[var(--radius-card)] border border-border bg-card p-3">
+    <div className="flex flex-col gap-2 rounded-[var(--qg-radius-card)] border border-border bg-card p-3">
       <label htmlFor="test-cases-refine" className="text-[13px] font-medium">
         Refine test cases
       </label>
@@ -142,7 +142,7 @@ export function TestCasesRefinePanel({
         rows={3}
         maxLength={1000}
         placeholder={TEST_CASES_REFINE_PLACEHOLDER}
-        className="w-full rounded-[var(--radius)] border border-border bg-card px-2.5 py-2 text-[13px] text-text focus-visible:outline-none"
+        className="w-full rounded-[var(--qg-radius)] border border-border bg-card px-2.5 py-2 text-[13px] text-text focus-visible:outline-none"
       />
       <div className="flex flex-wrap items-center gap-2">
         <Button

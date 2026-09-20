@@ -18,7 +18,7 @@ function TierSegmented() {
       <div
         role="radiogroup"
         aria-label="Model tier"
-        className="flex overflow-hidden rounded-[var(--radius)] border border-border-strong bg-card"
+        className="flex overflow-hidden rounded-[var(--qg-radius)] border border-border-strong bg-card"
       >
         {(['fast', 'reasoning'] as Tier[]).map((t) => (
           <button
@@ -27,7 +27,7 @@ function TierSegmented() {
             aria-checked={tier === t}
             onClick={() => setTier(t)}
             className={cn(
-              'px-3 py-1.5 text-[12px] font-medium capitalize transition-colors duration-[var(--dur)]',
+              'px-3 py-1.5 text-[12px] font-medium capitalize transition-colors duration-[var(--qg-dur)]',
               tier === t ? 'bg-accent text-accent-ink' : 'text-text-2 hover:bg-card-2',
             )}
           >
@@ -47,7 +47,7 @@ export function TopBar({ children }: { children?: React.ReactNode }) {
     <header className="flex h-14 shrink-0 items-center justify-between gap-4 border-b border-border px-4">
       <div className="flex items-center gap-2">
         <button
-          className="rounded-[var(--radius)] p-2 text-text-2 hover:bg-card-2 lg:hidden"
+          className="rounded-[var(--qg-radius)] p-2 text-text-2 hover:bg-card-2 lg:hidden"
           onClick={() => setDrawerOpen(true)}
           aria-label="Open navigation"
         >

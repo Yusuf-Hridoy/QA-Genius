@@ -32,8 +32,8 @@ function BugSkeleton() {
     <div className="flex flex-col gap-3">
       <Skeleton className="h-6 w-2/3" />
       <Skeleton className="h-6 w-48" />
-      <Skeleton className="h-40 w-full rounded-[var(--radius-card)]" />
-      <Skeleton className="h-32 w-full rounded-[var(--radius-card)]" />
+      <Skeleton className="h-40 w-full rounded-[var(--qg-radius-card)]" />
+      <Skeleton className="h-32 w-full rounded-[var(--qg-radius-card)]" />
     </div>
   );
 }
@@ -101,7 +101,7 @@ export function BugReportResult({ data, isLoading }: ResultProps) {
       </div>
 
       {environment ? (
-        <pre className="overflow-x-auto rounded-[var(--radius)] border border-border bg-card-2 p-3 font-mono text-[12px] text-text-2">
+        <pre className="overflow-x-auto rounded-[var(--qg-radius)] border border-border bg-card-2 p-3 font-mono text-[12px] text-text-2">
           {environment}
         </pre>
       ) : null}
@@ -174,7 +174,7 @@ export function BugReportResult({ data, isLoading }: ResultProps) {
                   type="checkbox"
                   disabled
                   aria-label={`Investigation step ${i + 1}`}
-                  className="mt-0.5 h-4 w-4 accent-[var(--accent)]"
+                  className="mt-0.5 h-4 w-4 accent-[var(--qg-accent)]"
                 />
                 {step}
               </li>

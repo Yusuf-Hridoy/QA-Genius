@@ -61,6 +61,8 @@ QA-Genius is a personal, open-source portfolio product by Yusuf Ahmed: an AI wor
 
 Chosen after seven rendered options. Light-only until dark mode is un-parked. All colors are CSS variables in `app/globals.css`, mirrored into Tailwind; **no raw hex in components** (CI greps for it).
 
+All look D tokens are namespaced `--qg-*`; shadcn's own variable names (`--card`, `--muted`, `--accent`, `--border`, `--ring`, `--radius`, …) are aliases that point at `--qg-*` and must never be used directly in components.
+
 ```css
 --bg: #f0eee9;
 --side: #e7e4dd;
@@ -196,6 +198,7 @@ Decision records go here too, dated, one line each:
 - 2026-09-20 — Test-cases request gains optional `criteria` (≤ 40 × 500 chars) and `previous` (≤ 60) user-prompt blocks; verbatim v1 system prompts untouched, snapshots unchanged.
 - 2026-09-20 — Run gains `automation` prefill, `manualStory`, and `selectedIds` fields (additive; generator output schemas unchanged).
 - 2026-09-20 — `SuiteMatch` lives in `lib/suite/match.ts` (lib never imports from components).
+- 2026-09-20 — Look D tokens namespaced `--qg-*` after a shadcn variable collision wiped the theme; guarded by `check-css-tokens` + computed-style e2e.
 
 ---
 

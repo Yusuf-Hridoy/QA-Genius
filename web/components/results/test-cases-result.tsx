@@ -97,7 +97,7 @@ function FilterChip({
       onClick={onClick}
       aria-pressed={active}
       className={cn(
-        'rounded-full border px-2.5 py-1 text-[11px] font-medium transition-colors duration-[var(--dur)]',
+        'rounded-full border px-2.5 py-1 text-[11px] font-medium transition-colors duration-[var(--qg-dur)]',
         active
           ? 'border-accent bg-accent-soft text-accent'
           : 'border-border-strong bg-card text-text-2 hover:bg-card-2',
@@ -196,7 +196,7 @@ function TestCaseCard({
               checked={checked}
               onChange={() => selection.onToggle(testCase.id)}
               aria-label={`Select ${testCase.id}`}
-              className="mr-2 h-4 w-4 align-middle accent-[var(--accent)]"
+              className="mr-2 h-4 w-4 align-middle accent-[var(--qg-accent)]"
             />
           ) : null}
           <span className="mr-2 font-mono text-[12px] text-muted">{testCase.id}</span>
@@ -231,7 +231,7 @@ function TestCaseCard({
         {testCase.expected_result}
       </p>
       {testCase.test_data ? (
-        <pre className="mt-2 overflow-x-auto rounded-[var(--radius)] bg-card-2 p-2 font-mono text-[12px] text-text-2">
+        <pre className="mt-2 overflow-x-auto rounded-[var(--qg-radius)] bg-card-2 p-2 font-mono text-[12px] text-text-2">
           {testCase.test_data}
         </pre>
       ) : null}
@@ -279,8 +279,8 @@ function TestCasesSkeleton() {
         <Skeleton className="h-16" />
       </div>
       <Skeleton className="h-9 w-full" />
-      <Skeleton className="h-56 w-full rounded-[var(--radius-card)]" />
-      <Skeleton className="h-56 w-full rounded-[var(--radius-card)]" />
+      <Skeleton className="h-56 w-full rounded-[var(--qg-radius-card)]" />
+      <Skeleton className="h-56 w-full rounded-[var(--qg-radius-card)]" />
     </div>
   );
 }
@@ -380,7 +380,7 @@ export function TestCasesResult({
         />
       </div>
 
-      <div className="flex flex-wrap items-center gap-1.5 rounded-[var(--radius-card)] border border-border bg-card p-2.5">
+      <div className="flex flex-wrap items-center gap-1.5 rounded-[var(--qg-radius-card)] border border-border bg-card p-2.5">
         <span className="mr-1 text-[11px] font-medium uppercase tracking-wide text-muted">
           Category
         </span>
@@ -444,8 +444,8 @@ export function TestCasesResult({
         ))}
         {cases.length === 0 && isLoading ? (
           <>
-            <Skeleton className="h-56 w-full rounded-[var(--radius-card)]" />
-            <Skeleton className="h-56 w-full rounded-[var(--radius-card)]" />
+            <Skeleton className="h-56 w-full rounded-[var(--qg-radius-card)]" />
+            <Skeleton className="h-56 w-full rounded-[var(--qg-radius-card)]" />
           </>
         ) : null}
       </div>

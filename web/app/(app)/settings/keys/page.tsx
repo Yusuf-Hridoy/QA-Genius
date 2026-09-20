@@ -61,14 +61,14 @@ function KeyRow({ storedKey, isDefault }: { storedKey: StoredKey; isDefault: boo
   };
 
   return (
-    <div className="flex flex-wrap items-center gap-3 rounded-[var(--radius)] border border-border bg-card px-3 py-2.5">
+    <div className="flex flex-wrap items-center gap-3 rounded-[var(--qg-radius)] border border-border bg-card px-3 py-2.5">
       <input
         type="radio"
         name="default-key"
         checked={isDefault}
         onChange={() => setDefault(storedKey.id)}
         aria-label={`Set ${meta.displayName} as default`}
-        className="h-4 w-4 accent-[var(--accent)]"
+        className="h-4 w-4 accent-[var(--qg-accent)]"
       />
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-2">
@@ -168,7 +168,7 @@ export default function KeysSettingsPage() {
     <div className="flex max-w-2xl flex-col gap-4">
       <h1 className="font-display text-[22px] font-semibold">Settings</h1>
 
-      <div className="flex items-start gap-2.5 rounded-[var(--radius-card)] border border-border bg-card p-4">
+      <div className="flex items-start gap-2.5 rounded-[var(--qg-radius-card)] border border-border bg-card p-4">
         <Info className="mt-0.5 h-4 w-4 shrink-0 text-info-fg" aria-hidden />
         <p className="text-[13px] leading-relaxed text-text-2">
           Keys live only in this browser&apos;s storage. Each request sends your key to your chosen
@@ -242,7 +242,7 @@ export default function KeysSettingsPage() {
                 type="button"
                 onClick={() => setShowKey((v) => !v)}
                 aria-label={showKey ? 'Hide key' : 'Show key'}
-                className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded-[var(--radius)] p-1.5 text-muted hover:bg-card-2 hover:text-text"
+                className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded-[var(--qg-radius)] p-1.5 text-muted hover:bg-card-2 hover:text-text"
               >
                 {showKey ? (
                   <EyeOff className="h-4 w-4" aria-hidden />

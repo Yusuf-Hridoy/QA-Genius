@@ -47,7 +47,7 @@ export function TestCasesDiffView({
             type="checkbox"
             checked={changesOnly}
             onChange={(e) => setChangesOnly(e.target.checked)}
-            className="h-4 w-4 accent-[var(--accent)]"
+            className="h-4 w-4 accent-[var(--qg-accent)]"
           />
           Show only changes
         </label>
@@ -55,14 +55,14 @@ export function TestCasesDiffView({
           <div
             key={`${entry.status}-${entry.id}`}
             data-testid={`diff-${entry.status}`}
-            className="rounded-[var(--radius)] border border-border bg-card-2 p-2.5"
+            className="rounded-[var(--qg-radius)] border border-border bg-card-2 p-2.5"
             style={
               entry.status === 'added'
-                ? { borderLeft: '3px solid var(--ok-fg)' }
+                ? { borderLeft: '3px solid var(--qg-ok-fg)' }
                 : entry.status === 'changed'
-                  ? { borderLeft: '3px solid var(--warn-fg)' }
+                  ? { borderLeft: '3px solid var(--qg-warn-fg)' }
                   : entry.status === 'removed'
-                    ? { borderLeft: '3px solid var(--bad-fg)' }
+                    ? { borderLeft: '3px solid var(--qg-bad-fg)' }
                     : undefined
             }
           >

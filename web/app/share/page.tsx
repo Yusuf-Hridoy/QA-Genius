@@ -132,7 +132,7 @@ export default function SharePage() {
           />
         ) : content ? (
           <>
-            <div className="rounded-[var(--radius-card)] border border-border bg-card p-3">
+            <div className="rounded-[var(--qg-radius-card)] border border-border bg-card p-3">
               <p className="text-[13px]">
                 Shared read-only result · {state.projectName} ·{' '}
                 {new Date(content.run.updatedAt).toLocaleDateString(undefined, {

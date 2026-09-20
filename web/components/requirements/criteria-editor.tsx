@@ -49,7 +49,7 @@ function AutoGrowTextarea({
       aria-label={ariaLabel}
       rows={1}
       onChange={(e) => onChange(e.target.value)}
-      className="w-full resize-none overflow-hidden rounded-[var(--radius)] border border-border bg-card px-2.5 py-2 text-[13px] text-text focus-visible:outline-none"
+      className="w-full resize-none overflow-hidden rounded-[var(--qg-radius)] border border-border bg-card px-2.5 py-2 text-[13px] text-text focus-visible:outline-none"
       style={{ boxShadow: 'none' }}
     />
   );
@@ -95,8 +95,8 @@ function SortableRow({
       data-criterion-id={criterion.id}
       className={
         highlight
-          ? 'flex items-start gap-2 rounded-[var(--radius-card)] border border-accent bg-accent-soft/40 p-2.5'
-          : 'flex items-start gap-2 rounded-[var(--radius-card)] border border-border bg-card p-2.5'
+          ? 'flex items-start gap-2 rounded-[var(--qg-radius-card)] border border-accent bg-accent-soft/40 p-2.5'
+          : 'flex items-start gap-2 rounded-[var(--qg-radius-card)] border border-border bg-card p-2.5'
       }
     >
       <button
