@@ -72,4 +72,7 @@ web/coverage
 !web/**/*.json
 !web/lib/
 !web/lib/**
+# Suite fixtures are demo data (AGENTS.md §8), not local data.
+!web/fixtures/suite/*.csv
+!web/fixtures/suite/*.xlsx
 
