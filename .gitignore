@@ -59,3 +59,12 @@ Thumbs.db
 *.xlsx
 *.json
 !requirements*.txt
+
+# v2 web app
+web/node_modules
+web/.next
+web/.env*.local
+web/test-results
+web/playwright-report
+web/coverage
+
