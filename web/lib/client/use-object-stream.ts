@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { parsePartialJson } from './parse-partial-json';
+import { decodeStreamError } from '@/lib/llm/stream-error';
 
 export type StreamMeta = {
   provider?: string;
@@ -98,22 +99,42 @@ export function useObjectStream<T>(api: string, schema?: FinalObjectSchema) {
         const reader = response.body.getReader();
         const decoder = new TextDecoder();
         let accumulated = '';
+        let streamError: { code?: string; message?: string } | null = null;
         for (;;) {
           const { done, value } = await reader.read();
           if (done) break;
           accumulated += decoder.decode(value, { stream: true });
-          const partial = parsePartialJson(accumulated);
+          // Mid-stream provider error: strip the sentinel before parsing.
+          const split = decodeStreamError(accumulated);
+          if (split.code) {
+            streamError = { code: split.code, message: split.message };
+            const partial = parsePartialJson(split.jsonText);
+            if (partial !== undefined) {
+              setObject(partial as T);
+            }
+            break;
+          }
+          const partial = parsePartialJson(split.jsonText);
           if (partial !== undefined) {
             setObject(partial as T);
           }
         }
         if (!controller.signal.aborted) {
-          const finalObject = parsePartialJson(accumulated);
-          const valid =
-            finalObject !== undefined &&
-            (schema === undefined || schema.safeParse(finalObject).success);
-          if (!valid) {
-            setError(badModelOutput());
+          if (streamError?.code) {
+            const apiError = new Error(
+              streamError.message ?? 'Your provider failed mid-stream. Try again.',
+            ) as ApiError;
+            apiError.code = streamError.code;
+            setError(apiError);
+          } else {
+            const { jsonText } = decodeStreamError(accumulated);
+            const finalObject = parsePartialJson(jsonText);
+            const valid =
+              finalObject !== undefined &&
+              (schema === undefined || schema.safeParse(finalObject).success);
+            if (!valid) {
+              setError(badModelOutput());
+            }
           }
         }
         setMeta({ ...responseMeta, latencyMs: Math.round(performance.now() - startedAt) });

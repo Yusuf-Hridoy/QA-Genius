@@ -102,7 +102,11 @@ export function decodeShare(fragment: string): SharePayload {
   if (!fragment) throw new ShareDecodeError('The share link is empty.');
   let inflated: Uint8Array;
   try {
-    inflated = inflateSync(base64UrlToBytes(fragment));
+    // Preallocated out (+1 byte so any overshoot is detectable): oversized
+    // payloads fail during inflation, never via an unbounded allocation.
+    inflated = inflateSync(base64UrlToBytes(fragment), {
+      out: new Uint8Array(MAX_INFLATED_BYTES + 1),
+    });
   } catch {
     throw new ShareDecodeError('The share link could not be read.');
   }

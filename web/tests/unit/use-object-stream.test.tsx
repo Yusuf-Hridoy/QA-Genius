@@ -137,4 +137,25 @@ describe('useObjectStream', () => {
     expect(result.current.error).toBeNull();
     expect(result.current.object).toEqual({ ok: true });
   });
+
+  it('surfaces a mid-stream sentinel as the mapped ApiError', async () => {
+    const { encodeStreamError } = await import('@/lib/llm/stream-error');
+    // The sentinel terminates the JSON text; the partial object stays visible.
+    const body = `{"ok":true}${encodeStreamError('provider_rate_limited', 'Slow down.')}`;
+    fetchMock.mockResolvedValue(streamResponse(body));
+    const { result } = renderHook(() =>
+      useObjectStream('/api/generate/ping', { safeParse: () => ({ success: true }) }),
+    );
+
+    await act(async () => {
+      await result.current.submit({}, {});
+    });
+
+    await waitFor(() => {
+      expect(result.current.isLoading).toBe(false);
+    });
+    expect(result.current.error?.code).toBe('provider_rate_limited');
+    expect(result.current.error?.message).toBe('Slow down.');
+    expect(result.current.object).toEqual({ ok: true });
+  });
 });

@@ -244,3 +244,62 @@ describe('key hygiene', () => {
     }
   });
 });
+
+describe('generateStream mid-stream errors', () => {
+  it('writes the sentinel line when an error part arrives after the first chunk', async () => {
+    async function* textThenError(): AsyncGenerator<{
+      type: string;
+      textDelta?: string;
+      error?: unknown;
+    }> {
+      yield { type: 'text-delta', textDelta: '{"ambiguity_score":' };
+      yield {
+        type: 'error',
+        error: new APICallError({
+          message: 'Rate limit exceeded',
+          url: 'https://generativelanguage.googleapis.com/',
+          requestBodyValues: {},
+          statusCode: 429,
+          responseHeaders: { 'retry-after': '7' },
+        }),
+      };
+    }
+    streamObjectMock.mockReturnValue({ fullStream: textThenError() });
+
+    const response = await generateStream({
+      kind: 'story_analyzer',
+      body: validStoryBody,
+      byok,
+      requestId: 'req-mid',
+    });
+
+    expect(response.status).toBe(200);
+    const { decodeStreamError } = await import('@/lib/llm/stream-error');
+    const split = decodeStreamError(await readResponseBody(response));
+    expect(split.jsonText).toBe('{"ambiguity_score":');
+    expect(split.code).toBe('provider_rate_limited');
+  });
+
+  it('writes the sentinel line when the iterator throws mid-stream', async () => {
+    async function* textThenThrow(): AsyncGenerator<{
+      type: string;
+      textDelta?: string;
+    }> {
+      yield { type: 'text-delta', textDelta: '{"ok":' };
+      throw new Error('fetch failed: socket hang up');
+    }
+    streamObjectMock.mockReturnValue({ fullStream: textThenThrow() });
+
+    const response = await generateStream({
+      kind: 'story_analyzer',
+      body: validStoryBody,
+      byok,
+      requestId: 'req-throw',
+    });
+
+    const { decodeStreamError } = await import('@/lib/llm/stream-error');
+    const split = decodeStreamError(await readResponseBody(response));
+    expect(split.jsonText).toBe('{"ok":');
+    expect(split.code).toBe('provider_unavailable');
+  });
+});

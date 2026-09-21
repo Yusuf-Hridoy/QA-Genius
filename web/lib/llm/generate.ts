@@ -1,10 +1,16 @@
-import { generateText, streamObject } from 'ai';
+﻿import { generateText, streamObject } from 'ai';
 import { ZodError, type z } from 'zod';
 import { REGISTRY, type GeneratorKind, type GeneratorDef } from '@/lib/generators/kinds';
 import { createModel, resolveModel, PROVIDERS } from './providers';
 import { detectSuspicious } from './suspicious';
 import { repairAndParse } from './repair';
-import { isJsonModeUnsupported } from './errors';
+import { isJsonModeUnsupported, mapProviderError } from './errors';
+import {
+  STREAM_ERROR_KEY,
+  STREAM_ERROR_SENTINEL,
+  decodeStreamError,
+  encodeStreamError,
+} from './stream-error';
 import type { Byok } from './byok';
 import { BadModelOutputError, InputTooLargeError, RequestValidationError } from './errors';
 
@@ -56,6 +62,8 @@ function formatIssues(error: unknown): string {
 
 /** A stream part as yielded by the SDK result's fullStream. */
 type FullStreamPart = { type: string; textDelta?: string; error?: unknown };
+// Re-exported for tests and the client sentinel contract.
+export { STREAM_ERROR_KEY, STREAM_ERROR_SENTINEL, decodeStreamError, encodeStreamError };
 
 /**
  * Pull the first stream part before committing to a 200 response, so provider
@@ -90,11 +98,24 @@ async function streamFirstChunkResponse(
           if (next.done) break;
           if (next.value?.type === 'text-delta' && next.value.textDelta) {
             controller.enqueue(encoder.encode(next.value.textDelta));
+          } else if (next.value?.type === 'error') {
+            // Mid-stream failure after a 200: write the sentinel line so the
+            // client can surface the mapped error instead of a truncation.
+            const mapped = mapProviderError(next.value.error);
+            controller.enqueue(encoder.encode(encodeStreamError(mapped.code, mapped.message)));
+            break;
           }
         }
         controller.close();
       } catch (error) {
-        controller.error(error);
+        // Iterator throw (network drop, abort): same sentinel path.
+        try {
+          const mapped = mapProviderError(error);
+          controller.enqueue(encoder.encode(encodeStreamError(mapped.code, mapped.message)));
+          controller.close();
+        } catch {
+          controller.error(error);
+        }
       }
     },
   });
