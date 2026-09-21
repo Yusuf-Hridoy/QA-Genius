@@ -25,6 +25,8 @@ export type ProviderMeta = {
   needsBaseUrl: boolean;
   defaultModels: Record<Tier, string>;
   supportsJsonMode: boolean; // hint for generate.ts fallback
+  /** Whether the default models can read attached screenshots. */
+  supportsVision: boolean;
 };
 
 export const PROVIDERS: Record<ProviderId, ProviderMeta> = {
@@ -35,6 +37,7 @@ export const PROVIDERS: Record<ProviderId, ProviderMeta> = {
     needsBaseUrl: false,
     defaultModels: { fast: 'gemini-2.5-flash-lite', reasoning: 'gemini-2.5-flash' },
     supportsJsonMode: true,
+    supportsVision: true,
   },
   groq: {
     id: 'groq',
@@ -43,6 +46,7 @@ export const PROVIDERS: Record<ProviderId, ProviderMeta> = {
     needsBaseUrl: false,
     defaultModels: { fast: 'llama-3.1-8b-instant', reasoning: 'llama-3.3-70b-versatile' },
     supportsJsonMode: true,
+    supportsVision: false,
   },
   openai: {
     id: 'openai',
@@ -51,6 +55,7 @@ export const PROVIDERS: Record<ProviderId, ProviderMeta> = {
     needsBaseUrl: false,
     defaultModels: { fast: 'gpt-4o-mini', reasoning: 'gpt-4o-mini' },
     supportsJsonMode: true,
+    supportsVision: true,
   },
   anthropic: {
     id: 'anthropic',
@@ -59,6 +64,7 @@ export const PROVIDERS: Record<ProviderId, ProviderMeta> = {
     needsBaseUrl: false,
     defaultModels: { fast: 'claude-3-5-haiku-latest', reasoning: 'claude-sonnet-4-5' },
     supportsJsonMode: true,
+    supportsVision: true,
   },
   openrouter: {
     id: 'openrouter',
@@ -70,6 +76,7 @@ export const PROVIDERS: Record<ProviderId, ProviderMeta> = {
       reasoning: 'google/gemini-2.5-flash',
     },
     supportsJsonMode: true,
+    supportsVision: true,
   },
   'openai-compatible': {
     id: 'openai-compatible',
@@ -78,6 +85,7 @@ export const PROVIDERS: Record<ProviderId, ProviderMeta> = {
     needsBaseUrl: true,
     defaultModels: { fast: 'llama3.1', reasoning: 'llama3.1' },
     supportsJsonMode: false,
+    supportsVision: false,
   },
 };
 

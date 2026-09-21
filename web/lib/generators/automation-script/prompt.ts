@@ -116,14 +116,21 @@ export function buildAutomationPrompt(req: AutomationRequest): { system: string;
 
   // v1 human template:
   // "Test Scenario:\n{scenario}\n\nFramework: {framework}\nLanguage: {language}\nStructure: {structure}\nBrowsers: {browsers}\nTarget Site Type: {site_type}"
-  const user = withInstructions(
+  const base =
     `Test Scenario:\n${req.scenario}\n\n` +
-      `Framework: ${req.framework}\n` +
-      `Language: ${language}\n` +
-      `Structure: ${req.structure}\n` +
-      `Browsers: ${req.browsers.join(', ')}\n` +
-      `Target Site Type: ${req.site_type}`,
-    req.instructions,
-  );
+    `Framework: ${req.framework}\n` +
+    `Language: ${language}\n` +
+    `Structure: ${req.structure}\n` +
+    `Browsers: ${req.browsers.join(', ')}\n` +
+    `Target Site Type: ${req.site_type}`;
+  // Repair loop (Phase 3): previously generated files travel on the user
+  // prompt so the model can fix them. The verbatim system prompt is untouched.
+  const withPrevious =
+    req.previousFiles && req.previousFiles.length > 0
+      ? `${base}\n\nPreviously generated files:\n${req.previousFiles
+          .map((f) => `--- ${f.name} ---\n${f.code}`)
+          .join('\n')}`
+      : base;
+  const user = withInstructions(withPrevious, req.instructions);
   return { system, user };
 }

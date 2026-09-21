@@ -85,7 +85,13 @@ export function downloadStoryMarkdown(analysis: AmbiguityAnalysis, slug: string)
 }
 
 /** Bug report Markdown — also what "Copy as Markdown" copies. */
-export function bugToMarkdown(bug: BugReport): string {
+export function bugToMarkdown(
+  bug: BugReport,
+  evidence?: {
+    image?: { mime?: string };
+    log?: { name?: string; kind?: string };
+  },
+): string {
   const lines: string[] = [];
   lines.push(`# ${bug.title}`);
   lines.push('');
@@ -142,9 +148,30 @@ export function bugToMarkdown(bug: BugReport): string {
     lines.push('');
   }
 
+  if (evidence && (evidence.image || evidence.log)) {
+    lines.push('## Evidence');
+    lines.push('');
+    if (evidence.image) lines.push(`- Screenshot: attached (${evidence.image.mime ?? 'image'})`);
+    if (evidence.log)
+      lines.push(`- Log: ${evidence.log.name ?? 'log'} (${evidence.log.kind ?? 'text'})`);
+    if (evidence.image && bug.screenshot_annotations && bug.screenshot_annotations.length > 0) {
+      lines.push('- Screenshot annotations:');
+      bug.screenshot_annotations.forEach((item, i) => lines.push(`  ${i + 1}. ${item}`));
+    }
+    lines.push('');
+  }
+
   return lines.join('\n');
 }
 
-export function downloadBugMarkdown(bug: BugReport, slug: string) {
-  downloadText(`${slug}-bug-report-${dateStamp()}.md`, bugToMarkdown(bug), 'text/markdown');
+export function downloadBugMarkdown(
+  bug: BugReport,
+  slug: string,
+  evidence?: { image?: { mime?: string }; log?: { name?: string; kind?: string } },
+) {
+  downloadText(
+    `${slug}-bug-report-${dateStamp()}.md`,
+    bugToMarkdown(bug, evidence),
+    'text/markdown',
+  );
 }

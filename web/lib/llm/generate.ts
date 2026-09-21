@@ -4,13 +4,19 @@ import { REGISTRY, type GeneratorKind, type GeneratorDef } from '@/lib/generator
 import { createModel, resolveModel, PROVIDERS } from './providers';
 import { detectSuspicious } from './suspicious';
 import { repairAndParse } from './repair';
-import { isJsonModeUnsupported, mapProviderError } from './errors';
+import { isJsonModeUnsupported, mapProviderError, VisionUnsupportedError } from './errors';
 import {
   STREAM_ERROR_KEY,
   STREAM_ERROR_SENTINEL,
   decodeStreamError,
   encodeStreamError,
 } from './stream-error';
+import {
+  appendAttachmentText,
+  appendMessageText,
+  buildUserMessages,
+  type EvidenceAttachments,
+} from './multimodal';
 import type { Byok } from './byok';
 import { BadModelOutputError, InputTooLargeError, RequestValidationError } from './errors';
 
@@ -33,7 +39,13 @@ function collectSuspiciousAndSize(body: unknown): { suspicious: boolean; totalCh
     } else if (Array.isArray(value)) {
       for (const item of value) visit(item);
     } else if (value !== null && typeof value === 'object') {
-      for (const item of Object.values(value)) visit(item);
+      for (const [key, item] of Object.entries(value)) {
+        // Attachment image bytes are capped by the request schema (2.8M
+        // chars) and the route body guard (3 MB): excluded from the total
+        // cap and never scanned for suspicious content.
+        if (key === 'dataBase64' && typeof item === 'string') continue;
+        visit(item);
+      }
     }
   };
   visit(body);
@@ -174,6 +186,16 @@ export async function generateStream(input: GenerateInput): Promise<Response> {
   const model = createModel(byok.provider, byok.apiKey, modelId, byok.baseUrl);
   const temperature = def.temperature ?? 0.3;
 
+  // Evidence attachments (bug desk): the log excerpt travels in the user
+  // prompt; the screenshot travels as a vision part for capable providers.
+  const attachments = (req as { attachments?: EvidenceAttachments }).attachments;
+  const userWithEvidence = appendAttachmentText(user, attachments);
+  const image = attachments?.image;
+  if (image && !PROVIDERS[byok.provider].supportsVision) {
+    throw new VisionUnsupportedError();
+  }
+  const messages = image ? buildUserMessages(userWithEvidence, image) : undefined;
+
   const baseHeaders: Record<string, string> = {
     'x-qag-request-id': requestId,
     'x-qag-provider': byok.provider,
@@ -192,7 +214,7 @@ export async function generateStream(input: GenerateInput): Promise<Response> {
         model,
         schema: def.outputSchema as z.ZodType,
         system,
-        prompt: user,
+        ...(messages ? { messages } : { prompt: userWithEvidence }),
         temperature,
         maxOutputTokens: 8192,
       });
@@ -205,11 +227,14 @@ export async function generateStream(input: GenerateInput): Promise<Response> {
 
   // 7. Fallback path: plain text + extract/repair/parse.
   const startedAt = Date.now();
-  const fallbackPrompt = `${user}\n\nRespond with ONLY the JSON object.`;
+  const fallbackPrompt = `${userWithEvidence}\n\nRespond with ONLY the JSON object.`;
+  const fallbackMessages = messages
+    ? appendMessageText(messages, 'Respond with ONLY the JSON object.')
+    : undefined;
   const textResult = await generateText({
     model,
     system,
-    prompt: fallbackPrompt,
+    ...(fallbackMessages ? { messages: fallbackMessages } : { prompt: fallbackPrompt }),
     temperature,
     maxOutputTokens: 8192,
   });
@@ -223,10 +248,13 @@ export async function generateStream(input: GenerateInput): Promise<Response> {
     const issues = formatIssues(
       firstError instanceof Error && firstError.cause ? firstError.cause : firstError,
     );
+    const reAskText = reAskSuffix(issues, rawText);
     const second = await generateText({
       model,
       system,
-      prompt: fallbackPrompt + reAskSuffix(issues, rawText),
+      ...(fallbackMessages
+        ? { messages: appendMessageText(fallbackMessages, reAskText) }
+        : { prompt: fallbackPrompt + reAskText }),
       temperature,
       maxOutputTokens: 8192,
     });

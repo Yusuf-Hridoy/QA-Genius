@@ -8,6 +8,8 @@ export type ErrorCode =
   | 'content_blocked'
   | 'validation_error'
   | 'input_too_large'
+  | 'attachment_too_large'
+  | 'vision_unsupported'
   | 'provider_rate_limited'
   | 'bad_model_output'
   | 'provider_unavailable'
@@ -76,6 +78,26 @@ export class RequestValidationError extends AppError {
 export class InputTooLargeError extends AppError {
   constructor() {
     super('input_too_large', 422, 'Input is too large (max 50,000 characters).');
+  }
+}
+
+export class AttachmentTooLargeError extends AppError {
+  constructor() {
+    super(
+      'attachment_too_large',
+      413,
+      'The attachment is too large (max 2 MB image, 20,000 characters of log).',
+    );
+  }
+}
+
+export class VisionUnsupportedError extends AppError {
+  constructor() {
+    super(
+      'vision_unsupported',
+      400,
+      "This provider/model can't read images. Switch to Gemini, OpenAI or Anthropic, or remove the screenshot.",
+    );
   }
 }
 

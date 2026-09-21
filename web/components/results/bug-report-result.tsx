@@ -1,6 +1,7 @@
 'use client';
 
 import { Card, CardHeader } from '@/components/ui/card';
+import { CodeBlock } from '@/components/ui/code-block';
 import { Pill, type PillTone } from '@/components/ui/pill';
 import { Skeleton } from '@/components/ui/skeleton';
 import { arr, str } from './partial-data';
@@ -38,7 +39,7 @@ function BugSkeleton() {
   );
 }
 
-export function BugReportResult({ data, isLoading }: ResultProps) {
+export function BugReportResult({ data, isLoading, input }: ResultProps) {
   if (!data) {
     return isLoading ? <BugSkeleton /> : null;
   }
@@ -58,11 +59,29 @@ export function BugReportResult({ data, isLoading }: ResultProps) {
   const investigationSteps = arr<string>(data.investigation_steps);
   const relatedIssues = arr<string>(data.related_issues);
   const annotations = arr<string>(data.screenshot_annotations);
+  const suspectedPattern = str(data.suspected_pattern);
+
+  const attachments = (input?.attachments ?? {}) as {
+    image?: { mime?: string; dataBase64?: string };
+    log?: { name?: string; text?: string; kind?: string };
+  };
+  const evidenceImage =
+    typeof attachments.image?.dataBase64 === 'string' && attachments.image.dataBase64.length > 0
+      ? { mime: attachments.image.mime ?? 'image/png', dataBase64: attachments.image.dataBase64 }
+      : null;
+  const evidenceLog =
+    typeof attachments.log?.text === 'string' && attachments.log.text.length > 0
+      ? {
+          name: attachments.log.name ?? 'log',
+          text: attachments.log.text,
+          kind: attachments.log.kind ?? 'text',
+        }
+      : null;
 
   const optionalBlocks: { heading: string; content: React.ReactNode }[] = [
     {
       heading: 'Suspected pattern',
-      content: str(data.suspected_pattern) || null,
+      content: suspectedPattern || null,
     },
     {
       heading: 'Suggested fix',
@@ -99,6 +118,60 @@ export function BugReportResult({ data, isLoading }: ResultProps) {
         ) : null}
         {severity === '' && isLoading ? <Skeleton className="h-5 w-40 rounded-full" /> : null}
       </div>
+
+      {evidenceImage ? (
+        <Card data-testid="bug-evidence">
+          <CardHeader title="Evidence" />
+          <div className="grid items-start gap-3 md:grid-cols-2">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={`data:${evidenceImage.mime};base64,${evidenceImage.dataBase64}`}
+              alt="Attached screenshot"
+              className="w-full rounded-[var(--qg-radius)] border border-border object-contain"
+            />
+            <ol className="list-decimal pl-5 text-[13px] text-text-2">
+              {annotations.map((note, i) => (
+                <li key={i}>{note}</li>
+              ))}
+              {annotations.length === 0 && !isLoading ? (
+                <li className="list-none text-muted">No annotations yet.</li>
+              ) : null}
+            </ol>
+          </div>
+        </Card>
+      ) : null}
+
+      {evidenceLog ? (
+        <details
+          className="rounded-[var(--qg-radius-card)] border border-border bg-card px-4 py-3"
+          data-testid="bug-evidence-log"
+        >
+          <summary className="cursor-pointer text-[13px] font-medium">
+            Evidence · log
+            <span className="ml-2 font-mono text-[12px] text-muted">{evidenceLog.name}</span>
+          </summary>
+          <div className="mt-2 grid items-start gap-3 md:grid-cols-2">
+            <CodeBlock code={evidenceLog.text} language="text" filename={evidenceLog.name} />
+            <div className="flex flex-col gap-2 text-[13px] text-text-2">
+              {suspectedPattern ? (
+                <p>
+                  <span className="font-medium">Suspected pattern: </span>
+                  {suspectedPattern}
+                </p>
+              ) : null}
+              {relatedAreas.length > 0 ? (
+                <div className="flex flex-wrap gap-1">
+                  {relatedAreas.map((area) => (
+                    <Pill key={area} tone="neutral">
+                      {area}
+                    </Pill>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+          </div>
+        </details>
+      ) : null}
 
       {environment ? (
         <pre className="overflow-x-auto rounded-[var(--qg-radius)] border border-border bg-card-2 p-3 font-mono text-[12px] text-text-2">

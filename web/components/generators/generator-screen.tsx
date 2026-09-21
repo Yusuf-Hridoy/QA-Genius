@@ -50,6 +50,7 @@ export function GeneratorScreen({
   renderResult?: (args: {
     data: Record<string, unknown> | undefined;
     isLoading: boolean;
+    input: Record<string, unknown>;
   }) => ReactNode;
   /** Rendered below the exports row. */
   resultFooter?: ReactNode;
@@ -251,9 +252,9 @@ export function GeneratorScreen({
           <div className="flex flex-col gap-3">
             {resultHeader}
             {renderResult ? (
-              renderResult({ data: object, isLoading })
+              renderResult({ data: object, isLoading, input: lastInput })
             ) : (
-              <ui.Result data={object} isLoading={isLoading} />
+              <ui.Result data={object} isLoading={isLoading} input={lastInput} />
             )}
             {(hasResult || isLoading) && (
               <div className="flex flex-wrap items-center justify-between gap-2">

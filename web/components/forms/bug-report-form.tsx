@@ -1,11 +1,57 @@
 'use client';
 
+import { useRef, useState } from 'react';
+import { ImagePlus, Paperclip, X } from 'lucide-react';
 import { DEVICE_TYPES, computeReproducibility } from '@/lib/generators/bug-report/derived';
+import { PROVIDERS } from '@/lib/llm/providers';
+import { useDefaultKey } from '@/components/shell/key-badge';
+import {
+  base64Bytes,
+  isImageMime,
+  keptChip,
+  processImageFile,
+  processLogFile,
+  type LogKind,
+} from '@/lib/bug/attachments';
 import { FormField } from '@/components/ui/form-field';
 import { Input, Textarea } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
 import { Pill } from '@/components/ui/pill';
+import { Button } from '@/components/ui/button';
 import { fieldInt, fieldValue, type FormProps } from './types';
+
+type ImageAttachment = { mime: string; dataBase64: string };
+type LogAttachment = { name: string; text: string; kind: LogKind };
+
+function readAttachments(value: Record<string, unknown>): {
+  image?: ImageAttachment;
+  log?: LogAttachment;
+} {
+  const raw = value.attachments;
+  if (!raw || typeof raw !== 'object') return {};
+  const record = raw as Record<string, unknown>;
+  const out: { image?: ImageAttachment; log?: LogAttachment } = {};
+  const image = record.image as Record<string, unknown> | undefined;
+  if (image && typeof image.mime === 'string' && typeof image.dataBase64 === 'string') {
+    out.image = { mime: image.mime, dataBase64: image.dataBase64 };
+  }
+  const log = record.log as Record<string, unknown> | undefined;
+  if (log && typeof log.name === 'string' && typeof log.text === 'string') {
+    out.log = {
+      name: log.name,
+      text: log.text,
+      kind: log.kind === 'har' || log.kind === 'json' ? log.kind : 'text',
+    };
+  }
+  return out;
+}
+
+function formatKilobytes(bytes: number): string {
+  return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+}
+
+const VISION_MESSAGE =
+  "This provider/model can't read images. Switch to Gemini, OpenAI or Anthropic, or remove the screenshot.";
 
 export function BugReportForm({ value, errors, onField }: FormProps) {
   const rawBug = fieldValue(value, 'raw_bug');
@@ -16,6 +62,79 @@ export function BugReportForm({ value, errors, onField }: FormProps) {
 
   const computedRepro = computeReproducibility(totalAttempts, successfulAttempts);
   const allSuccessful = successfulAttempts === totalAttempts && totalAttempts > 0;
+
+  const defaultKey = useDefaultKey();
+  const visionSupported = !defaultKey || PROVIDERS[defaultKey.provider].supportsVision;
+  const attachments = readAttachments(value);
+  const [attachError, setAttachError] = useState<string | null>(null);
+  const [logTotal, setLogTotal] = useState<number | null>(null);
+  const [dragging, setDragging] = useState(false);
+  const fileInput = useRef<HTMLInputElement>(null);
+
+  const setAttachments = (next: { image?: ImageAttachment; log?: LogAttachment }) => {
+    onField('attachments', Object.keys(next).length > 0 ? next : undefined);
+  };
+
+  const attachImage = async (file: File) => {
+    setAttachError(null);
+    try {
+      const processed = await processImageFile(file);
+      setAttachments({ ...attachments, image: processed });
+    } catch (error) {
+      setAttachError(error instanceof Error ? error.message : 'Could not read the image.');
+    }
+  };
+
+  const attachLog = async (file: File) => {
+    setAttachError(null);
+    try {
+      const processed = await processLogFile(file);
+      setLogTotal(processed.totalChars);
+      setAttachments({
+        ...attachments,
+        log: { name: processed.name, text: processed.text, kind: processed.kind },
+      });
+    } catch (error) {
+      setAttachError(error instanceof Error ? error.message : 'Could not read the log file.');
+    }
+  };
+
+  const attachFiles = async (files: FileList | File[]) => {
+    const list = Array.from(files);
+    if (list.length === 0) return;
+    // One image and one log per report: images go to the screenshot slot,
+    // everything else is tried as a log.
+    for (const file of list) {
+      if (isImageMime(file.type)) {
+        if (!visionSupported) {
+          setAttachError(VISION_MESSAGE);
+          continue;
+        }
+        await attachImage(file);
+      } else {
+        await attachLog(file);
+      }
+    }
+  };
+
+  const pasteImage = (e: React.ClipboardEvent) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    for (const item of Array.from(items)) {
+      if (item.type.startsWith('image/')) {
+        const file = item.getAsFile();
+        if (!file) continue;
+        if (!visionSupported) {
+          setAttachError(VISION_MESSAGE);
+          continue;
+        }
+        void attachImage(file);
+      }
+    }
+  };
+
+  const attachmentsError =
+    errors['attachments.image'] ?? errors['attachments.log'] ?? errors.attachments;
 
   const numberField = (label: string, field: string, current: number, error?: string) => (
     <FormField label={label} error={error}>
@@ -30,10 +149,128 @@ export function BugReportForm({ value, errors, onField }: FormProps) {
 
   return (
     <div className="flex flex-col gap-3 rounded-[var(--qg-radius-card)] border border-border bg-card p-4">
+      <div className="flex flex-col gap-2">
+        <span id="bug-attachments-label" className="text-[13px] font-medium">
+          Evidence
+        </span>
+        <div
+          role="button"
+          tabIndex={0}
+          aria-labelledby="bug-attachments-label"
+          onClick={() => fileInput.current?.click()}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') fileInput.current?.click();
+          }}
+          onDragOver={(e) => {
+            e.preventDefault();
+            setDragging(true);
+          }}
+          onDragLeave={() => setDragging(false)}
+          onDrop={(e) => {
+            e.preventDefault();
+            setDragging(false);
+            void attachFiles(e.dataTransfer.files);
+          }}
+          data-testid="bug-attachments-dropzone"
+          className={
+            dragging
+              ? 'rounded-[var(--qg-radius)] border border-accent bg-accent-soft px-3 py-4 text-center text-[13px] text-accent'
+              : 'rounded-[var(--qg-radius)] border border-dashed border-border-strong px-3 py-4 text-center text-[13px] text-muted'
+          }
+        >
+          Drop a screenshot or a log file
+        </div>
+        <input
+          ref={fileInput}
+          type="file"
+          className="hidden"
+          accept=".png,.jpg,.jpeg,.webp,.txt,.log,.json,.har"
+          aria-label="Attach a screenshot or a log file"
+          onChange={(e) => {
+            void attachFiles(e.target.files ?? []);
+            e.target.value = '';
+          }}
+        />
+        {!visionSupported ? (
+          <p className="text-[12px] text-warn-fg" data-testid="bug-vision-warning">
+            {VISION_MESSAGE}
+          </p>
+        ) : null}
+        {attachments.image ? (
+          <div
+            className="flex items-center gap-3 rounded-[var(--qg-radius)] border border-border bg-card-2 p-2"
+            data-testid="bug-image-preview"
+          >
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={`data:${attachments.image.mime};base64,${attachments.image.dataBase64}`}
+              alt="Attached screenshot"
+              className="h-16 w-16 shrink-0 rounded-[var(--qg-radius)] object-cover"
+            />
+            <div className="min-w-0 flex-1">
+              <p className="flex items-center gap-1 text-[13px] font-medium">
+                <ImagePlus className="h-3.5 w-3.5" aria-hidden />
+                Screenshot
+              </p>
+              <p className="font-mono text-[12px] text-muted">
+                {formatKilobytes(base64Bytes(attachments.image.dataBase64))}
+              </p>
+            </div>
+            <Button
+              variant="ghost"
+              size="icon"
+              aria-label="Remove screenshot"
+              onClick={() => {
+                setAttachments(attachments.log ? { log: attachments.log } : {});
+              }}
+            >
+              <X className="h-4 w-4" aria-hidden />
+            </Button>
+          </div>
+        ) : null}
+        {attachments.log ? (
+          <div
+            className="flex flex-col gap-1.5 rounded-[var(--qg-radius)] border border-border bg-card-2 p-2.5"
+            data-testid="bug-log-preview"
+          >
+            <div className="flex items-center gap-2">
+              <Paperclip className="h-3.5 w-3.5 shrink-0" aria-hidden />
+              <p className="min-w-0 flex-1 truncate font-mono text-[12px]">
+                {attachments.log.name}
+              </p>
+              <Pill tone="neutral">
+                {keptChip(logTotal ?? attachments.log.text.length, attachments.log.text.length)}
+              </Pill>
+              <Button
+                variant="ghost"
+                size="icon"
+                aria-label="Remove log"
+                onClick={() => {
+                  setLogTotal(null);
+                  setAttachments(attachments.image ? { image: attachments.image } : {});
+                }}
+              >
+                <X className="h-4 w-4" aria-hidden />
+              </Button>
+            </div>
+            <pre className="overflow-x-auto font-mono text-[12px] leading-relaxed text-text-2">
+              {attachments.log.text.split('\n').slice(0, 5).join('\n')}
+              {attachments.log.text.split('\n').length > 5 ? '\n…' : ''}
+            </pre>
+          </div>
+        ) : null}
+        {(attachError ?? attachmentsError) ? (
+          <p className="text-[12px] text-bad-fg" role="alert">
+            {attachError ?? attachmentsError}
+          </p>
+        ) : null}
+      </div>
+
       <FormField label="Raw Bug Notes" error={errors.raw_bug}>
         <Textarea
           value={rawBug}
           onChange={(e) => onField('raw_bug', e.target.value)}
+          onPaste={pasteImage}
           placeholder="Checkout button does nothing on the second click in Safari, 3 of 5 attempts, cart total shows 0"
           rows={6}
           aria-invalid={Boolean(errors.raw_bug)}

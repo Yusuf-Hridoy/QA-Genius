@@ -47,8 +47,32 @@ function AutomationSkeleton() {
   );
 }
 
-export function AutomationResult({ data, isLoading }: ResultProps) {
-  const [selected, setSelected] = useState<string | null>(null);
+export type AutomationFileDiagnostic = {
+  errors: number;
+  warnings: number;
+  checked: boolean;
+};
+
+export function AutomationResult({
+  data,
+  isLoading,
+  fileDiagnostics,
+  highlightFile,
+  highlightLines,
+  selectedFile,
+  onSelectFile,
+}: ResultProps & {
+  /** Per-file syntax state for the tree dots (absent = no dots). */
+  fileDiagnostics?: Record<string, AutomationFileDiagnostic>;
+  /** File whose lines are highlighted in the code viewer. */
+  highlightFile?: string | null;
+  /** 1-based lines highlighted in the active file. */
+  highlightLines?: number[];
+  /** Controlled file selection (defaults to internal state). */
+  selectedFile?: string | null;
+  onSelectFile?: (name: string) => void;
+}) {
+  const [internalSelected, setInternalSelected] = useState<string | null>(null);
 
   const framework = str(data?.framework);
   const setupInstructions = arr<string>(data?.setup_instructions);
@@ -62,7 +86,13 @@ export function AutomationResult({ data, isLoading }: ResultProps) {
     return automationFiles(data as unknown as AutomationScript);
   }, [data]);
 
-  const activeFile = files.find(([name]) => name === selected) ?? files[0];
+  const activeFile =
+    files.find(([name]) => name === (selectedFile ?? internalSelected)) ?? files[0];
+
+  const selectFile = (name: string) => {
+    setInternalSelected(name);
+    onSelectFile?.(name);
+  };
 
   if (!data) {
     return isLoading ? <AutomationSkeleton /> : null;
@@ -87,15 +117,24 @@ export function AutomationResult({ data, isLoading }: ResultProps) {
                 (name, i) => {
                   const isFile = files.some(([fileName]) => fileName === name);
                   const isActive = activeFile?.[0] === name;
+                  const diag = fileDiagnostics?.[name];
+                  const dotTone =
+                    !diag || !diag.checked ? 'neutral' : diag.errors > 0 ? 'bad' : 'ok';
+                  const dotTitle = !diag
+                    ? undefined
+                    : !diag.checked
+                      ? 'not checked'
+                      : `${diag.errors} error${diag.errors === 1 ? '' : 's'}, ${diag.warnings} warning${diag.warnings === 1 ? '' : 's'}`;
                   return (
                     <li key={`${name}-${i}`}>
                       <button
                         type="button"
                         disabled={!isFile}
-                        onClick={() => setSelected(name)}
+                        onClick={() => selectFile(name)}
                         aria-current={isActive ? 'true' : undefined}
+                        title={dotTitle}
                         className={cn(
-                          'w-full truncate rounded-[var(--qg-radius)] px-2 py-1.5 text-left font-mono text-[12px] transition-colors duration-[var(--qg-dur)]',
+                          'flex w-full items-center gap-1.5 truncate rounded-[var(--qg-radius)] px-2 py-1.5 text-left font-mono text-[12px] transition-colors duration-[var(--qg-dur)]',
                           isActive
                             ? 'bg-accent-soft text-accent'
                             : isFile
@@ -103,7 +142,19 @@ export function AutomationResult({ data, isLoading }: ResultProps) {
                               : 'text-muted',
                         )}
                       >
-                        {name}
+                        {fileDiagnostics ? (
+                          <span
+                            aria-hidden
+                            title={dotTitle}
+                            className={cn(
+                              'h-1.5 w-1.5 shrink-0 rounded-full',
+                              dotTone === 'ok' && 'bg-ok-fg',
+                              dotTone === 'bad' && 'bg-bad-fg',
+                              dotTone === 'neutral' && 'bg-border-strong',
+                            )}
+                          />
+                        ) : null}
+                        <span className="truncate">{name}</span>
                       </button>
                     </li>
                   );
@@ -121,6 +172,8 @@ export function AutomationResult({ data, isLoading }: ResultProps) {
               code={activeFile[1]}
               language={languageFor(activeFile[0])}
               filename={activeFile[0]}
+              highlightLines={highlightFile === activeFile[0] ? highlightLines : undefined}
+              scrollToLine={highlightFile === activeFile[0] ? highlightLines?.[0] : undefined}
             />
           ) : (
             <Skeleton className="h-72 w-full" />

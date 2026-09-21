@@ -18,7 +18,12 @@ import { downloadTestCasesCsv } from '@/lib/exports/csv';
 import { downloadTestCasesXlsx } from '@/lib/exports/xlsx';
 import { downloadFeature } from '@/lib/exports/feature';
 import { bugToMarkdown, downloadBugMarkdown } from '@/lib/exports/markdown';
-import { downloadAutomationZip, downloadSourceFile } from '@/lib/exports/zip';
+import {
+  downloadAutomationZip,
+  downloadSourceFile,
+  downloadSyntaxSummary,
+} from '@/lib/exports/zip';
+import { getSyntaxSummary, hashJson } from '@/lib/automation/syntax-store';
 import { projectSlug } from '@/lib/exports/download';
 import { useProjectStore } from '@/lib/store/project';
 import { copyWithToast } from '@/components/ui/copy-button';
@@ -83,19 +88,25 @@ export function TestCasesExports({ data, input }: ExportsProps) {
   );
 }
 
-export function BugExports({ data }: ExportsProps) {
+export function BugExports({ data, input }: ExportsProps) {
   const slug = useSlug();
   const bug = data as unknown as BugReport;
+  const attachments = (input.attachments ?? {}) as {
+    image?: { mime?: string; dataBase64?: string };
+    log?: { name?: string; kind?: string };
+  };
+  const evidence =
+    attachments.image?.dataBase64 || attachments.log ? { ...attachments } : undefined;
   return (
     <ExportBar>
       <Button
         variant="secondary"
-        onClick={() => void copyWithToast(bugToMarkdown(bug), 'Markdown copied')}
+        onClick={() => void copyWithToast(bugToMarkdown(bug, evidence), 'Markdown copied')}
       >
         <FileText className="h-3.5 w-3.5" aria-hidden />
         Copy as Markdown
       </Button>
-      <Button variant="secondary" onClick={() => downloadBugMarkdown(bug, slug)}>
+      <Button variant="secondary" onClick={() => downloadBugMarkdown(bug, slug, evidence)}>
         <Download className="h-3.5 w-3.5" aria-hidden />
         Download Markdown
       </Button>
@@ -110,15 +121,25 @@ export function BugExports({ data }: ExportsProps) {
 export function AutomationExports({ data }: ExportsProps) {
   const slug = useSlug();
   const script = data as unknown as AutomationScript;
+  // The syntax summary belongs to this exact output (hash-guarded); repaired
+  // output carries its SYNTAX-CHECK.md summary after the repair remount.
+  const stored = getSyntaxSummary('automation_script');
+  const syntax = stored && stored.outputHash === hashJson(data) ? stored : undefined;
+  const hasDiagnostics =
+    syntax !== undefined &&
+    (syntax.afterErrors > 0 || syntax.warnings > 0 || syntax.beforeErrors > 0);
   return (
     <ExportBar>
-      <Button variant="secondary" onClick={() => void downloadAutomationZip(script, slug)}>
+      <Button variant="secondary" onClick={() => void downloadAutomationZip(script, slug, syntax)}>
         <FileArchive className="h-3.5 w-3.5" aria-hidden />
         ZIP project
       </Button>
       <Button
         variant="secondary"
-        onClick={() => downloadSourceFile(script.test_file_name, script.test_code, slug)}
+        onClick={() => {
+          downloadSourceFile(script.test_file_name, script.test_code, slug);
+          if (syntax && hasDiagnostics) downloadSyntaxSummary(syntax, slug);
+        }}
       >
         <FileCode2 className="h-3.5 w-3.5" aria-hidden />
         Test file

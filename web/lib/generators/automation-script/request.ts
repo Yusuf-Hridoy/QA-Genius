@@ -33,6 +33,14 @@ export const AutomationRequest = z.object({
   browsers: z.array(z.enum(BROWSERS)).min(1).default(['Chromium']),
   site_type: z.enum(SITE_TYPES).default('Custom (paste URL above)'),
   instructions: z.string().trim().max(1000).optional(),
+  /**
+   * Repair loop (Phase 3): the previously generated files, sent back with
+   * fix-only instructions. User-prompt only; each file ≤ 20 000 chars.
+   */
+  previousFiles: z
+    .array(z.object({ name: z.string().max(200), code: z.string().max(20_000) }))
+    .max(8)
+    .optional(),
 });
 
 export type AutomationRequest = z.infer<typeof AutomationRequest>;

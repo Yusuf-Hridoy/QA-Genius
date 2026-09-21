@@ -106,4 +106,11 @@ h3 {
   outline: none;
   box-shadow: var(--qg-ring);
 }
+
+/* diagnostics line highlight in code blocks */
+.qag-highlight-line {
+  background: var(--qg-hl-bg);
+  display: block;
+  border-radius: 4px;
+}
 /* probe */

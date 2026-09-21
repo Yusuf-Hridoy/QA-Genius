@@ -165,6 +165,29 @@ describe('automation prompt', () => {
     const { user } = buildAutomationPrompt(req);
     expect(user).toContain('Language: Python');
   });
+
+  it('appends previous files for the repair loop without touching the system prompt', () => {
+    const plain = AutomationRequest.parse({
+      ...base,
+      framework: 'Playwright (JavaScript)',
+      language: 'TypeScript',
+    });
+    const req = AutomationRequest.parse({
+      ...base,
+      framework: 'Playwright (JavaScript)',
+      language: 'TypeScript',
+      instructions: 'Fix ONLY the following syntax problems.',
+      previousFiles: [{ name: 'tests/a.spec.ts', code: 'test(' }],
+    });
+    const withPrevious = buildAutomationPrompt(req);
+    expect(withPrevious.system).toBe(buildAutomationPrompt(plain).system);
+    expect(withPrevious.user).toContain('Previously generated files:');
+    expect(withPrevious.user).toContain('--- tests/a.spec.ts ---\ntest(');
+    expect(withPrevious.user).toContain(
+      'ADDITIONAL INSTRUCTIONS FROM USER:\nFix ONLY the following syntax problems.',
+    );
+    expect(buildAutomationPrompt(plain).user).not.toContain('Previously generated files:');
+  });
 });
 
 describe('duel prompts', () => {
