@@ -38,7 +38,7 @@ export function buildUserMessages(userText: string, image: EvidenceImage): Model
         {
           type: 'image',
           image: Buffer.from(image.dataBase64, 'base64'),
-          mimeType: image.mime,
+          mediaType: image.mime,
         },
       ],
     },

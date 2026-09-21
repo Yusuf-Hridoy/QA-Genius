@@ -69,9 +69,9 @@ describe('attachment user text', () => {
     expect(messages).toHaveLength(1);
     const content = (messages[0] as { content: unknown[] }).content;
     expect(content[0]).toMatchObject({ type: 'text', text: 'prompt text' });
-    const imagePart = content[1] as { type: string; image: Buffer; mimeType: string };
+    const imagePart = content[1] as { type: string; image: Buffer; mediaType: string };
     expect(imagePart.type).toBe('image');
-    expect(imagePart.mimeType).toBe('image/png');
+    expect(imagePart.mediaType).toBe('image/png');
     expect(Buffer.isBuffer(imagePart.image)).toBe(true);
   });
 });
