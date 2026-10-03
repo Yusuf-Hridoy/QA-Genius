@@ -57,6 +57,16 @@ def _label(index: int, short: str) -> str:
     return f"Key {index + 1} ({short})"
 
 
+def default_client_factory(base_url: str, api_key: str) -> Any:
+    """Build the production client: no SDK retries (rotation handles that)."""
+    return openai.OpenAI(
+        base_url=base_url,
+        api_key=api_key,
+        timeout=REQUEST_TIMEOUT,
+        max_retries=0,
+    )
+
+
 def _call_once(
     client: Any, model: str, system: str, user: str, use_json_mode: bool
 ) -> str:
@@ -96,13 +106,7 @@ def generate_json(
         )
 
     if client_factory is None:
-        def client_factory(base_url: str, api_key: str) -> Any:
-            return openai.OpenAI(
-                base_url=base_url,
-                api_key=api_key,
-                timeout=REQUEST_TIMEOUT,
-                max_retries=0,
-            )
+        client_factory = default_client_factory
 
     notes: list[str] = []
     invalid_count = 0
