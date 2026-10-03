@@ -16,7 +16,7 @@ from qagenius.providers import PROVIDERS, get_provider
 BASE_DIR = Path(__file__).parent
 SAMPLES_DIR = BASE_DIR / "samples"
 
-STORY_LIMIT = 2000
+STORY_LIMIT = 3000
 CONTEXT_LIMIT = 1000
 
 app = FastAPI(title="QA-Genius v2")
