@@ -104,8 +104,11 @@ mark{background:var(--warn-bg);color:inherit;border-radius:3px;
 .htmx-indicator{display:none}
 .htmx-request .htmx-indicator{display:inline}
 .htmx-request.htmx-indicator{display:inline}
+.htmx-request .btn-label{display:none}
 .muted{color:var(--muted)}
+.small{font-size:13px}
 .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.key-panel{border:1px solid var(--accent)}
 
 .key-list{list-style:none;margin:0;padding:0;display:flex;
   flex-direction:column;gap:10px}

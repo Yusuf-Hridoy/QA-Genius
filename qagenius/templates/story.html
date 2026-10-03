@@ -10,6 +10,30 @@
 </ol>
 <div class="card">
   <h2>Story check</h2>
-  <p>The full Story check tool arrives in Task 5: story form, Load example, and result cards.</p>
+  <form id="story-form" hx-post="/requirements/story/run" hx-target="#story-output" hx-swap="innerHTML" hx-indicator="#check-btn">
+    <div class="field">
+      <label for="story-user-story">User story</label>
+      <textarea id="story-user-story" name="user_story" maxlength="2000" required placeholder="As a shopper, I want…"></textarea>
+      <span class="hint">Up to 2000 characters.</span>
+    </div>
+    <div class="field">
+      <label for="story-type">Story type</label>
+      <select id="story-type" name="story_type">
+        <option value="User story">User story</option>
+        <option value="Technical story">Technical story</option>
+        <option value="Bug fix story">Bug fix story</option>
+        <option value="Spike/Research">Spike/Research</option>
+      </select>
+    </div>
+    <div class="field">
+      <label for="story-context">Context <span class="hint">optional — page, role, constraints (up to 1000 characters)</span></label>
+      <textarea id="story-context" name="context" maxlength="1000" placeholder="Login page, shoppers sign in with email and password…"></textarea>
+    </div>
+    <div class="row">
+      <button id="check-btn" type="submit" class="btn btn-primary"><span class="btn-label">Check story</span><span class="htmx-indicator">Checking…</span></button>
+      <button id="load-example" type="button" class="btn" hx-get="/requirements/story/example" hx-target="#story-output" hx-swap="innerHTML">Load example</button>
+    </div>
+  </form>
 </div>
+<div id="story-output"></div>
 {% endblock %}

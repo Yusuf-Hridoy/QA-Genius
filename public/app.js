@@ -293,6 +293,28 @@
     });
   }
 
+  function saveKeyAndResubmit(providerSelectId, keyInputId, formId) {
+    var select = document.getElementById(providerSelectId);
+    var keyInput = document.getElementById(keyInputId);
+    var form = document.getElementById(formId);
+    if (!select || !keyInput || !form) {
+      return;
+    }
+    var key = keyInput.value.trim();
+    if (!select.value || !key) {
+      keyInput.focus();
+      return;
+    }
+    var keys = loadKeys();
+    keys.push({ id: newId(), provider: select.value, label: "", key: key });
+    storeKeys(keys);
+    if (typeof form.requestSubmit === "function") {
+      form.requestSubmit();
+    } else {
+      form.submit();
+    }
+  }
+
   document.addEventListener("DOMContentLoaded", function () {
     updateKeyPill();
     initKeysPage();
@@ -308,5 +330,6 @@
     headerKeys: headerKeys,
     updateKeyPill: updateKeyPill,
     maskKey: maskKey,
+    saveKeyAndResubmit: saveKeyAndResubmit,
   };
 })();

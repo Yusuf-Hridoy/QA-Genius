@@ -1,0 +1,90 @@
+<div class="stat-row">
+  <div class="stat"><div class="num">{{ clarity_score }}</div><div class="lbl">Clarity score</div></div>
+  <div class="stat"><div class="num">{{ invest_passes }} / 6</div><div class="lbl">INVEST passes</div></div>
+  <div class="stat"><div class="num">{{ result.vague_phrases | length }}</div><div class="lbl">Vague words</div></div>
+</div>
+<div class="card">
+  <h2>Your story</h2>
+  <p>{{ highlighted_story | safe }}</p>
+  <p><span class="pill info">{{ result.clarity_label }}</span></p>
+</div>
+<div class="card">
+  <h2>INVEST check</h2>
+  <table class="grid">
+    <tr><th>Dimension</th><th>Verdict</th></tr>
+    {% for row in invest_rows %}
+    <tr>
+      <td>{{ row.name }}</td>
+      <td><span class="pill {{ row.pill }}">{{ row.value }}</span></td>
+    </tr>
+    {% endfor %}
+  </table>
+  <p class="muted">{{ result.invest_overall }}</p>
+</div>
+<div class="card">
+  <h2>Vague phrases</h2>
+  {% if result.vague_phrases %}
+  <table class="grid">
+    <tr><th>Phrase</th><th>Severity</th><th>Why it matters</th><th>Say instead</th></tr>
+    {% for vp in result.vague_phrases %}
+    <tr>
+      <td><code class="mono">{{ vp.phrase }}</code></td>
+      <td><span class="pill {{ 'bad' if vp.severity == 'High' else ('warn' if vp.severity == 'Medium' else 'info') }}">{{ vp.severity }}</span></td>
+      <td>{{ vp.suggestion }}</td>
+      <td>{{ vp.replacement }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+  {% else %}
+  <p class="muted">No vague phrases found. Clear story.</p>
+  {% endif %}
+</div>
+<div class="card">
+  <h2>Suggested rewrites</h2>
+  <ul>
+    {% for rewrite in result.suggested_rewrites %}
+    <li>{{ rewrite }}</li>
+    {% endfor %}
+  </ul>
+</div>
+<div class="card">
+  <h2>Acceptance criteria</h2>
+  <pre class="code" id="ac-block">{{ acceptance_criteria }}</pre>
+  <div class="row">
+    <button type="button" class="btn btn-small" onclick="navigator.clipboard.writeText(document.getElementById('ac-block').innerText)">Copy</button>
+  </div>
+</div>
+{% if result.missing_elements %}
+<div class="card">
+  <h2>Missing elements</h2>
+  <ul>
+    {% for item in result.missing_elements %}
+    <li>{{ item }}</li>
+    {% endfor %}
+  </ul>
+</div>
+{% endif %}
+{% if result.risks %}
+<div class="card">
+  <h2>Risks if built as-is</h2>
+  <ul>
+    {% for risk in result.risks %}
+    <li>{{ risk }}</li>
+    {% endfor %}
+  </ul>
+</div>
+{% endif %}
+{% if result.recommended_split %}
+<div class="card">
+  <h2>Recommended split</h2>
+  <ul>
+    {% for split in result.recommended_split %}
+    <li>{{ split }}</li>
+    {% endfor %}
+  </ul>
+</div>
+{% endif %}
+{% if notes %}
+<p class="muted small">{{ notes | join(" · ") }}</p>
+{% endif %}
+<p class="muted small">Answered by {{ provider_name }}.</p>
