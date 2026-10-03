@@ -28,13 +28,20 @@ KEYS_HEADER = {
 FORM = {"user_story": "As a shopper, I want my account to lock quickly."}
 
 
-def test_no_keys_returns_key_panel() -> None:
+def test_no_keys_signals_drawer_open() -> None:
     response = client.post("/requirements/story/run", data=FORM)
     assert response.status_code == 200
-    body = response.text
-    assert "Save and generate" in body
-    assert "panel-key" in body
-    assert "Get a free" in body
+    assert response.headers.get("hx-trigger") == "open-keys"
+
+
+def test_malformed_keys_header_signals_drawer_open() -> None:
+    response = client.post(
+        "/requirements/story/run",
+        data=FORM,
+        headers={"X-QAG-Keys": "not-json"},
+    )
+    assert response.status_code == 200
+    assert response.headers.get("hx-trigger") == "open-keys"
 
 
 def test_fake_llm_returns_result_cards(monkeypatch) -> None:

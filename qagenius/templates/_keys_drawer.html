@@ -1,0 +1,32 @@
+<aside id="keys-drawer" class="drawer" role="dialog" aria-labelledby="keys-drawer-title" aria-hidden="true" hidden>
+  <div class="drawer-head">
+    <h2 id="keys-drawer-title">Your API keys</h2>
+    <button id="keys-close" type="button" class="btn btn-small" aria-label="Close keys panel">×</button>
+  </div>
+  <p><em>Keys are saved only in this browser. Our server uses them for your request and never stores or logs them.</em></p>
+  <ul id="drawer-key-list" class="key-list"></ul>
+  <p id="drawer-key-empty" class="muted">No keys yet. Add your first key below.</p>
+  <div class="row"><button id="test-all" type="button" class="btn btn-small">Test all</button></div>
+  <h3>Add a key</h3>
+  <form id="drawer-key-form">
+    <div class="field">
+      <label for="drawer-provider">Provider</label>
+      <select id="drawer-provider" name="provider">
+        {% for p in providers %}
+        <option value="{{ p.id }}" data-key-url="{{ p.key_url }}">{{ p.name }}</option>
+        {% endfor %}
+      </select>
+      <span class="hint"><a id="drawer-key-link" href="{{ providers[0].key_url }}" target="_blank" rel="noopener">Get a free key →</a></span>
+    </div>
+    <div class="field">
+      <label for="drawer-label">Label <span class="hint">optional nickname, never sent anywhere</span></label>
+      <input type="text" id="drawer-label" name="label" maxlength="60" placeholder="e.g. My Gemini key" autocomplete="off">
+    </div>
+    <div class="field">
+      <label for="drawer-key">API key</label>
+      <input type="password" id="drawer-key" name="key" placeholder="Paste your key" autocomplete="off" spellcheck="false">
+    </div>
+    <button type="submit" id="drawer-save" class="btn btn-primary">Save key</button>
+  </form>
+  <p class="muted small">If a key is busy or invalid, the next one is used automatically.</p>
+</aside>

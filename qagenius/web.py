@@ -21,6 +21,8 @@ CONTEXT_LIMIT = 1000
 
 app = FastAPI(title="QA-Genius v2")
 templates = Jinja2Templates(directory=BASE_DIR / "templates")
+# Drawer + key panel live in base.html, rendered by every page.
+templates.env.globals["providers"] = PROVIDERS
 
 
 @app.get("/health")
@@ -40,11 +42,9 @@ def story_page(request: Request) -> HTMLResponse:
     )
 
 
-@app.get("/keys", response_class=HTMLResponse)
-def keys_page(request: Request) -> HTMLResponse:
-    return templates.TemplateResponse(
-        request, "keys.html", {"active": "keys", "providers": PROVIDERS}
-    )
+@app.get("/keys", include_in_schema=False)
+def keys_page() -> RedirectResponse:
+    return RedirectResponse(url="/requirements/story?keys=open")
 
 
 @app.get("/bugs", response_class=HTMLResponse)
@@ -274,8 +274,10 @@ def story_run(
         )
     keys = _request_keys(request)
     if not keys:
-        return templates.TemplateResponse(
-            request, "_key_panel.html", {"providers": PROVIDERS}
+        # The browser opens the keys drawer (HX-Trigger: open-keys).
+        return HTMLResponse(
+            '<p class="muted">Add an API key to run the check.</p>',
+            headers={"HX-Trigger": "open-keys"},
         )
     system, user = story_check_prompt(
         user_story, story_type=story_type, context=context
@@ -285,8 +287,9 @@ def story_run(
             keys, system, user, AmbiguityAnalysis
         )
     except llm.NoKeysError:
-        return templates.TemplateResponse(
-            request, "_key_panel.html", {"providers": PROVIDERS}
+        return HTMLResponse(
+            '<p class="muted">Add an API key to run the check.</p>',
+            headers={"HX-Trigger": "open-keys"},
         )
     except llm.AllKeysBusyError as e:
         return _error_card(

@@ -29,15 +29,18 @@ a{color:var(--accent)}
 .nav a:hover{background:var(--card-2);color:var(--text)}
 .nav a.active{background:var(--card);color:var(--text);
   border:1px solid var(--border)}
-.side-bottom{margin-top:auto;padding:14px;border-top:1px solid var(--border);
-  display:flex;flex-direction:column;gap:10px}
-.side-bottom a{color:var(--text);font-weight:600;text-decoration:none}
-.side-bottom a.active{text-decoration:underline}
 
 .main{flex:1;min-width:0;display:flex;flex-direction:column}
 .topbar{height:56px;flex:0 0 56px;display:flex;align-items:center;
   padding:0 24px;border-bottom:1px solid var(--border);
   font-family:"Plus Jakarta Sans",sans-serif;font-weight:600}
+.key-chip{margin-left:auto;display:inline-flex;align-items:center;gap:8px;
+  padding:7px 14px;border-radius:999px;cursor:pointer;
+  border:1px solid var(--border-strong);background:var(--card);
+  color:var(--text);font-weight:600;font-size:13px;font-family:inherit}
+.key-chip.empty{background:var(--warn-bg);color:var(--warn-fg);
+  border-color:var(--warn-bg)}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--ok-fg)}
 .content{padding:24px;max-width:960px;width:100%;margin:0 auto}
 
 .card{background:var(--card);border:1px solid var(--border);
@@ -118,3 +121,18 @@ mark{background:var(--warn-bg);color:inherit;border-radius:3px;
   margin-bottom:10px}
 .key-test-result{margin-left:4px}
 .btn-small{padding:5px 10px;font-size:13px}
+.pill.neutral{background:var(--card-2);color:var(--text-2)}
+
+.drawer{position:fixed;top:0;right:0;bottom:0;width:420px;max-width:94vw;
+  background:var(--card);border-left:1px solid var(--border);
+  padding:20px;overflow-y:auto;z-index:60;
+  transform:translateX(105%);transition:transform .22s ease}
+.drawer.open{transform:none}
+.drawer-head{display:flex;align-items:center;justify-content:space-between}
+.drawer-head h2{margin:0;font-size:18px}
+.drawer h3{margin:18px 0 8px;font-size:15px}
+.key-num{font-weight:700}
+.key-edit-form{display:flex;flex-direction:column;gap:8px;margin-top:8px}
+.key-edit-form select,.key-edit-form input{padding:8px 10px;
+  border:1px solid var(--border-strong);border-radius:var(--r);
+  background:var(--card);color:var(--text);font:inherit}

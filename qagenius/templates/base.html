@@ -21,15 +21,18 @@
       <a href="/insights" class="{% if active == 'insights' %}active{% endif %}">Quality insights</a>
       <a href="/performance" class="{% if active == 'performance' %}active{% endif %}">Performance</a>
     </nav>
-    <div class="side-bottom">
-      <a href="/keys" class="{% if active == 'keys' %}active{% endif %}">Your API keys</a>
-      <span id="key-status" class="pill warn">No key yet — examples only</span>
-    </div>
   </aside>
-  <div class="main">
-    <header class="topbar">{% block top_title %}QA-Genius{% endblock %}</header>
+    <div class="main">
+    <header class="topbar"><span>{% block top_title %}QA-Genius{% endblock %}</span>
+      <button id="key-chip" type="button" class="key-chip empty" aria-haspopup="dialog" aria-controls="keys-drawer">
+        <span class="dot" hidden></span>
+        <svg id="key-chip-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="8" cy="8" r="4"/><path d="M11 11l8 8M16.5 16.5l2-2M18.5 18.5l-2-2"/></svg>
+        <span id="key-chip-text">Add API key</span>
+      </button>
+    </header>
     <main class="content">{% block content %}{% endblock %}</main>
   </div>
 </div>
+{% include "_keys_drawer.html" %}
 </body>
 </html>

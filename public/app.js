@@ -1,6 +1,6 @@
 /* QA-Genius v2: keys live in the browser (localStorage), never on the server.
  * Every HTMX request carries them in the X-QAG-Keys header as
- * [{provider, key}] in the user's order. Labels are never sent. */
+ * [{provider, key}] in the user's order. Labels and test results stay local. */
 (function () {
   "use strict";
 
@@ -41,28 +41,13 @@
     } catch (err) {
       return;
     }
-    updateKeyPill();
+    updateChip();
   }
 
   function headerKeys() {
     return loadKeys().map(function (entry) {
       return { provider: entry.provider, key: entry.key };
     });
-  }
-
-  function updateKeyPill() {
-    var pill = document.getElementById("key-status");
-    if (!pill) {
-      return;
-    }
-    var count = loadKeys().length;
-    if (count > 0) {
-      pill.className = "pill ok";
-      pill.textContent = count === 1 ? "1 key ready" : count + " keys ready";
-    } else {
-      pill.className = "pill warn";
-      pill.textContent = "No key yet — examples only";
-    }
   }
 
   function maskKey(key) {
@@ -90,57 +75,175 @@
     return node;
   }
 
-  function providerName(select, id) {
-    var options = select.querySelectorAll("option");
-    for (var i = 0; i < options.length; i++) {
-      if (options[i].value === id) {
-        return options[i].textContent;
+  function providerName(id) {
+    var select = document.getElementById("drawer-provider");
+    if (select) {
+      var options = select.querySelectorAll("option");
+      for (var i = 0; i < options.length; i++) {
+        if (options[i].value === id) {
+          return options[i].textContent;
+        }
       }
     }
     return id;
   }
 
-  function renderKeyList(listNode, form, select) {
+  function timeAgo(ts) {
+    var diff = Date.now() - ts;
+    if (diff < 60000) {
+      return "just now";
+    }
+    if (diff < 3600000) {
+      var mins = Math.floor(diff / 60000);
+      return mins + " min ago";
+    }
+    if (diff < 86400000) {
+      var hours = Math.floor(diff / 3600000);
+      return hours + " h ago";
+    }
+    return new Date(ts).toLocaleDateString();
+  }
+
+  function updateChip() {
+    var chip = document.getElementById("key-chip");
+    var text = document.getElementById("key-chip-text");
+    var dot = chip ? chip.querySelector(".dot") : null;
+    var icon = document.getElementById("key-chip-icon");
+    if (!chip || !text) {
+      return;
+    }
+    var keys = loadKeys();
+    if (keys.length > 0) {
+      chip.classList.remove("empty");
+      if (dot) {
+        dot.hidden = false;
+      }
+      if (icon) {
+        icon.hidden = true;
+      }
+      var word = keys.length === 1 ? "1 key" : keys.length + " keys";
+      text.textContent = providerName(keys[0].provider) + " connected · " + word;
+    } else {
+      chip.classList.add("empty");
+      if (dot) {
+        dot.hidden = true;
+      }
+      if (icon) {
+        icon.hidden = false;
+      }
+      text.textContent = "Add API key";
+    }
+  }
+
+  var drawerOpen = false;
+  var closeTimer = null;
+  var testingId = null;
+  var pendingStorySubmit = false;
+
+  function openDrawer(focusAdd) {
+    var drawer = document.getElementById("keys-drawer");
+    if (!drawer) {
+      return;
+    }
+    if (closeTimer) {
+      clearTimeout(closeTimer);
+      closeTimer = null;
+    }
+    renderDrawer();
+    drawer.hidden = false;
+    drawer.setAttribute("aria-hidden", "false");
+    // Force reflow so the slide transition plays.
+    void drawer.offsetWidth;
+    drawer.classList.add("open");
+    drawerOpen = true;
+    if (focusAdd) {
+      var keyInput = document.getElementById("drawer-key");
+      if (keyInput) {
+        keyInput.focus();
+      }
+    }
+  }
+
+  function closeDrawer() {
+    var drawer = document.getElementById("keys-drawer");
+    if (!drawer || !drawerOpen) {
+      return;
+    }
+    drawerOpen = false;
+    drawer.classList.remove("open");
+    drawer.setAttribute("aria-hidden", "true");
+    closeTimer = setTimeout(function () {
+      drawer.hidden = true;
+    }, 240);
+    var chip = document.getElementById("key-chip");
+    if (chip) {
+      chip.focus();
+    }
+  }
+
+  function statusPill(entry) {
+    if (entry.id === testingId) {
+      return el("span", "pill neutral", "testing…");
+    }
+    var last = entry.lastTest;
+    if (!last || typeof last.ok !== "boolean") {
+      return el("span", "pill neutral", "not tested");
+    }
+    if (last.ok) {
+      return el("span", "pill ok", "working · " + timeAgo(last.at));
+    }
+    var reason = last.reason ? String(last.reason).slice(0, 80) : "failed";
+    return el("span", "pill bad", "failed: " + reason);
+  }
+
+  function findPos(keys, id) {
+    for (var i = 0; i < keys.length; i++) {
+      if (keys[i].id === id) {
+        return i;
+      }
+    }
+    return -1;
+  }
+
+  function renderDrawer() {
+    var listNode = document.getElementById("drawer-key-list");
+    if (!listNode) {
+      return;
+    }
     while (listNode.firstChild) {
       listNode.removeChild(listNode.firstChild);
     }
     var keys = loadKeys();
-    var empty = document.getElementById("key-empty");
+    var empty = document.getElementById("drawer-key-empty");
     if (empty) {
       empty.style.display = keys.length ? "none" : "";
     }
-    keys.forEach(function (entry) {
+    keys.forEach(function (entry, idx) {
       var li = el("li", "key-row");
       li.dataset.id = entry.id;
 
       var main = el("div", "key-main");
-      main.appendChild(el("strong", null, providerName(select, entry.provider)));
+      main.appendChild(el("span", "key-num", (idx + 1) + "."));
+      main.appendChild(el("strong", null, providerName(entry.provider)));
       if (entry.label) {
         main.appendChild(el("span", "muted", " · " + entry.label));
       }
-      var code = el("code", "mono", " " + maskKey(entry.key));
-      main.appendChild(code);
-      var result = el("span", "key-test-result");
-      result.id = "test-" + entry.id;
-      main.appendChild(result);
+      main.appendChild(el("code", "mono", " " + maskKey(entry.key)));
+      main.appendChild(statusPill(entry));
       li.appendChild(main);
 
       var actions = el("div", "row");
-      var buttons = [
-        ["test", "Test"],
-        ["up", "↑"],
-        ["down", "↓"],
-        ["edit", "Edit"],
-        ["delete", "Delete"],
-      ];
+      var buttons = [["test", "Test"]];
+      if (idx > 0) {
+        buttons.push(["first", "Make first"]);
+      }
+      buttons.push(["edit", "Edit"]);
+      buttons.push(["delete", "Delete"]);
       buttons.forEach(function (pair) {
         var btn = el("button", "btn btn-small", pair[1]);
         btn.type = "button";
         btn.dataset.action = pair[0];
         btn.dataset.id = entry.id;
-        if (pair[0] === "test") {
-          btn.setAttribute("aria-label", "Test key");
-        }
         actions.appendChild(btn);
       });
       li.appendChild(actions);
@@ -148,69 +251,205 @@
     });
   }
 
-  function showTestResult(id, ok, message) {
-    var node = document.getElementById("test-" + id);
-    if (!node) {
-      return;
+  function runTest(id) {
+    var keys = loadKeys();
+    var pos = findPos(keys, id);
+    if (pos === -1) {
+      return Promise.resolve(false);
     }
-    while (node.firstChild) {
-      node.removeChild(node.firstChild);
-    }
-    var pill = el("span", ok ? "pill ok" : "pill bad", message);
-    node.appendChild(pill);
-  }
-
-  function testEntry(entry, button) {
-    button.disabled = true;
-    showTestResult(entry.id, false, "…");
-    fetch("/api/keys/test", {
+    testingId = id;
+    renderDrawer();
+    return fetch("/api/keys/test", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ provider: entry.provider, key: entry.key }),
+      body: JSON.stringify({ provider: keys[pos].provider, key: keys[pos].key }),
     })
       .then(function (resp) {
         return resp.json();
       })
       .then(function (data) {
-        if (data && data.ok) {
-          showTestResult(entry.id, true, "OK");
-        } else {
-          showTestResult(entry.id, false, (data && data.error) || "Failed");
+        var fresh = loadKeys();
+        var at = findPos(fresh, id);
+        if (at !== -1) {
+          if (data && data.ok) {
+            fresh[at].lastTest = { ok: true, at: Date.now(), reason: "" };
+          } else {
+            fresh[at].lastTest = {
+              ok: false,
+              at: Date.now(),
+              reason: (data && data.error) || "failed",
+            };
+          }
+          storeKeys(fresh);
         }
+        testingId = null;
+        renderDrawer();
+        return !!(data && data.ok);
       })
       .catch(function () {
-        showTestResult(entry.id, false, "Network error");
-      })
-      .finally(function () {
-        button.disabled = false;
+        var fresh = loadKeys();
+        var at = findPos(fresh, id);
+        if (at !== -1) {
+          fresh[at].lastTest = { ok: false, at: Date.now(), reason: "Network error" };
+          storeKeys(fresh);
+        }
+        testingId = null;
+        renderDrawer();
+        return false;
       });
   }
 
-  var editingId = null;
-
-  function initKeysPage() {
-    var listNode = document.getElementById("key-list");
-    var form = document.getElementById("key-form");
-    var select = document.getElementById("key-provider");
-    if (!listNode || !form || !select) {
+  function maybeResubmitStory() {
+    if (!pendingStorySubmit) {
       return;
     }
-    var labelInput = document.getElementById("key-label");
-    var keyInput = document.getElementById("key-value");
-    var link = document.getElementById("provider-key-link");
-    var submitBtn = document.getElementById("key-save");
+    if (loadKeys().length === 0) {
+      return;
+    }
+    pendingStorySubmit = false;
+    closeDrawer();
+    var form = document.getElementById("story-form");
+    if (form) {
+      if (typeof form.requestSubmit === "function") {
+        form.requestSubmit();
+      } else {
+        form.submit();
+      }
+    }
+  }
+
+  function openEditRow(li, entry) {
+    while (li.firstChild) {
+      li.removeChild(li.firstChild);
+    }
+    var form = el("div", "key-edit-form");
+    var head = el("div", "key-main");
+    head.appendChild(el("strong", null, providerName(entry.provider)));
+    if (entry.label) {
+      head.appendChild(el("span", "muted", " · " + entry.label));
+    }
+    head.appendChild(el("code", "mono", " " + maskKey(entry.key)));
+    form.appendChild(head);
+
+    var master = document.getElementById("drawer-provider");
+    var select = el("select", null);
+    if (master) {
+      select.innerHTML = master.innerHTML;
+    }
+    select.value = entry.provider;
+    select.setAttribute("aria-label", "Provider");
+    form.appendChild(select);
+
+    var labelInput = el("input", null);
+    labelInput.type = "text";
+    labelInput.value = entry.label || "";
+    labelInput.maxLength = 60;
+    labelInput.placeholder = "Label (optional)";
+    labelInput.setAttribute("aria-label", "Label");
+    form.appendChild(labelInput);
+
+    var keyInput = el("input", null);
+    keyInput.type = "password";
+    keyInput.value = "";
+    keyInput.placeholder = "Key (empty = keep current key)";
+    keyInput.setAttribute("aria-label", "API key, empty keeps the current key");
+    keyInput.autocomplete = "off";
+    form.appendChild(keyInput);
+
+    var row = el("div", "row");
+    var save = el("button", "btn btn-small", "Save");
+    save.type = "button";
+    var cancel = el("button", "btn btn-small", "Cancel");
+    cancel.type = "button";
+    row.appendChild(save);
+    row.appendChild(cancel);
+    form.appendChild(row);
+    li.appendChild(form);
+
+    cancel.addEventListener("click", function () {
+      renderDrawer();
+    });
+    save.addEventListener("click", function () {
+      var fresh = loadKeys();
+      var at = findPos(fresh, entry.id);
+      if (at === -1) {
+        renderDrawer();
+        return;
+      }
+      var newKey = keyInput.value.trim();
+      fresh[at].provider = select.value;
+      fresh[at].label = labelInput.value.trim();
+      if (newKey) {
+        fresh[at].key = newKey;
+        delete fresh[at].lastTest;
+      }
+      storeKeys(fresh);
+      renderDrawer();
+    });
+    keyInput.focus();
+  }
+
+  function openDeleteConfirm(li, entry, actions) {
+    while (actions.firstChild) {
+      actions.removeChild(actions.firstChild);
+    }
+    actions.appendChild(el("span", "muted", "Delete this key?"));
+    var yes = el("button", "btn btn-small", "Yes");
+    yes.type = "button";
+    var no = el("button", "btn btn-small", "No");
+    no.type = "button";
+    actions.appendChild(yes);
+    actions.appendChild(no);
+    no.addEventListener("click", function () {
+      renderDrawer();
+    });
+    yes.addEventListener("click", function () {
+      var fresh = loadKeys();
+      var at = findPos(fresh, entry.id);
+      if (at !== -1) {
+        fresh.splice(at, 1);
+        storeKeys(fresh);
+      }
+      renderDrawer();
+    });
+  }
+
+  function initDrawer() {
+    var drawer = document.getElementById("keys-drawer");
+    var chip = document.getElementById("key-chip");
+    if (!drawer || !chip) {
+      return;
+    }
+    var listNode = document.getElementById("drawer-key-list");
+    var form = document.getElementById("drawer-key-form");
+    var select = document.getElementById("drawer-provider");
+    var labelInput = document.getElementById("drawer-label");
+    var keyInput = document.getElementById("drawer-key");
+    var link = document.getElementById("drawer-key-link");
+
+    chip.addEventListener("click", function () {
+      if (drawerOpen) {
+        closeDrawer();
+      } else {
+        openDrawer(false);
+      }
+    });
+    document.getElementById("keys-close").addEventListener("click", closeDrawer);
+    document.addEventListener("keydown", function (event) {
+      if (event.key === "Escape") {
+        closeDrawer();
+      }
+    });
 
     function syncLink() {
       var opt = select.options[select.selectedIndex];
       if (link && opt && opt.dataset.keyUrl) {
         link.href = opt.dataset.keyUrl;
-        link.textContent = "Get a free " + opt.textContent + " key";
+        link.textContent = "Get a free " + opt.textContent + " key →";
       }
     }
     select.addEventListener("change", syncLink);
     syncLink();
-
-    renderKeyList(listNode, form, select);
 
     listNode.addEventListener("click", function (event) {
       var btn = event.target.closest("button[data-action]");
@@ -218,118 +457,92 @@
         return;
       }
       var keys = loadKeys();
-      var pos = -1;
-      for (var i = 0; i < keys.length; i++) {
-        if (keys[i].id === btn.dataset.id) {
-          pos = i;
-          break;
-        }
-      }
+      var pos = findPos(keys, btn.dataset.id);
       if (pos === -1) {
         return;
       }
       var action = btn.dataset.action;
-      if (action === "delete") {
-        keys.splice(pos, 1);
-        if (editingId === btn.dataset.id) {
-          editingId = null;
-          form.reset();
-          syncLink();
-          submitBtn.textContent = "Save key";
-        }
+      var li = btn.closest("li");
+      if (action === "test") {
+        btn.disabled = true;
+        runTest(keys[pos].id).then(function () {
+          btn.disabled = false;
+        });
+      } else if (action === "first" && pos > 0) {
+        var moved = keys.splice(pos, 1)[0];
+        keys.unshift(moved);
         storeKeys(keys);
-        renderKeyList(listNode, form, select);
-      } else if (action === "up" && pos > 0) {
-        var tmp = keys[pos - 1];
-        keys[pos - 1] = keys[pos];
-        keys[pos] = tmp;
-        storeKeys(keys);
-        renderKeyList(listNode, form, select);
-      } else if (action === "down" && pos < keys.length - 1) {
-        var tmp2 = keys[pos + 1];
-        keys[pos + 1] = keys[pos];
-        keys[pos] = tmp2;
-        storeKeys(keys);
-        renderKeyList(listNode, form, select);
+        renderDrawer();
       } else if (action === "edit") {
-        var entry = keys[pos];
-        select.value = entry.provider;
-        labelInput.value = entry.label || "";
-        keyInput.value = entry.key;
-        editingId = entry.id;
-        submitBtn.textContent = "Save changes";
-        syncLink();
-        keyInput.focus();
-      } else if (action === "test") {
-        testEntry(keys[pos], btn);
+        openEditRow(li, keys[pos]);
+      } else if (action === "delete") {
+        openDeleteConfirm(li, keys[pos], btn.closest(".row"));
       }
+    });
+
+    document.getElementById("test-all").addEventListener("click", function () {
+      var ids = loadKeys().map(function (entry) {
+        return entry.id;
+      });
+      ids.reduce(function (chain, id) {
+        return chain.then(function () {
+          return runTest(id);
+        });
+      }, Promise.resolve());
     });
 
     form.addEventListener("submit", function (event) {
       event.preventDefault();
       var provider = select.value;
-      var label = labelInput.value.trim();
       var key = keyInput.value.trim();
       if (!provider || !key) {
+        keyInput.focus();
         return;
       }
       var keys = loadKeys();
-      if (editingId) {
-        for (var i = 0; i < keys.length; i++) {
-          if (keys[i].id === editingId) {
-            keys[i] = { id: editingId, provider: provider, label: label, key: key };
-            break;
-          }
-        }
-        editingId = null;
-        submitBtn.textContent = "Save key";
-      } else {
-        keys.push({ id: newId(), provider: provider, label: label, key: key });
-      }
+      var id = newId();
+      keys.push({
+        id: id,
+        provider: provider,
+        label: labelInput.value.trim(),
+        key: key,
+      });
       storeKeys(keys);
       form.reset();
       syncLink();
-      renderKeyList(listNode, form, select);
+      renderDrawer();
+      runTest(id).then(function () {
+        maybeResubmitStory();
+      });
     });
-  }
 
-  function saveKeyAndResubmit(providerSelectId, keyInputId, formId) {
-    var select = document.getElementById(providerSelectId);
-    var keyInput = document.getElementById(keyInputId);
-    var form = document.getElementById(formId);
-    if (!select || !keyInput || !form) {
-      return;
-    }
-    var key = keyInput.value.trim();
-    if (!select.value || !key) {
-      keyInput.focus();
-      return;
-    }
-    var keys = loadKeys();
-    keys.push({ id: newId(), provider: select.value, label: "", key: key });
-    storeKeys(keys);
-    if (typeof form.requestSubmit === "function") {
-      form.requestSubmit();
-    } else {
-      form.submit();
+    if (new URLSearchParams(window.location.search).get("keys") === "open") {
+      openDrawer(false);
     }
   }
 
   document.addEventListener("DOMContentLoaded", function () {
-    updateKeyPill();
-    initKeysPage();
+    updateChip();
+    initDrawer();
   });
 
   document.body.addEventListener("htmx:configRequest", function (event) {
     event.detail.headers["X-QAG-Keys"] = JSON.stringify(headerKeys());
   });
 
+  // The server answers "no keys" with an HX-Trigger: open-keys header.
+  document.body.addEventListener("open-keys", function () {
+    pendingStorySubmit = true;
+    openDrawer(true);
+  });
+
   window.QAG = {
     loadKeys: loadKeys,
     storeKeys: storeKeys,
     headerKeys: headerKeys,
-    updateKeyPill: updateKeyPill,
+    updateChip: updateChip,
     maskKey: maskKey,
-    saveKeyAndResubmit: saveKeyAndResubmit,
+    openDrawer: openDrawer,
+    closeDrawer: closeDrawer,
   };
 })();
