@@ -6,7 +6,7 @@ PROVIDERS: list[dict[str, str]] = [
         "name": "Google Gemini (free)",
         "short": "Gemini",
         "base_url": "https://generativelanguage.googleapis.com/v1beta/openai/",
-        "model": "gemini-2.5-flash",
+        "model": "gemini-3.8-flash",
         "key_url": "https://aistudio.google.com/app/apikey",
     },
     {
@@ -54,7 +54,7 @@ PROVIDERS: list[dict[str, str]] = [
         "name": "OpenRouter",
         "short": "OpenRouter",
         "base_url": "https://openrouter.ai/api/v1",
-        "model": "google/gemini-2.5-flash",
+        "model": "google/gemini-3.8-flash",
         "key_url": "https://openrouter.ai/keys",
     },
 ]

@@ -11,6 +11,7 @@ Logs mention only the provider name and the key position.
 
 import json
 import logging
+import re
 from collections.abc import Callable
 from typing import Any
 
@@ -55,6 +56,17 @@ class BadOutputError(Exception):
 
 def _label(index: int, short: str) -> str:
     return f"Key {index + 1} ({short})"
+
+
+KEYLIKE_RE = re.compile(r"[A-Za-z0-9\-_]{20,}")
+
+
+def _clean_reason(text: str, key: str) -> str:
+    """Shorten a provider error for display and hide anything key-like."""
+    short = text[:160]
+    if key:
+        short = short.replace(key, "[hidden]")
+    return KEYLIKE_RE.sub("[hidden]", short)
 
 
 def default_client_factory(base_url: str, api_key: str) -> Any:
@@ -155,6 +167,13 @@ def generate_json(
             logger.warning("%s rate limited", label)
             notes.append(f"{label} was busy, trying the next key")
             continue
+        except openai.NotFoundError:
+            logger.warning("%s model not available (404)", label)
+            notes.append(
+                f'{label}: the model "{provider["model"]}" is not available '
+                "— try updating QA-Genius"
+            )
+            continue
         except (openai.APITimeoutError, openai.APIConnectionError):
             logger.warning("%s timed out or unreachable", label)
             notes.append(f"{label} was busy, trying the next key")
@@ -166,16 +185,14 @@ def generate_json(
                 notes.append(f"{label} was busy, trying the next key")
                 continue
             logger.warning("%s failed (%d)", label, status)
+            reason = _clean_reason(str(e), entry.get("key", ""))
             raise ProviderError(
-                f"{label} failed with an unexpected error. "
-                "Check the provider status and try again."
+                f"{label} failed ({status}): {reason}"
             ) from None
-        except openai.OpenAIError:
+        except openai.OpenAIError as e:
             logger.warning("%s failed", label)
-            raise ProviderError(
-                f"{label} failed with an unexpected error. "
-                "Check the provider status and try again."
-            ) from None
+            reason = _clean_reason(str(e), entry.get("key", ""))
+            raise ProviderError(f"{label} failed: {reason}") from None
 
         data = json_repair_utils.parse_json_resilient(content)
         if data is None:

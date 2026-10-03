@@ -130,9 +130,11 @@ def _request_keys(request: Request) -> list[dict[str, str]]:
     return keys
 
 
-def _error_card(request: Request, message: str) -> HTMLResponse:
+def _error_card(
+    request: Request, message: str, notes: list[str] | None = None
+) -> HTMLResponse:
     return templates.TemplateResponse(
-        request, "_error.html", {"message": message}
+        request, "_error.html", {"message": message, "notes": notes or []}
     )
 
 
@@ -280,16 +282,18 @@ def story_run(
         return templates.TemplateResponse(
             request, "_key_panel.html", {"providers": PROVIDERS}
         )
-    except llm.AllKeysBusyError:
+    except llm.AllKeysBusyError as e:
         return _error_card(
             request,
             "All your keys are busy. Try again in a minute or add another key.",
+            e.notes,
         )
-    except llm.InvalidKeyError:
+    except llm.InvalidKeyError as e:
         return _error_card(
             request,
             "Your key was rejected. Check it on the Your API keys page "
             "and try again.",
+            e.notes,
         )
     except llm.ProviderError as e:
         return _error_card(request, str(e))

@@ -195,3 +195,19 @@ def test_system_without_placeholder_still_carries_schema() -> None:
     system_text = received["messages"][0]["content"]
     assert "ambiguity_score" in system_text
     assert '"properties"' in system_text
+
+
+def test_model_not_available_moves_to_next_key() -> None:
+    def factory(base_url: str, api_key: str):
+        if api_key == "first":
+            return _FakeClient(_http_error(openai.NotFoundError, 404))
+        return _FakeClient(_ok_completion('{"ok": true}'))
+
+    result, used, notes = llm.generate_json(
+        KEYS, "system", "user", OkSchema, client_factory=factory
+    )
+    assert result.ok is True
+    assert used == 1
+    assert "not available" in notes[0]
+    assert "gemini-3.8-flash" in notes[0]
+    assert notes[-1] == "Used Key 2 (Groq)"

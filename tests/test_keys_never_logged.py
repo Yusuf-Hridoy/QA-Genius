@@ -13,6 +13,8 @@ from qagenius import llm
 
 SECRET = "sk-TESTSECRET123"
 
+SECRET26 = "sk-TESTSECRET123456789012"
+
 
 class OkSchema(BaseModel):
     ok: bool
@@ -102,3 +104,59 @@ def test_story_run_error_never_echoes_key(monkeypatch) -> None:
         headers=header,
     )
     assert SECRET not in response.text
+
+
+def _bad_request_with_secret() -> openai.BadRequestError:
+    request = httpx.Request("POST", "https://provider.test/v1/chat/completions")
+    body = {
+        "error": {
+            "message": "Invalid argument: rejected",
+            "type": "invalid_request_error",
+        }
+    }
+    return openai.BadRequestError(
+        f"Invalid argument for key {SECRET26}: rejected",
+        response=httpx.Response(400, request=request),
+        body=body,
+    )
+
+
+class _SecretLeakingClient:
+    def __init__(self) -> None:
+        class Completions:
+            def create(self, **kwargs):
+                raise _bad_request_with_secret()
+
+        self.chat = type("Chat", (), {"completions": Completions()})()
+
+
+def _secret_factory(base_url: str, api_key: str):
+    return _SecretLeakingClient()
+
+
+def test_provider_error_hides_key_in_message_and_logs(caplog) -> None:
+    import pytest
+
+    keys = [{"provider": "gemini", "key": SECRET26, "label": ""}]
+    with caplog.at_level(logging.WARNING, logger="qagenius.llm"):
+        with pytest.raises(llm.ProviderError) as exc_info:
+            llm.generate_json(
+                keys, "system", "user", OkSchema, client_factory=_secret_factory
+            )
+    assert SECRET26 not in str(exc_info.value)
+    assert "[hidden]" in str(exc_info.value)
+    assert SECRET26 not in caplog.text
+
+
+def test_provider_error_card_hides_key(monkeypatch) -> None:
+    monkeypatch.setattr(llm, "default_client_factory", _secret_factory)
+    client = TestClient(main.app, raise_server_exceptions=False)
+    header = {
+        "X-QAG-Keys": json.dumps([{"provider": "gemini", "key": SECRET26}])
+    }
+    response = client.post(
+        "/requirements/story/run",
+        data={"user_story": "As a shopper, I want X."},
+        headers=header,
+    )
+    assert SECRET26 not in response.text

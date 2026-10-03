@@ -2,4 +2,11 @@
   <h2>Could not check the story</h2>
   <p><span class="pill bad">Error</span></p>
   <p>{{ message }}</p>
+  {% if notes %}
+  <ul>
+    {% for note in notes %}
+    <li class="muted">{{ note }}</li>
+    {% endfor %}
+  </ul>
+  {% endif %}
 </div>
