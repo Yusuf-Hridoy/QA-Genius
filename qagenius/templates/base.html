@@ -7,14 +7,14 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700&amp;family=Instrument+Sans:wght@400;500;600&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/static/style.css">
-<script src="/static/htmx.min.js" defer></script>
-<script src="/static/app.js" defer></script>
+<link rel="stylesheet" href="/style.css">
+<script src="/htmx.min.js" defer></script>
+<script src="/app.js" defer></script>
 </head>
 <body>
 <div class="layout">
   <aside class="sidebar">
-    <div class="logo">QA-Genius<small>Cloud Dancer &amp; Forest</small></div>
+    <div class="logo"><span class="logo-mark">✓</span>QA-Genius</div>
     <nav class="nav">
       <a href="/requirements/story" class="{% if active == 'requirements' %}active{% endif %}">Requirements</a>
       <a href="/bugs" class="{% if active == 'bugs' %}active{% endif %}">Bug desk</a>

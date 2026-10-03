@@ -22,7 +22,7 @@ from qagenius.providers import get_provider
 
 logger = logging.getLogger(__name__)
 
-REQUEST_TIMEOUT = 60.0
+REQUEST_TIMEOUT = 45.0
 
 
 class NoKeysError(Exception):
@@ -84,7 +84,8 @@ def generate_json(
     """Call the first working key and return (result, used_key_index, notes).
 
     `used_key_index` is the 0-based position in `keys`. `notes` describes
-    skipped keys, e.g. ["Key 1 (Gemini) was busy, used Key 2 (Groq)"].
+    skipped keys plus who answered, e.g.
+    ["Key 1 (Gemini) was busy, trying the next key", "Used Key 2 (Groq)"].
     """
     if not keys:
         raise NoKeysError("No API keys were sent with this request.")
@@ -97,7 +98,10 @@ def generate_json(
     if client_factory is None:
         def client_factory(base_url: str, api_key: str) -> Any:
             return openai.OpenAI(
-                base_url=base_url, api_key=api_key, timeout=REQUEST_TIMEOUT
+                base_url=base_url,
+                api_key=api_key,
+                timeout=REQUEST_TIMEOUT,
+                max_retries=0,
             )
 
     notes: list[str] = []
@@ -179,6 +183,8 @@ def generate_json(
                 "The AI returned something unreadable. Try again."
             )
         logger.info("%s answered", label)
+        if notes:
+            notes.append(f"Used {label}")
         return result, index, notes
 
     if attempted > 0 and invalid_count == attempted:

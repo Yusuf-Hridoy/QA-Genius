@@ -8,7 +8,6 @@ from fastapi.templating import Jinja2Templates
 BASE_DIR = Path(__file__).parent
 
 app = FastAPI(title="QA-Genius v2")
-app.mount("/static", StaticFiles(directory=BASE_DIR.parent / "public"), name="static")
 templates = Jinja2Templates(directory=BASE_DIR / "templates")
 
 
@@ -53,3 +52,14 @@ def performance_page(request: Request) -> HTMLResponse:
     return templates.TemplateResponse(
         request, "coming_soon.html", {"active": "performance", "page": "Performance"}
     )
+
+
+# Served from the site root (e.g. /style.css). On Vercel the CDN serves
+# public/ first; locally this mount serves the same files. It must stay
+# last so it never shadows the routes above. check_dir=False keeps
+# startup working even if the folder is missing from the bundle.
+app.mount(
+    "/",
+    StaticFiles(directory=BASE_DIR.parent / "public", check_dir=False),
+    name="public",
+)
