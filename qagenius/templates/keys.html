@@ -4,6 +4,34 @@
 {% block content %}
 <div class="card">
   <h2>Your API keys</h2>
-  <p>The full keys page arrives in Task 4: add keys from many providers, reorder, and test them.</p>
+  <p><em>Keys are saved only in this browser. Each request sends them to your AI provider through our server, which never stores or logs them.</em></p>
+</div>
+<div class="card">
+  <h2>Keys in order</h2>
+  <p id="key-empty" class="muted">No keys yet. Add your first key below — the first provider in this list is tried first.</p>
+  <ul id="key-list" class="key-list"></ul>
+</div>
+<div class="card">
+  <h2>Add a key</h2>
+  <form id="key-form">
+    <div class="field">
+      <label for="key-provider">Provider</label>
+      <select id="key-provider" name="provider">
+        {% for p in providers %}
+        <option value="{{ p.id }}" data-key-url="{{ p.key_url }}">{{ p.name }}</option>
+        {% endfor %}
+      </select>
+      <span class="hint"><a id="provider-key-link" href="{{ providers[0].key_url }}" target="_blank" rel="noopener">Get a free key</a></span>
+    </div>
+    <div class="field">
+      <label for="key-label">Label <span class="hint">a nickname so you can tell keys apart — never sent anywhere</span></label>
+      <input type="text" id="key-label" name="label" maxlength="60" placeholder="e.g. My Gemini key" autocomplete="off">
+    </div>
+    <div class="field">
+      <label for="key-value">API key</label>
+      <input type="password" id="key-value" name="key" placeholder="Paste your key" autocomplete="off" spellcheck="false">
+    </div>
+    <button type="submit" id="key-save" class="btn btn-primary">Save key</button>
+  </form>
 </div>
 {% endblock %}
