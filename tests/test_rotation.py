@@ -6,6 +6,7 @@ import pytest
 from pydantic import BaseModel
 
 from qagenius import llm
+from qagenius.models import AmbiguityAnalysis
 
 
 class OkSchema(BaseModel):
@@ -165,3 +166,32 @@ def test_busy_key_is_called_exactly_once() -> None:
     first_key_calls = [h for h in seen if h == "Bearer first"]
     assert len(first_key_calls) == 1
     assert len(seen) == 2
+
+
+def test_system_without_placeholder_still_carries_schema() -> None:
+    received: dict = {}
+
+    class RecordingCompletions:
+        def create(self, **kwargs):
+            received.update(kwargs)
+            message = type("Message", (), {"content": '{"ok": true}'})()
+            choice = type("Choice", (), {"message": message})()
+            return type("Completion", (), {"choices": [choice]})()
+
+    class RecordingClient:
+        def __init__(self) -> None:
+            self.chat = type("Chat", (), {"completions": RecordingCompletions()})()
+
+    with pytest.raises(llm.BadOutputError):
+        # '{"ok": true}' cannot validate as AmbiguityAnalysis, but the
+        # system message must already contain the schema by then.
+        llm.generate_json(
+            [KEYS[0]],
+            "You are a requirements auditor.",
+            "Some story.",
+            AmbiguityAnalysis,
+            client_factory=lambda base_url, api_key: RecordingClient(),
+        )
+    system_text = received["messages"][0]["content"]
+    assert "ambiguity_score" in system_text
+    assert '"properties"' in system_text

@@ -100,9 +100,13 @@ def generate_json(
     if not keys:
         raise NoKeysError("No API keys were sent with this request.")
 
+    schema_json = json.dumps(schema.model_json_schema(), indent=2)
     if "{json_schema}" in system:
-        system = system.replace(
-            "{json_schema}", json.dumps(schema.model_json_schema())
+        system = system.replace("{json_schema}", schema_json)
+    else:
+        system += (
+            "\n\nRespond with ONLY a JSON object that matches this JSON Schema. "
+            "Use these exact field names.\n" + schema_json
         )
 
     if client_factory is None:

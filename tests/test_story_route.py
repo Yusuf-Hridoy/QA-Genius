@@ -95,3 +95,29 @@ def test_unreadable_output_returns_plain_error(monkeypatch) -> None:
         "/requirements/story/run", data=FORM, headers=KEYS_HEADER
     )
     assert "unreadable" in response.text
+
+
+def test_story_run_sends_schema_to_model(monkeypatch) -> None:
+    received: dict = {}
+
+    class RecordingCompletions:
+        def create(self, **kwargs):
+            received.update(kwargs)
+            message = type("Message", (), {"content": json.dumps(SAMPLE["result"])})()
+            choice = type("Choice", (), {"message": message})()
+            return type("Completion", (), {"choices": [choice]})()
+
+    class RecordingClient:
+        def __init__(self) -> None:
+            self.chat = type("Chat", (), {"completions": RecordingCompletions()})()
+
+    monkeypatch.setattr(
+        llm, "default_client_factory", lambda base_url, api_key: RecordingClient()
+    )
+    response = client.post(
+        "/requirements/story/run", data=FORM, headers=KEYS_HEADER
+    )
+    assert response.status_code == 200
+    system_text = received["messages"][0]["content"]
+    assert "ambiguity_score" in system_text
+    assert '"properties"' in system_text
