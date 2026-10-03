@@ -97,6 +97,12 @@ def test_key(body: KeyTestRequest) -> dict:
         }
     except llm.AllKeysBusyError:
         return {"ok": False, "error": "The provider is busy. Try again in a minute."}
+    except llm.ModelUnavailableError:
+        return {
+            "ok": False,
+            "error": "That model isn't available right now. "
+            "QA-Genius needs a model update.",
+        }
     except (llm.ProviderError, llm.BadOutputError, llm.NoKeysError) as e:
         return {"ok": False, "error": str(e)}
     if not result.ok:
@@ -293,6 +299,13 @@ def story_run(
             request,
             "Your key was rejected. Check it on the Your API keys page "
             "and try again.",
+            e.notes,
+        )
+    except llm.ModelUnavailableError as e:
+        return _error_card(
+            request,
+            "The AI model isn't available right now. Your keys are fine — "
+            "QA-Genius needs a model update.",
             e.notes,
         )
     except llm.ProviderError as e:

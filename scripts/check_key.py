@@ -37,10 +37,13 @@ def main() -> int:
         llm.NoKeysError,
         llm.AllKeysBusyError,
         llm.InvalidKeyError,
+        llm.ModelUnavailableError,
         llm.ProviderError,
         llm.BadOutputError,
     ) as e:
         print(f"FAILED: {e}")
+        for note in getattr(e, "notes", []):
+            print(f"  - {note}")
         return 1
     print(f"OK {provider_id} {provider['model']}")
     return 0

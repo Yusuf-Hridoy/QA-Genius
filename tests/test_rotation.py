@@ -211,3 +211,23 @@ def test_model_not_available_moves_to_next_key() -> None:
     assert "not available" in notes[0]
     assert "gemini-3.8-flash" in notes[0]
     assert notes[-1] == "Used Key 2 (Groq)"
+
+
+def test_all_models_unavailable_raises_model_unavailable() -> None:
+    def factory(base_url: str, api_key: str):
+        return _FakeClient(_http_error(openai.NotFoundError, 404))
+
+    with pytest.raises(llm.ModelUnavailableError) as exc_info:
+        llm.generate_json(KEYS, "system", "user", OkSchema, client_factory=factory)
+    assert len(exc_info.value.notes) == 2
+    assert all("not available" in note for note in exc_info.value.notes)
+
+
+def test_mixed_unavailable_and_busy_raises_all_keys_busy() -> None:
+    def factory(base_url: str, api_key: str):
+        if api_key == "first":
+            return _FakeClient(_http_error(openai.NotFoundError, 404))
+        return _FakeClient(_http_error(openai.RateLimitError, 429))
+
+    with pytest.raises(llm.AllKeysBusyError):
+        llm.generate_json(KEYS, "system", "user", OkSchema, client_factory=factory)

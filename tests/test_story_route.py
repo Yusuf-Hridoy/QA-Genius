@@ -97,6 +97,22 @@ def test_unreadable_output_returns_plain_error(monkeypatch) -> None:
     assert "unreadable" in response.text
 
 
+def test_unavailable_model_returns_update_message(monkeypatch) -> None:
+    def fake(keys, system, user, schema):
+        raise llm.ModelUnavailableError(
+            ['Key 1 (Gemini): the model "gemini-x" is not available']
+        )
+
+    monkeypatch.setattr(llm, "generate_json", fake)
+    response = client.post(
+        "/requirements/story/run", data=FORM, headers=KEYS_HEADER
+    )
+    body = response.text
+    assert "Your keys are fine" in body
+    assert "needs a model update" in body
+    assert "not available" in body
+
+
 def test_story_run_sends_schema_to_model(monkeypatch) -> None:
     received: dict = {}
 

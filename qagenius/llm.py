@@ -46,6 +46,14 @@ class InvalidKeyError(Exception):
         self.notes = notes
 
 
+class ModelUnavailableError(Exception):
+    """Raised when every key failed only because the model is gone (404)."""
+
+    def __init__(self, notes: list[str]) -> None:
+        super().__init__("Model unavailable")
+        self.notes = notes
+
+
 class ProviderError(Exception):
     """Raised for non-retryable provider errors (we stop, no further keys tried)."""
 
@@ -126,6 +134,7 @@ def generate_json(
 
     notes: list[str] = []
     invalid_count = 0
+    notfound_count = 0
     attempted = 0
 
     for index, entry in enumerate(keys):
@@ -173,6 +182,7 @@ def generate_json(
                 f'{label}: the model "{provider["model"]}" is not available '
                 "— try updating QA-Genius"
             )
+            notfound_count += 1
             continue
         except (openai.APITimeoutError, openai.APIConnectionError):
             logger.warning("%s timed out or unreachable", label)
@@ -214,4 +224,6 @@ def generate_json(
 
     if attempted > 0 and invalid_count == attempted:
         raise InvalidKeyError(notes)
+    if attempted > 0 and notfound_count == attempted:
+        raise ModelUnavailableError(notes)
     raise AllKeysBusyError(notes)

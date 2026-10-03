@@ -30,7 +30,7 @@ PROVIDERS: list[dict[str, str]] = [
         "name": "xAI (Grok)",
         "short": "Grok",
         "base_url": "https://api.x.ai/v1",
-        "model": "grok-3-mini",
+        "model": "grok-4.3",
         "key_url": "https://console.x.ai",
     },
     {
