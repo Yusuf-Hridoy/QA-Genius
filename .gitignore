@@ -59,4 +59,5 @@ Thumbs.db
 *.xlsx
 *.json
 !requirements*.txt
+!vercel.json
 !qagenius/samples/*.json
