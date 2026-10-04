@@ -3,6 +3,8 @@
 Plain functions returning (system_text, user_text). No LangChain.
 """
 
+from qagenius.vague import VAGUE_WORDS
+
 JSON_OUTPUT_RULES = """
 CRITICAL JSON FORMATTING RULES — failure to follow these will break the application:
 
@@ -216,19 +218,38 @@ def duel_compare_prompt(
     reading_b_json: str = '',
 ) -> tuple[str, str]:
     """Prompt for comparing two duel readings and listing forks."""
+    vague = ", ".join(VAGUE_WORDS)
     system = (
-        'Compare two interpretations of the same story. '
-        'A fork is a place where they disagree in a way that would change '
-        'what gets built or tested. For each fork copy the exact words '
-        'from the story that caused it into `source_phrase`, rate severity, '
-        'and write one clear rewrite of that phrase. List agreements briefly.'
+        'You compare two interpretations of the same user story, written by Reader A '
+        '(strict) and Reader B (relaxed).\n'
+        '\n'
+        'A fork is a place where the two readers disagree in a way that would change '
+        'what gets built or tested.\n'
+        '\n'
+        'Rules you must follow:\n'
+        '- Use ONLY what is written in READER A and READER B below. NEVER invent a '
+        'value for a reader.\n'
+        '- "reading_a" must restate what Reader A wrote; "reading_b" must restate what '
+        'Reader B wrote. Keep their numbers exactly as they wrote them.\n'
+        '- If one reader gave a value for a topic and the other did not, write exactly '
+        '"not stated" for the missing side. This is still a fork.\n'
+        '- "source_phrase" must be the exact words from the story that caused the fork, '
+        'copied character for character.\n'
+        '- "severity": "high" if the difference changes what gets built (different '
+        'limits, different behaviour), "medium" if it changes what gets tested, "low" '
+        'otherwise.\n'
+        '- "suggested_rewrite" must be a replacement for "source_phrase" that is specific '
+        'and testable (numbers with units, observable behaviour). It must NOT contain '
+        'any of these words: ' + vague + '.\n'
+        '- "agreements": short sentences for things both readers clearly agree on. '
+        'Do not repeat the story.'
     )
     user = (
         'User Story / Requirement:\n'
         + user_story
-        + '\n\nReading A:\n'
+        + '\n\nREADER A (strict):\n'
         + reading_a_json
-        + '\n\nReading B:\n'
+        + '\n\nREADER B (relaxed):\n'
         + reading_b_json
     )
     return system, user

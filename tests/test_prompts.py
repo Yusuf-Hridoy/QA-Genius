@@ -83,3 +83,23 @@ def test_reader_prompt_demands_numbers_and_units() -> None:
     system, _ = prompts.duel_reader_prompt(user_story="As a shopper I want to check out.")
     assert 'at least 3 entries in "numbers"' in system
     assert "NEVER restate" in system
+
+
+def test_compare_prompt_forbids_inventing() -> None:
+    system, _ = prompts.duel_compare_prompt(user_story="story")
+    assert "NEVER invent a value for a reader" in system
+    assert '"not stated"' in system
+
+
+def test_compare_prompt_lists_vague_words() -> None:
+    system, _ = prompts.duel_compare_prompt(user_story="story")
+    assert "quickly" in system
+    assert "too many" in system
+
+
+def test_compare_prompt_labels_readers() -> None:
+    _, user = prompts.duel_compare_prompt(
+        user_story="story", reading_a_json="{}", reading_b_json="{}",
+    )
+    assert "READER A (strict):" in user
+    assert "READER B (relaxed):" in user
