@@ -44,9 +44,12 @@ def _ok_completion(content: str):
 
 
 KEYS = [
-    {"provider": "gemini", "key": "first", "label": ""},
-    {"provider": "groq", "key": "second", "label": ""},
+    {"provider": "gemini", "key": "first", "label": "", "model": "gemini-test-model"},
+    {"provider": "groq", "key": "second", "label": "", "model": "groq-test-model"},
 ]
+
+FIRST_LABEL = "Key 1 (Gemini, gemini-test-model)"
+SECOND_LABEL = "Key 2 (Groq, groq-test-model)"
 
 
 def test_rate_limit_moves_to_next_key() -> None:
@@ -64,8 +67,8 @@ def test_rate_limit_moves_to_next_key() -> None:
     assert result.ok is True
     assert used == 1
     assert notes == [
-        "Key 1 (Gemini) was busy, trying the next key",
-        "Used Key 2 (Groq)",
+        f"{FIRST_LABEL} was busy, trying the next key",
+        f"Used {SECOND_LABEL}",
     ]
 
 
@@ -79,8 +82,8 @@ def test_auth_error_marks_key_invalid_and_moves_on() -> None:
         KEYS, "system", "user", OkSchema, client_factory=factory
     )
     assert used == 1
-    assert notes[0] == "Key 1 (Gemini) looked invalid, trying the next key"
-    assert notes[-1] == "Used Key 2 (Groq)"
+    assert notes[0] == f"{FIRST_LABEL} looked invalid, trying the next key"
+    assert notes[-1] == f"Used {SECOND_LABEL}"
 
 
 def test_all_keys_failing_raises_all_keys_busy() -> None:
@@ -100,7 +103,7 @@ def test_final_note_names_answering_key() -> None:
     _, _, notes = llm.generate_json(
         KEYS, "system", "user", OkSchema, client_factory=factory
     )
-    assert notes[-1] == "Used Key 2 (Groq)"
+    assert notes[-1] == f"Used {SECOND_LABEL}"
 
 
 def test_first_key_success_leaves_notes_empty() -> None:
@@ -209,8 +212,8 @@ def test_model_not_available_moves_to_next_key() -> None:
     assert result.ok is True
     assert used == 1
     assert "not available" in notes[0]
-    assert "gemini-3.8-flash" in notes[0]
-    assert notes[-1] == "Used Key 2 (Groq)"
+    assert "gemini-test-model" in notes[0]
+    assert notes[-1] == f"Used {SECOND_LABEL}"
 
 
 def test_all_models_unavailable_raises_model_unavailable() -> None:
@@ -231,3 +234,104 @@ def test_mixed_unavailable_and_busy_raises_all_keys_busy() -> None:
 
     with pytest.raises(llm.AllKeysBusyError):
         llm.generate_json(KEYS, "system", "user", OkSchema, client_factory=factory)
+
+
+def test_entry_model_is_sent_to_provider() -> None:
+    received: dict = {}
+
+    class RecordingCompletions:
+        def create(self, **kwargs):
+            received.update(kwargs)
+            return _ok_completion('{"ok": true}')
+
+    class RecordingClient:
+        def __init__(self) -> None:
+            self.chat = type("Chat", (), {"completions": RecordingCompletions()})()
+
+    result, used, _ = llm.generate_json(
+        [KEYS[0]],
+        "system",
+        "user",
+        OkSchema,
+        client_factory=lambda base_url, api_key: RecordingClient(),
+    )
+    assert result.ok is True
+    assert used == 0
+    assert received["model"] == "gemini-test-model"
+
+
+def test_unsafe_model_falls_back_to_live_list() -> None:
+    received: dict = {}
+    fetches: list[str] = []
+
+    class RecordingCompletions:
+        def create(self, **kwargs):
+            received.update(kwargs)
+            return _ok_completion('{"ok": true}')
+
+    class RecordingClient:
+        def __init__(self) -> None:
+            self.chat = type("Chat", (), {"completions": RecordingCompletions()})()
+
+    def fetcher(base_url: str, api_key: str):
+        fetches.append(base_url)
+        return ["whatever-flash-model"]
+
+    keys = [{"provider": "gemini", "key": "k", "model": "evil; touch /tmp/x"}]
+    result, _, notes = llm.generate_json(
+        keys,
+        "system",
+        "user",
+        OkSchema,
+        client_factory=lambda base_url, api_key: RecordingClient(),
+        models_fetcher=fetcher,
+    )
+    assert result.ok is True
+    assert received["model"] == "whatever-flash-model"
+    assert fetches == ["https://generativelanguage.googleapis.com/v1beta/openai/"]
+    assert notes == []
+
+
+def test_missing_model_lists_once_per_provider() -> None:
+    fetches: list[str] = []
+
+    def fetcher(base_url: str, api_key: str):
+        fetches.append(api_key)
+        return ["picked-model"]
+
+    def factory(base_url: str, api_key: str):
+        if api_key == "one":
+            return _FakeClient(_http_error(openai.RateLimitError, 429))
+        return _FakeClient(_ok_completion('{"ok": true}'))
+
+    keys = [
+        {"provider": "gemini", "key": "one"},
+        {"provider": "gemini", "key": "two"},
+    ]
+    _, used, _ = llm.generate_json(
+        keys,
+        "system",
+        "user",
+        OkSchema,
+        client_factory=factory,
+        models_fetcher=fetcher,
+    )
+    assert used == 1
+    assert fetches == ["one"]
+
+
+def test_no_credit_moves_to_next_key() -> None:
+    def factory(base_url: str, api_key: str):
+        if api_key == "first":
+            return _FakeClient(_http_error(openai.APIStatusError, 402))
+        return _FakeClient(_ok_completion('{"ok": true}'))
+
+    result, used, notes = llm.generate_json(
+        KEYS, "system", "user", OkSchema, client_factory=factory
+    )
+    assert result.ok is True
+    assert used == 1
+    assert notes == [
+        f"{FIRST_LABEL} has no credit for this model, trying the next key",
+        f"Used {SECOND_LABEL}",
+    ]

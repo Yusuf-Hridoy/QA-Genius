@@ -1,5 +1,6 @@
 import html
 import json
+import logging
 from pathlib import Path
 
 from fastapi import FastAPI, Form, Request
@@ -8,10 +9,14 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 
+import openai
+
 from qagenius import llm
 from qagenius.models import AmbiguityAnalysis
 from qagenius.prompts import story_check_prompt
-from qagenius.providers import PROVIDERS, get_provider
+from qagenius.providers import PROVIDERS, get_provider, pick_default
+
+logger = logging.getLogger(__name__)
 
 BASE_DIR = Path(__file__).parent
 SAMPLES_DIR = BASE_DIR / "samples"
@@ -71,6 +76,7 @@ def performance_page(request: Request) -> HTMLResponse:
 class KeyTestRequest(BaseModel):
     provider: str = ""
     key: str = ""
+    model: str = ""
 
 
 class KeyTestSchema(BaseModel):
@@ -84,8 +90,15 @@ def test_key(body: KeyTestRequest) -> dict:
     if provider is None or not body.key.strip():
         return {"ok": False, "error": "Pick a provider and paste a key."}
     try:
+        key_entry: dict[str, str] = {
+            "provider": body.provider,
+            "key": body.key,
+            "label": "test",
+        }
+        if llm.valid_model(body.model):
+            key_entry["model"] = body.model
         result, _, _ = llm.generate_json(
-            [{"provider": body.provider, "key": body.key, "label": "test"}],
+            [key_entry],
             'Reply with exactly {"ok": true}.',
             'Reply with exactly {"ok": true}.',
             KeyTestSchema,
@@ -110,6 +123,34 @@ def test_key(body: KeyTestRequest) -> dict:
     return {"ok": True}
 
 
+class KeyModelsRequest(BaseModel):
+    provider: str = ""
+    key: str = ""
+
+
+@app.post("/api/keys/models")
+def key_models(body: KeyModelsRequest) -> dict:
+    """List chat models one key can call. Never echoes or logs the key."""
+    provider = get_provider(body.provider)
+    if provider is None or not body.key.strip():
+        return {"ok": False, "error": "Pick a provider and paste a key."}
+    try:
+        models = llm.list_chat_models(provider, body.key)
+    except openai.OpenAIError as e:
+        logger.warning(
+            "%s model list failed (%s)", provider["short"], type(e).__name__
+        )
+        return {"ok": False, "error": llm.clean_reason(str(e), body.key)}
+    except Exception:  # never leak unexpected details (or the key)
+        logger.warning("%s model list failed", provider["short"])
+        return {"ok": False, "error": "Could not list models. Try again."}
+    return {
+        "ok": True,
+        "models": models,
+        "suggested": pick_default(provider, models),
+    }
+
+
 def _request_keys(request: Request) -> list[dict[str, str]]:
     """Read the X-QAG-Keys header. Returns [] when missing or malformed."""
     try:
@@ -126,13 +167,14 @@ def _request_keys(request: Request) -> list[dict[str, str]]:
             and entry.get("key")
             and get_provider(str(entry["provider"])) is not None
         ):
-            keys.append(
-                {
-                    "provider": str(entry["provider"]),
-                    "key": str(entry["key"]),
-                    "label": "",
-                }
-            )
+            parsed: dict[str, str] = {
+                "provider": str(entry["provider"]),
+                "key": str(entry["key"]),
+                "label": "",
+            }
+            if llm.valid_model(entry.get("model")):
+                parsed["model"] = str(entry["model"])
+            keys.append(parsed)
     return keys
 
 

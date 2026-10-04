@@ -46,8 +46,19 @@
 
   function headerKeys() {
     return loadKeys().map(function (entry) {
-      return { provider: entry.provider, key: entry.key };
+      var item = { provider: entry.provider, key: entry.key };
+      if (entry.model) {
+        item.model = entry.model;
+      }
+      return item;
     });
+  }
+
+  function shortModel(model) {
+    if (!model) {
+      return "";
+    }
+    return model.length <= 22 ? model : model.slice(0, 22) + "…";
   }
 
   function maskKey(key) {
@@ -122,7 +133,12 @@
         icon.hidden = true;
       }
       var word = keys.length === 1 ? "1 key" : keys.length + " keys";
-      text.textContent = providerName(keys[0].provider) + " connected · " + word;
+      var first = shortModel(keys[0].model);
+      text.textContent =
+        providerName(keys[0].provider) +
+        (first ? " · " + first : "") +
+        " connected · " +
+        word;
     } else {
       chip.classList.add("empty");
       if (dot) {
@@ -229,6 +245,7 @@
         main.appendChild(el("span", "muted", " · " + entry.label));
       }
       main.appendChild(el("code", "mono", " " + maskKey(entry.key)));
+      main.appendChild(el("code", "mono", " " + (entry.model || "auto")));
       main.appendChild(statusPill(entry));
       li.appendChild(main);
 
@@ -237,6 +254,7 @@
       if (idx > 0) {
         buttons.push(["first", "Make first"]);
       }
+      buttons.push(["model", "Change model"]);
       buttons.push(["edit", "Edit"]);
       buttons.push(["delete", "Delete"]);
       buttons.forEach(function (pair) {
@@ -251,19 +269,75 @@
     });
   }
 
-  function runTest(id) {
+  var modelCache = {};
+
+  function fetchModelList(entry) {
+    return fetch("/api/keys/models", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ provider: entry.provider, key: entry.key }),
+    })
+      .then(function (resp) {
+        return resp.json();
+      })
+      .then(function (data) {
+        if (data && data.ok && Array.isArray(data.models)) {
+          modelCache[entry.id] = {
+            models: data.models,
+            suggested: data.suggested || "",
+          };
+          return modelCache[entry.id];
+        }
+        return null;
+      })
+      .catch(function () {
+        return null;
+      });
+  }
+
+  function ensureModel(id) {
     var keys = loadKeys();
     var pos = findPos(keys, id);
     if (pos === -1) {
-      return Promise.resolve(false);
+      return Promise.resolve(null);
     }
+    if (keys[pos].model && modelCache[id]) {
+      return Promise.resolve(keys[pos]);
+    }
+    return fetchModelList(keys[pos]).then(function () {
+      var fresh = loadKeys();
+      var at = findPos(fresh, id);
+      if (at === -1) {
+        return null;
+      }
+      var cached = modelCache[id];
+      if (!fresh[at].model && cached && cached.suggested) {
+        fresh[at].model = cached.suggested;
+        storeKeys(fresh);
+        return fresh[at];
+      }
+      return fresh[at];
+    });
+  }
+
+  function runTest(id) {
     testingId = id;
     renderDrawer();
-    return fetch("/api/keys/test", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ provider: keys[pos].provider, key: keys[pos].key }),
-    })
+    return ensureModel(id).then(function (entry) {
+      if (!entry) {
+        testingId = null;
+        renderDrawer();
+        return false;
+      }
+      var payload = { provider: entry.provider, key: entry.key };
+      if (entry.model) {
+        payload.model = entry.model;
+      }
+      return fetch("/api/keys/test", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      })
       .then(function (resp) {
         return resp.json();
       })
@@ -297,6 +371,7 @@
         renderDrawer();
         return false;
       });
+    });
   }
 
   function maybeResubmitStory() {
@@ -377,6 +452,10 @@
         return;
       }
       var newKey = keyInput.value.trim();
+      if (select.value !== fresh[at].provider) {
+        delete fresh[at].model;
+        delete modelCache[entry.id];
+      }
       fresh[at].provider = select.value;
       fresh[at].label = labelInput.value.trim();
       if (newKey) {
@@ -387,6 +466,98 @@
       renderDrawer();
     });
     keyInput.focus();
+  }
+
+  function openModelEditor(li, entry) {
+    while (li.firstChild) {
+      li.removeChild(li.firstChild);
+    }
+    var head = el("div", "key-main");
+    head.appendChild(el("strong", null, providerName(entry.provider)));
+    head.appendChild(el("code", "mono", " " + (entry.model || "auto")));
+    li.appendChild(head);
+
+    var form = el("div", "key-edit-form");
+    var loading = el("span", "muted", "Loading models…");
+    form.appendChild(loading);
+    li.appendChild(form);
+
+    function build(models) {
+      while (form.firstChild) {
+        form.removeChild(form.firstChild);
+      }
+      if (!models || !models.length) {
+        form.appendChild(
+          el("span", "muted", "Could not list models. Type one below.")
+        );
+      } else {
+        var select = el("select", null);
+        models.forEach(function (name) {
+          var opt = document.createElement("option");
+          opt.value = name;
+          opt.textContent = name;
+          if (name === entry.model) {
+            opt.selected = true;
+          }
+          select.appendChild(opt);
+        });
+        select.setAttribute("aria-label", "Model");
+        form.appendChild(select);
+      }
+      var other = el("input", null);
+      other.type = "text";
+      other.value = "";
+      other.maxLength = 100;
+      other.placeholder = "Other model id (optional)";
+      other.setAttribute("aria-label", "Other model id");
+      other.autocomplete = "off";
+      other.spellcheck = false;
+      form.appendChild(other);
+      var row = el("div", "row");
+      var save = el("button", "btn btn-small", "Save");
+      save.type = "button";
+      var cancel = el("button", "btn btn-small", "Cancel");
+      cancel.type = "button";
+      row.appendChild(save);
+      row.appendChild(cancel);
+      form.appendChild(row);
+      cancel.addEventListener("click", function () {
+        renderDrawer();
+      });
+      save.addEventListener("click", function () {
+        var chosen = other.value.trim();
+        if (!chosen && form.querySelector("select")) {
+          chosen = form.querySelector("select").value;
+        }
+        if (!chosen) {
+          other.focus();
+          return;
+        }
+        var fresh = loadKeys();
+        var at = findPos(fresh, entry.id);
+        if (at === -1) {
+          renderDrawer();
+          return;
+        }
+        fresh[at].model = chosen;
+        delete fresh[at].lastTest;
+        storeKeys(fresh);
+        renderDrawer();
+      });
+      other.focus();
+    }
+
+    var cached = modelCache[entry.id];
+    if (cached && cached.models) {
+      build(cached.models);
+    } else {
+      fetchModelList(entry).then(function (result) {
+        if (findPos(loadKeys(), entry.id) === -1) {
+          return;
+        }
+        build(result ? result.models : []);
+      });
+    }
   }
 
   function openDeleteConfirm(li, entry, actions) {
@@ -410,6 +581,7 @@
         fresh.splice(at, 1);
         storeKeys(fresh);
       }
+      delete modelCache[entry.id];
       renderDrawer();
     });
   }
@@ -475,6 +647,8 @@
         renderDrawer();
       } else if (action === "edit") {
         openEditRow(li, keys[pos]);
+      } else if (action === "model") {
+        openModelEditor(li, keys[pos]);
       } else if (action === "delete") {
         openDeleteConfirm(li, keys[pos], btn.closest(".row"));
       }

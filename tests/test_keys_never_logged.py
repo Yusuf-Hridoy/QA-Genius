@@ -60,7 +60,7 @@ def _passing_factory(base_url: str, api_key: str):
 
 
 def test_failing_and_passing_calls_never_log_key(caplog) -> None:
-    keys = [{"provider": "gemini", "key": SECRET, "label": "mine"}]
+    keys = [{"provider": "gemini", "key": SECRET, "label": "mine", "model": "m"}]
     with caplog.at_level(logging.WARNING, logger="qagenius.llm"):
         try:
             llm.generate_json(
@@ -137,7 +137,7 @@ def _secret_factory(base_url: str, api_key: str):
 def test_provider_error_hides_key_in_message_and_logs(caplog) -> None:
     import pytest
 
-    keys = [{"provider": "gemini", "key": SECRET26, "label": ""}]
+    keys = [{"provider": "gemini", "key": SECRET26, "label": "", "model": "m"}]
     with caplog.at_level(logging.WARNING, logger="qagenius.llm"):
         with pytest.raises(llm.ProviderError) as exc_info:
             llm.generate_json(
@@ -152,7 +152,9 @@ def test_provider_error_card_hides_key(monkeypatch) -> None:
     monkeypatch.setattr(llm, "default_client_factory", _secret_factory)
     client = TestClient(main.app, raise_server_exceptions=False)
     header = {
-        "X-QAG-Keys": json.dumps([{"provider": "gemini", "key": SECRET26}])
+        "X-QAG-Keys": json.dumps(
+            [{"provider": "gemini", "key": SECRET26, "model": "test-model"}]
+        )
     }
     response = client.post(
         "/requirements/story/run",
@@ -160,3 +162,17 @@ def test_provider_error_card_hides_key(monkeypatch) -> None:
         headers=header,
     )
     assert SECRET26 not in response.text
+
+
+def test_models_endpoint_never_logs_key(monkeypatch, caplog) -> None:
+    def fake_fetch(base_url: str, api_key: str):
+        raise _rate_limit_error()
+
+    monkeypatch.setattr(llm, "fetch_model_ids", fake_fetch)
+    with caplog.at_level(logging.WARNING):
+        response = TestClient(main.app, raise_server_exceptions=False).post(
+            "/api/keys/models", json={"provider": "groq", "key": SECRET26}
+        )
+    assert response.json()["ok"] is False
+    assert SECRET26 not in response.text
+    assert SECRET26 not in caplog.text

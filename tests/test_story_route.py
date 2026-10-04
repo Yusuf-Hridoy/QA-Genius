@@ -44,6 +44,31 @@ def test_malformed_keys_header_signals_drawer_open() -> None:
     assert response.headers.get("hx-trigger") == "open-keys"
 
 
+def test_unsafe_model_is_dropped_from_header(monkeypatch) -> None:
+    seen: dict = {}
+
+    def fake(keys, system, user, schema):
+        seen["keys"] = keys
+        return FAKE_RESULT, 0, []
+
+    monkeypatch.setattr(llm, "generate_json", fake)
+    header = {
+        "X-QAG-Keys": json.dumps(
+            [{"provider": "gemini", "key": "k", "model": "evil; touch /tmp/x"}]
+        )
+    }
+    client.post("/requirements/story/run", data=FORM, headers=header)
+    assert "model" not in seen["keys"][0]
+
+    header = {
+        "X-QAG-Keys": json.dumps(
+            [{"provider": "gemini", "key": "k", "model": "gemini-3.8-flash"}]
+        )
+    }
+    client.post("/requirements/story/run", data=FORM, headers=header)
+    assert seen["keys"][0]["model"] == "gemini-3.8-flash"
+
+
 def test_fake_llm_returns_result_cards(monkeypatch) -> None:
     def fake(keys, system, user, schema):
         assert "quickly" in user
@@ -136,6 +161,9 @@ def test_story_run_sends_schema_to_model(monkeypatch) -> None:
 
     monkeypatch.setattr(
         llm, "default_client_factory", lambda base_url, api_key: RecordingClient()
+    )
+    monkeypatch.setattr(
+        llm, "list_chat_models", lambda provider, key, fetcher=None: ["schema-model"]
     )
     response = client.post(
         "/requirements/story/run", data=FORM, headers=KEYS_HEADER
