@@ -42,3 +42,38 @@ def test_story_prompt_user_text_contains_story() -> None:
     story = "As a shopper I want to check out quickly."
     _, user = prompts.story_check_prompt(user_story=story)
     assert story in user
+
+
+def test_duel_reader_prompts_non_empty() -> None:
+    story = "As a shopper, I want my account to lock quickly."
+    for persona in ("A", "B"):
+        system, user = prompts.duel_reader_prompt(
+            user_story=story, story_type="User story", context="Aurora Storefront",
+            persona=persona,
+        )
+        assert system.strip()
+        assert user.strip()
+        assert story in user
+
+
+def test_duel_reader_personas_differ_only_in_persona_line() -> None:
+    story = "As a shopper, I want my account to lock quickly."
+    system_a, _ = prompts.duel_reader_prompt(user_story=story, persona="A")
+    system_b, _ = prompts.duel_reader_prompt(user_story=story, persona="B")
+    lines_a = system_a.strip().splitlines()
+    lines_b = system_b.strip().splitlines()
+    assert len(lines_a) == len(lines_b)
+    diffs = [i for i, (x, y) in enumerate(zip(lines_a, lines_b)) if x != y]
+    assert len(diffs) == 1
+    assert "strictest" in lines_a[diffs[0]]
+    assert "relaxed" in lines_b[diffs[0]]
+
+
+def test_duel_compare_prompt_contains_story() -> None:
+    story = "As a shopper, I want my account to lock quickly."
+    system, user = prompts.duel_compare_prompt(
+        user_story=story, reading_a_json='{"rules": []}', reading_b_json='{"rules": []}',
+    )
+    assert system.strip()
+    assert user.strip()
+    assert story in user

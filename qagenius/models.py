@@ -1,5 +1,6 @@
+from typing import List, Literal, Optional
+
 from pydantic import BaseModel
-from typing import List, Optional
 
 
 class CategoryCount(BaseModel):
@@ -249,3 +250,37 @@ class PerformanceTestSuite(BaseModel):
     design_notes: Optional[str] = None
     grafana_dashboard: Optional[str] = None
     sample_csv: Optional[str] = None
+
+
+class Rule(BaseModel):
+    topic: str
+    reading: str
+    source_phrase: str
+
+
+class NumberReading(BaseModel):
+    name: str
+    value: str
+    source_phrase: str
+
+
+class Interpretation(BaseModel):
+    actors: List[str] = []
+    rules: List[Rule] = []
+    numbers: List[NumberReading] = []
+    outcomes: List[str] = []
+    assumptions: List[str] = []
+
+
+class Fork(BaseModel):
+    topic: str
+    reading_a: str
+    reading_b: str
+    source_phrase: str
+    severity: Literal["high", "medium", "low"]
+    suggested_rewrite: str
+
+
+class DuelComparison(BaseModel):
+    forks: List[Fork] = []
+    agreements: List[str] = []

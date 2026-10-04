@@ -161,3 +161,57 @@ def performance_prompt(framework: str = '', expected_users: str = '', peak_event
         "{json_schema}", json_schema)
     user = 'Framework: ' + framework + '\nExpected Users: ' + expected_users + '\nPeak Event Type: ' + peak_event_type + '\nSLA Targets: ' + sla_targets + '\nPer-endpoint SLAs: ' + endpoint_slas + '\nOutput Configuration: ' + output_config + '\n\nUser Flows:\n' + user_flows
     return system, user
+
+
+def duel_reader_prompt(
+    user_story: str = '',
+    story_type: str = '',
+    context: str = '',
+    persona: str = 'A',
+) -> tuple[str, str]:
+    """Prompt for one duel reader: commit to a single concrete interpretation."""
+    base = (
+        'You are a senior QA engineer reading a user story once. '
+        'Commit to ONE concrete interpretation. '
+        'Where the story is vague, invent specific numbers and rules '
+        'a developer would build. Do not list alternatives. '
+        'For every rule and number, copy the exact words from the story '
+        'it is based on into `source_phrase` — copy them exactly, '
+        'character for character.'
+    )
+    label = (persona or 'A').strip().lower()
+    if label in ('a', 'strict', 'reader a', 'reader a - strict'):
+        persona_line = 'Always choose the strictest reasonable reading.'
+    else:
+        persona_line = 'Always choose the most relaxed reasonable reading.'
+    system = base + '\n' + persona_line
+    user = 'User Story / Requirement:\n' + user_story
+    if story_type:
+        user += '\n\nStory Type:\n' + story_type
+    if context:
+        user += '\n\nContext:\n' + context
+    return system, user
+
+
+def duel_compare_prompt(
+    user_story: str = '',
+    reading_a_json: str = '',
+    reading_b_json: str = '',
+) -> tuple[str, str]:
+    """Prompt for comparing two duel readings and listing forks."""
+    system = (
+        'Compare two interpretations of the same story. '
+        'A fork is a place where they disagree in a way that would change '
+        'what gets built or tested. For each fork copy the exact words '
+        'from the story that caused it into `source_phrase`, rate severity, '
+        'and write one clear rewrite of that phrase. List agreements briefly.'
+    )
+    user = (
+        'User Story / Requirement:\n'
+        + user_story
+        + '\n\nReading A:\n'
+        + reading_a_json
+        + '\n\nReading B:\n'
+        + reading_b_json
+    )
+    return system, user
