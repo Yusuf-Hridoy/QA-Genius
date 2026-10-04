@@ -716,6 +716,9 @@
     if (!btn) {
       return;
     }
+    if (btn.disabled) {
+      return;
+    }
     var phrase = btn.getAttribute("data-phrase") || "";
     var rewrite = btn.getAttribute("data-rewrite") || "";
     var box = document.getElementById("story-user-story");

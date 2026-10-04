@@ -5,62 +5,59 @@
     <span class="pill warn">{{ vague_count }} vague phrases</span>
     <span class="pill {{ agreement_pill }}">agreement {{ agreement_pct }}%</span>
   </p>
+  {% if result.removed_claims > 0 %}
+  <p class="muted small">Removed {{ result.removed_claims }} claim(s) the readers didn't make.</p>
+  {% endif %}
   <h3>Disputed story</h3>
   <p>{{ highlighted_story }}</p>
   <div class="duel-readers">
     <div class="duel-col">
       <h3>Reader A — strict</h3>
       <h4>Rules</h4>
+      {% if result.reading_a.rules %}
       <ul>
         {% for r in result.reading_a.rules %}
         <li><strong>{{ r.topic }}:</strong> {{ r.reading }}</li>
         {% endfor %}
       </ul>
+      {% else %}
+      <p class="muted small">No rules given.</p>
+      {% endif %}
       <h4>Numbers</h4>
+      {% if result.reading_a.numbers %}
       <ul>
         {% for n in result.reading_a.numbers %}
         <li><strong>{{ n.name }}:</strong> {{ n.value }}</li>
         {% endfor %}
       </ul>
+      {% else %}
+      <p class="muted small">No numbers given.</p>
+      {% endif %}
     </div>
     <div class="duel-col">
       <h3>Reader B — relaxed</h3>
       <h4>Rules</h4>
+      {% if result.reading_b.rules %}
       <ul>
         {% for r in result.reading_b.rules %}
         <li><strong>{{ r.topic }}:</strong> {{ r.reading }}</li>
         {% endfor %}
       </ul>
+      {% else %}
+      <p class="muted small">No rules given.</p>
+      {% endif %}
       <h4>Numbers</h4>
+      {% if result.reading_b.numbers %}
       <ul>
         {% for n in result.reading_b.numbers %}
         <li><strong>{{ n.name }}:</strong> {{ n.value }}</li>
         {% endfor %}
       </ul>
+      {% else %}
+      <p class="muted small">No numbers given.</p>
+      {% endif %}
     </div>
   </div>
-  <h3>Rules side by side</h3>
-  <table class="grid">
-    <tr><th>Topic</th><th>Reader A</th><th>Reader B</th></tr>
-    {% for row in rule_rows %}
-    <tr{% if row.differ %} class="diff-row"{% endif %}>
-      <td>{{ row.topic }}</td>
-      <td>{{ row.a.reading if row.a else "—" }}</td>
-      <td>{{ row.b.reading if row.b else "—" }}</td>
-    </tr>
-    {% endfor %}
-  </table>
-  <h3>Numbers side by side</h3>
-  <table class="grid">
-    <tr><th>Name</th><th>Reader A</th><th>Reader B</th></tr>
-    {% for row in number_rows %}
-    <tr{% if row.differ %} class="diff-row"{% endif %}>
-      <td>{{ row.name }}</td>
-      <td>{{ row.a.value if row.a else "—" }}</td>
-      <td>{{ row.b.value if row.b else "—" }}</td>
-    </tr>
-    {% endfor %}
-  </table>
   <h3>Forks</h3>
   {% if forks %}
   <table class="grid">
@@ -69,9 +66,9 @@
     <tr>
       <td>{{ fork.topic }}</td>
       <td><span class="pill {{ severity_pill(fork.severity) }}">{{ fork.severity }}</span></td>
-      <td>A: {{ fork.reading_a }}<br>B: {{ fork.reading_b }}</td>
-      <td>{{ fork.suggested_rewrite }}</td>
-      <td><button type="button" class="btn btn-small apply-rewrite" data-phrase="{{ fork.source_phrase | e }}" data-rewrite="{{ fork.suggested_rewrite | e }}">Apply rewrite</button></td>
+      <td>A: {% if fork.reading_a in not_stated_values %}<em class="muted">{{ fork.reading_a }}</em>{% else %}{{ fork.reading_a }}{% endif %}<br>B: {% if fork.reading_b in not_stated_values %}<em class="muted">{{ fork.reading_b }}</em>{% else %}{{ fork.reading_b }}{% endif %}</td>
+      <td>{{ fork.suggested_rewrite }}{% if loop.index0 in vague_rewrites %} <span class="pill warn">still vague: {{ vague_rewrites[loop.index0] | join(", ") }}</span>{% endif %}</td>
+      <td><button type="button" class="btn btn-small apply-rewrite" data-phrase="{{ fork.source_phrase | e }}" data-rewrite="{{ fork.suggested_rewrite | e }}"{% if loop.index0 in vague_rewrites %} disabled aria-disabled="true" title="This rewrite is still vague — edit it yourself."{% endif %}>Apply rewrite</button></td>
     </tr>
     {% endfor %}
   </table>

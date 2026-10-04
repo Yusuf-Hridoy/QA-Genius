@@ -13,7 +13,7 @@ import openai
 from markupsafe import Markup
 
 from qagenius import duel, llm
-from qagenius.duel import DuelResult, build_highlights
+from qagenius.duel import NOT_STATED_A, NOT_STATED_B, DuelResult, build_highlights
 from qagenius.models import AmbiguityAnalysis, DuelComparison, Interpretation
 from qagenius.prompts import story_check_prompt
 from qagenius.providers import PROVIDERS, get_provider, pick_default
@@ -303,32 +303,6 @@ def _highlight_duel_story(
     return Markup("".join(parts))
 
 
-def _pair_rules(reading_a: Interpretation, reading_b: Interpretation) -> list[dict]:
-    by_a = {r.topic: r for r in reading_a.rules}
-    by_b = {r.topic: r for r in reading_b.rules}
-    topics = list(by_a) + [t for t in by_b if t not in by_a]
-    rows = []
-    for topic in topics:
-        ra = by_a.get(topic)
-        rb = by_b.get(topic)
-        differ = ra is None or rb is None or ra.reading != rb.reading
-        rows.append({"topic": topic, "a": ra, "b": rb, "differ": differ})
-    return rows
-
-
-def _pair_numbers(reading_a: Interpretation, reading_b: Interpretation) -> list[dict]:
-    by_a = {n.name: n for n in reading_a.numbers}
-    by_b = {n.name: n for n in reading_b.numbers}
-    names = list(by_a) + [n for n in by_b if n not in by_a]
-    rows = []
-    for name in names:
-        na = by_a.get(name)
-        nb = by_b.get(name)
-        differ = na is None or nb is None or na.value != nb.value
-        rows.append({"name": name, "a": na, "b": nb, "differ": differ})
-    return rows
-
-
 def _agreement_pill(pct: int) -> str:
     if pct >= 70:
         return "ok"
@@ -359,9 +333,9 @@ def _duel_result_context(story: str, result: DuelResult) -> dict:
         "highlighted_story": _highlight_duel_story(
             story, result.highlights, forks
         ),
-        "rule_rows": _pair_rules(result.reading_a, result.reading_b),
-        "number_rows": _pair_numbers(result.reading_a, result.reading_b),
         "severity_pill": _severity_pill,
+        "vague_rewrites": result.vague_rewrites,
+        "not_stated_values": {NOT_STATED_A, NOT_STATED_B},
         "notes": result.notes,
         "provider_name": result.provider_name,
     }

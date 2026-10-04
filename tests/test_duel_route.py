@@ -1,14 +1,17 @@
 """Duel route tests. The duel runner is faked; no network."""
 
 import json
+import re
+from pathlib import Path
 
 from fastapi.testclient import TestClient
 
 import main
 from qagenius import duel as duel_module
 from qagenius import llm
-from qagenius.duel import DuelResult, build_highlights
+from qagenius.duel import NOT_STATED_B, DuelResult, build_highlights, ground_forks
 from qagenius.models import DuelComparison, Fork, Interpretation
+from qagenius.vague import find_vague_words
 
 client = TestClient(main.app)
 
@@ -98,3 +101,74 @@ def test_duel_error_renders_error_card(monkeypatch) -> None:
         "/requirements/story/duel", data=FORM, headers=KEYS_HEADER
     )
     assert "All your keys are busy" in response.text
+
+
+def test_side_by_side_tables_removed(monkeypatch) -> None:
+    monkeypatch.setattr(
+        duel_module, "run_duel", lambda k, s, t, c: _fake_result(s)
+    )
+    body = client.post(
+        "/requirements/story/duel", data=FORM, headers=KEYS_HEADER
+    ).text
+    assert "Rules side by side" not in body
+    assert "Numbers side by side" not in body
+
+
+def test_not_stated_rendered_muted(monkeypatch) -> None:
+    def fake(keys, user_story, story_type, context):
+        result = _fake_result(user_story)
+        fork = result.comparison.forks[0]
+        result.comparison.forks[0] = fork.model_copy(
+            update={"reading_b": NOT_STATED_B}
+        )
+        return result
+
+    monkeypatch.setattr(duel_module, "run_duel", fake)
+    body = client.post(
+        "/requirements/story/duel", data=FORM, headers=KEYS_HEADER
+    ).text
+    assert '<em class="muted">not stated by Reader B</em>' in body
+
+
+def test_vague_rewrite_disables_apply(monkeypatch) -> None:
+    def fake(keys, user_story, story_type, context):
+        result = _fake_result(user_story)
+        result.vague_rewrites = {0: ["quickly"]}
+        return result
+
+    monkeypatch.setattr(duel_module, "run_duel", fake)
+    body = client.post(
+        "/requirements/story/duel", data=FORM, headers=KEYS_HEADER
+    ).text
+    assert "still vague: quickly" in body
+    assert re.search(r"<button[^>]*apply-rewrite[^>]*disabled", body)
+
+
+def test_removed_claims_line(monkeypatch) -> None:
+    def fake(keys, user_story, story_type, context):
+        result = _fake_result(user_story)
+        result.removed_claims = 2
+        return result
+
+    monkeypatch.setattr(duel_module, "run_duel", fake)
+    body = client.post(
+        "/requirements/story/duel", data=FORM, headers=KEYS_HEADER
+    ).text
+    assert "Removed 2 claim(s)" in body
+
+
+def test_sample_duel_is_clean() -> None:
+    sample = json.loads(
+        Path("qagenius/samples/duel.json").read_text(encoding="utf-8")
+    )
+    reading_a = Interpretation.model_validate(sample["reading_a"])
+    reading_b = Interpretation.model_validate(sample["reading_b"])
+    comparison = DuelComparison.model_validate(sample["comparison"])
+    assert len(reading_a.numbers) >= 3
+    assert len(reading_a.rules) >= 3
+    assert len(reading_b.numbers) >= 3
+    assert len(reading_b.rules) >= 3
+    _, removed, _ = ground_forks(comparison, reading_a, reading_b)
+    assert removed == 0
+    for fork in comparison.forks:
+        assert find_vague_words(fork.suggested_rewrite) == []

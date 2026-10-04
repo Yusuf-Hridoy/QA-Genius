@@ -1,11 +1,8 @@
 """Ambiguity duel: two readers interpret the story, then a comparison."""
 
 import concurrent.futures
-import html
 import re
 from dataclasses import dataclass, field
-
-from markupsafe import Markup
 
 from qagenius import llm
 from qagenius.models import DuelComparison, Interpretation
@@ -130,44 +127,6 @@ def build_highlights(
             kept.append((start, end, idx))
     kept.sort(key=lambda item: item[0])
     return kept
-
-
-def highlight_story(
-    story: str, highlights: list[tuple[int, int, int]], forks: list
-) -> Markup:
-    """Escape the story, then wrap each highlight in a <mark>.
-
-    `forks` is accepted for context but only the index in `data-fork`
-    is rendered; no AI text is inserted here, so nothing can inject HTML.
-    """
-    valid: list[tuple[int, int, int]] = []
-    for start, end, idx in highlights:
-        if not isinstance(start, int) or not isinstance(end, int):
-            continue
-        if start < 0 or end > len(story) or start >= end:
-            continue
-        if idx < 0 or idx >= len(forks):
-            continue
-        valid.append((start, end, idx))
-    valid.sort(key=lambda item: item[0])
-    # Drop any residual overlaps defensively (keep earliest).
-    deduped: list[tuple[int, int, int]] = []
-    for item in valid:
-        if deduped and item[0] < deduped[-1][1]:
-            continue
-        deduped.append(item)
-    parts: list[str] = []
-    last = 0
-    for start, end, idx in deduped:
-        parts.append(html.escape(story[last:start]))
-        parts.append(
-            f'<mark class="fork-mark" tabindex="0" data-fork="{idx}">'
-            + html.escape(story[start:end])
-            + "</mark>"
-        )
-        last = end
-    parts.append(html.escape(story[last:]))
-    return Markup("".join(parts))
 
 
 def run_duel(

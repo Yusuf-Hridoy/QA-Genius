@@ -5,10 +5,10 @@ from qagenius.duel import (
     DuelResult,
     build_highlights,
     ground_forks,
-    highlight_story,
     run_duel,
 )
 from qagenius.models import DuelComparison, Fork, Interpretation, NumberReading
+from qagenius.web import _highlight_duel_story
 
 KEYS = [{"provider": "gemini", "key": "k1", "label": ""}]
 
@@ -115,17 +115,17 @@ def test_html_in_story_and_ai_text_is_escaped() -> None:
         )
     ]
     highlights = build_highlights(story, forks)
-    out = str(highlight_story(story, highlights, forks))
+    out = str(_highlight_duel_story(story, highlights, forks))
     assert "<script>" not in out
     assert "<img" not in out
+    assert "<b>evil rewrite</b>" not in out
     assert "&lt;script&gt;" in out
     assert "&lt;b&gt;" in out
     assert "&amp;" in out
+    assert "&lt;img" in out
+    assert "&lt;b&gt;evil rewrite&lt;/b&gt;" in out
     assert 'class="fork-mark"' in out
     assert 'data-fork="0"' in out
-    # AI text is never rendered by highlight_story.
-    assert "evil rewrite" not in out
-    assert "strict" not in out
 
 
 def test_reader_failure_aborts_duel() -> None:
