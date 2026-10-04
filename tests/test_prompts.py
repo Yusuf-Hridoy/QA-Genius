@@ -77,3 +77,9 @@ def test_duel_compare_prompt_contains_story() -> None:
     assert system.strip()
     assert user.strip()
     assert story in user
+
+
+def test_reader_prompt_demands_numbers_and_units() -> None:
+    system, _ = prompts.duel_reader_prompt(user_story="As a shopper I want to check out.")
+    assert 'at least 3 entries in "numbers"' in system
+    assert "NEVER restate" in system

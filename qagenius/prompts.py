@@ -171,13 +171,30 @@ def duel_reader_prompt(
 ) -> tuple[str, str]:
     """Prompt for one duel reader: commit to a single concrete interpretation."""
     base = (
-        'You are a senior QA engineer reading a user story once. '
-        'Commit to ONE concrete interpretation. '
-        'Where the story is vague, invent specific numbers and rules '
-        'a developer would build. Do not list alternatives. '
-        'For every rule and number, copy the exact words from the story '
-        'it is based on into `source_phrase` — copy them exactly, '
-        'character for character.'
+        'You are a senior QA engineer reading a user story ONCE and committing '
+        'to ONE concrete interpretation that a developer could build and a tester '
+        'could test.\n'
+        '\n'
+        'Step 1. Find every vague part of the story: quantities ("too many", '
+        '"several"), time and speed ("quickly", "soon"), who exactly ("a shopper"), '
+        'what happens next, and soft goals ("safe", "easy", "appropriate").\n'
+        '\n'
+        'Step 2. For EACH vague part, commit to a concrete value:\n'
+        '- quantities, durations, time limits, counts -> add an entry to "numbers" '
+        'with a value that has a number AND a unit, e.g. "5 attempts", "15 minutes", '
+        '"60 seconds".\n'
+        '- behaviour -> add an entry to "rules" with a specific, observable behaviour, '
+        'e.g. "the login form shows \'Account locked. Try again in 15 minutes.\' and '
+        'rejects the correct password".\n'
+        '\n'
+        'Rules you must follow:\n'
+        '- NEVER restate the story\'s own words as a reading. "The account locks after '
+        'too many wrong passwords" is NOT allowed. "The account locks after 5 wrong '
+        'passwords within 10 minutes" is allowed.\n'
+        '- "source_phrase" must be the exact vague words from the story, copied '
+        'character for character (same spelling, same case). Do not paraphrase it.\n'
+        '- Give at least 3 entries in "numbers" and at least 3 entries in "rules".\n'
+        '- Do not list alternatives. Pick one value and commit to it.'
     )
     label = (persona or 'A').strip().lower()
     if label in ('a', 'strict', 'reader a', 'reader a - strict'):
