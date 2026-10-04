@@ -1,6 +1,6 @@
-from typing import List, Literal, Optional
+from typing import Any, List, Literal, Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 
 
 class CategoryCount(BaseModel):
@@ -279,6 +279,20 @@ class Fork(BaseModel):
     source_phrase: str
     severity: Literal["high", "medium", "low"]
     suggested_rewrite: str
+
+    @field_validator("severity", mode="before")
+    @classmethod
+    def _tolerant_severity(cls, value: Any) -> str:
+        text = str(value or "").strip().lower()
+        if text in ("high", "medium", "low"):
+            return text
+        if text == "critical":
+            return "high"
+        if text == "moderate":
+            return "medium"
+        if text == "minor":
+            return "low"
+        return "medium"
 
 
 class DuelComparison(BaseModel):

@@ -137,3 +137,20 @@ def test_reader_failure_aborts_duel() -> None:
         pass
     else:
         raise AssertionError("expected AllKeysBusyError")
+
+
+def test_fork_severity_is_tolerant() -> None:
+    def make(severity):
+        return Fork(
+            topic="t",
+            reading_a="a",
+            reading_b="b",
+            source_phrase="quickly",
+            severity=severity,
+            suggested_rewrite="rewrite",
+        )
+
+    assert make("High").severity == "high"
+    assert make(" MEDIUM ").severity == "medium"
+    assert make("critical").severity == "high"
+    assert make("unknown").severity == "medium"
