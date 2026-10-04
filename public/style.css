@@ -151,3 +151,4 @@ mark{background:var(--warn-bg);color:inherit;border-radius:3px;
 .duel-col{background:var(--card-2);border:1px solid var(--border);
   border-radius:var(--r);padding:12px 14px}
 tr.diff-row td:first-child{border-left:4px solid #E0A82E}
+@media (max-width:768px){.duel-readers{grid-template-columns:1fr}}

@@ -4,6 +4,12 @@ Old Streamlit app lives on `main` and is untouched.
 Phase 1: sidebar, keys page, story check, load example.
 Live URL: TBD
 
+## Ambiguity duel
+On Story check, **Run ambiguity duel** asks two AI readers (strict and
+relaxed) to interpret the story separately, then compares them. Forks are
+highlighted in the story text — hover or focus a highlight to see both
+readings and a suggested rewrite. It uses 3 short AI calls.
+
 ## Troubleshooting
 - `python scripts/check_key.py` checks one provider key with a tiny JSON
   request. It asks for the provider id and the key (hidden while typing)
