@@ -10,9 +10,11 @@ from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 
 import openai
+from markupsafe import Markup
 
-from qagenius import llm
-from qagenius.models import AmbiguityAnalysis
+from qagenius import duel, llm
+from qagenius.duel import DuelResult, build_highlights
+from qagenius.models import AmbiguityAnalysis, DuelComparison, Interpretation
 from qagenius.prompts import story_check_prompt
 from qagenius.providers import PROVIDERS, get_provider, pick_default
 
@@ -259,6 +261,134 @@ def _story_result_context(
     }
 
 
+def _highlight_duel_story(
+    story: str, highlights: list[tuple[int, int, int]], forks: list
+) -> Markup:
+    """Escape the story, then wrap each highlight with a CSS-only tooltip."""
+    valid = [
+        (s, e, i)
+        for s, e, i in highlights
+        if isinstance(s, int)
+        and isinstance(e, int)
+        and 0 <= s < e <= len(story)
+        and 0 <= i < len(forks)
+    ]
+    valid.sort(key=lambda item: item[0])
+    deduped: list[tuple[int, int, int]] = []
+    for item in valid:
+        if deduped and item[0] < deduped[-1][1]:
+            continue
+        deduped.append(item)
+    parts: list[str] = []
+    last = 0
+    for start, end, idx in deduped:
+        fork = forks[idx]
+        parts.append(html.escape(story[last:start]))
+        parts.append(
+            '<span class="fork-wrap">'
+            + f'<mark class="fork-mark" tabindex="0" data-fork="{idx}">'
+            + html.escape(story[start:end])
+            + "</mark>"
+            + '<span class="tip" role="tooltip">'
+            + "<strong>Reader A — strict:</strong> "
+            + html.escape(fork.reading_a)
+            + "<br><strong>Reader B — relaxed:</strong> "
+            + html.escape(fork.reading_b)
+            + "<br><strong>Suggested rewrite:</strong> "
+            + html.escape(fork.suggested_rewrite)
+            + "</span></span>"
+        )
+        last = end
+    parts.append(html.escape(story[last:]))
+    return Markup("".join(parts))
+
+
+def _pair_rules(reading_a: Interpretation, reading_b: Interpretation) -> list[dict]:
+    by_a = {r.topic: r for r in reading_a.rules}
+    by_b = {r.topic: r for r in reading_b.rules}
+    topics = list(by_a) + [t for t in by_b if t not in by_a]
+    rows = []
+    for topic in topics:
+        ra = by_a.get(topic)
+        rb = by_b.get(topic)
+        differ = ra is None or rb is None or ra.reading != rb.reading
+        rows.append({"topic": topic, "a": ra, "b": rb, "differ": differ})
+    return rows
+
+
+def _pair_numbers(reading_a: Interpretation, reading_b: Interpretation) -> list[dict]:
+    by_a = {n.name: n for n in reading_a.numbers}
+    by_b = {n.name: n for n in reading_b.numbers}
+    names = list(by_a) + [n for n in by_b if n not in by_a]
+    rows = []
+    for name in names:
+        na = by_a.get(name)
+        nb = by_b.get(name)
+        differ = na is None or nb is None or na.value != nb.value
+        rows.append({"name": name, "a": na, "b": nb, "differ": differ})
+    return rows
+
+
+def _agreement_pill(pct: int) -> str:
+    if pct >= 70:
+        return "ok"
+    if pct >= 40:
+        return "warn"
+    return "bad"
+
+
+def _severity_pill(severity: str) -> str:
+    if severity == "high":
+        return "bad"
+    if severity == "medium":
+        return "warn"
+    return "info"
+
+
+def _duel_result_context(story: str, result: DuelResult) -> dict:
+    forks = result.comparison.forks
+    has_high = any(f.severity == "high" for f in forks)
+    return {
+        "result": result,
+        "comparison": result.comparison,
+        "forks": forks,
+        "forks_pill": "bad" if has_high else "warn",
+        "vague_count": len(result.highlights),
+        "agreement_pct": result.agreement_pct,
+        "agreement_pill": _agreement_pill(result.agreement_pct),
+        "highlighted_story": _highlight_duel_story(
+            story, result.highlights, forks
+        ),
+        "rule_rows": _pair_rules(result.reading_a, result.reading_b),
+        "number_rows": _pair_numbers(result.reading_a, result.reading_b),
+        "severity_pill": _severity_pill,
+        "notes": result.notes,
+        "provider_name": result.provider_name,
+    }
+
+
+def _duel_from_sample(story: str) -> dict:
+    with open(SAMPLES_DIR / "duel.json", encoding="utf-8") as f:
+        sample = json.load(f)
+    reading_a = Interpretation.model_validate(sample["reading_a"])
+    reading_b = Interpretation.model_validate(sample["reading_b"])
+    comparison = DuelComparison.model_validate(sample["comparison"])
+    n_forks = len(comparison.forks)
+    n_agree = len(comparison.agreements)
+    pct = 100 if n_forks + n_agree == 0 else round(100 * n_agree / (n_forks + n_agree))
+    result = DuelResult(
+        reading_a=reading_a,
+        reading_b=reading_b,
+        comparison=comparison,
+        agreement_pct=pct,
+        highlights=build_highlights(story, comparison.forks),
+        notes=[],
+        provider_name="saved example",
+        used_index=0,
+    )
+    return _duel_result_context(story, result)
+
+
 @app.get("/requirements/story/example", response_class=HTMLResponse)
 def story_example(request: Request) -> HTMLResponse:
     """Load example: fills the form and shows a saved result. No key needed."""
@@ -294,7 +424,10 @@ def story_example(request: Request) -> HTMLResponse:
         + "</textarea>"
     )
     body = templates.get_template("_story_result.html").render(context)
-    return HTMLResponse(story_field + type_field + context_field + body)
+    duel_body = templates.get_template("_duel_result.html").render(
+        _duel_from_sample(form["user_story"])
+    )
+    return HTMLResponse(story_field + type_field + context_field + body + duel_body)
 
 
 @app.post("/requirements/story/run", response_class=HTMLResponse)
@@ -363,6 +496,67 @@ def story_run(
         request,
         "_story_result.html",
         _story_result_context(request, user_story, result, notes, provider_name),
+    )
+
+
+@app.post("/requirements/story/duel", response_class=HTMLResponse)
+def story_duel(
+    request: Request,
+    user_story: str = Form(default=""),
+    story_type: str = Form(default="User story"),
+    context: str = Form(default=""),
+) -> HTMLResponse:
+    user_story = user_story.strip()
+    context = context.strip()
+    if not user_story:
+        return _error_card(request, "Please paste a user story first.")
+    if len(user_story) > STORY_LIMIT or len(context) > CONTEXT_LIMIT:
+        return _error_card(
+            request,
+            "That input is too long. Keep the story under "
+            f"{STORY_LIMIT} characters and context under {CONTEXT_LIMIT}.",
+        )
+    keys = _request_keys(request)
+    if not keys:
+        return HTMLResponse(
+            '<p class="muted">Add an API key to run the check.</p>',
+            headers={"HX-Trigger": "open-keys"},
+        )
+    try:
+        result = duel.run_duel(keys, user_story, story_type, context)
+    except llm.NoKeysError:
+        return HTMLResponse(
+            '<p class="muted">Add an API key to run the check.</p>',
+            headers={"HX-Trigger": "open-keys"},
+        )
+    except llm.AllKeysBusyError as e:
+        return _error_card(
+            request,
+            "All your keys are busy. Try again in a minute or add another key.",
+            e.notes,
+        )
+    except llm.InvalidKeyError as e:
+        return _error_card(
+            request,
+            "Your key was rejected. Check it on the Your API keys page "
+            "and try again.",
+            e.notes,
+        )
+    except llm.ModelUnavailableError as e:
+        return _error_card(
+            request,
+            "The AI model isn't available right now. Your keys are fine — "
+            "QA-Genius needs a model update.",
+            e.notes,
+        )
+    except llm.ProviderError as e:
+        return _error_card(request, str(e))
+    except llm.BadOutputError as e:
+        return _error_card(request, str(e))
+    return templates.TemplateResponse(
+        request,
+        "_duel_result.html",
+        _duel_result_context(user_story, result),
     )
 
 

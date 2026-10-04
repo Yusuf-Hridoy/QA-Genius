@@ -136,3 +136,18 @@ mark{background:var(--warn-bg);color:inherit;border-radius:3px;
 .key-edit-form select,.key-edit-form input{padding:8px 10px;
   border:1px solid var(--border-strong);border-radius:var(--r);
   background:var(--card);color:var(--text);font:inherit}
+
+.fork-wrap{position:relative;display:inline-block}
+.fork-mark{cursor:help}
+.fork-mark:focus{outline:2px solid var(--accent-soft)}
+.tip{display:none;position:absolute;left:0;top:1.6em;z-index:20;
+  width:260px;max-width:80vw;background:var(--card);
+  border:1px solid var(--border-strong);border-radius:var(--r);
+  padding:10px 12px;font-size:13px;color:var(--text);
+  box-shadow:0 4px 14px rgba(0,0,0,.12)}
+.fork-mark:hover + .tip,.fork-mark:focus + .tip,
+.fork-wrap:hover .tip,.fork-wrap:focus-within .tip{display:block}
+.duel-readers{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.duel-col{background:var(--card-2);border:1px solid var(--border);
+  border-radius:var(--r);padding:12px 14px}
+tr.diff-row td:first-child{border-left:4px solid #E0A82E}

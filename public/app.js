@@ -710,6 +710,39 @@
     openDrawer(true);
   });
 
+  // Ambiguity duel: replace the fork's phrase in the story box.
+  document.body.addEventListener("click", function (event) {
+    var btn = event.target.closest(".apply-rewrite");
+    if (!btn) {
+      return;
+    }
+    var phrase = btn.getAttribute("data-phrase") || "";
+    var rewrite = btn.getAttribute("data-rewrite") || "";
+    var box = document.getElementById("story-user-story");
+    var status = document.getElementById("duel-status");
+    function say(text) {
+      if (status) {
+        status.textContent = text;
+      }
+    }
+    if (!box || !phrase) {
+      say("Couldn't find that phrase in your story.");
+      return;
+    }
+    var at = box.value.toLowerCase().indexOf(phrase.toLowerCase());
+    if (at === -1) {
+      say("Couldn't find that phrase in your story.");
+      return;
+    }
+    box.value = box.value.slice(0, at) + rewrite + box.value.slice(at + phrase.length);
+    box.style.borderColor = "#1F5E46";
+    setTimeout(function () {
+      box.style.borderColor = "";
+    }, 1200);
+    say("Story updated — run Check story again.");
+    box.focus();
+  });
+
   window.QAG = {
     loadKeys: loadKeys,
     storeKeys: storeKeys,

@@ -32,8 +32,12 @@
     <div class="row">
       <button id="check-btn" type="submit" class="btn btn-primary"><span class="btn-label">Check story</span><span class="htmx-indicator">Checking…</span></button>
       <button id="load-example" type="button" class="btn" hx-get="/requirements/story/example" hx-target="#story-output" hx-swap="innerHTML">Load example</button>
+      <button id="duel-btn" type="button" class="btn" hx-post="/requirements/story/duel" hx-target="#duel-output" hx-swap="innerHTML" hx-include="#story-form" hx-indicator="#duel-progress">Run ambiguity duel</button>
     </div>
+    <span class="hint">Runs 3 short AI calls.</span>
+    <p id="duel-progress" class="htmx-indicator muted">Reader A and Reader B are reading your story…</p>
   </form>
 </div>
 <div id="story-output"></div>
+<div id="duel-output"></div>
 {% endblock %}
