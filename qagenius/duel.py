@@ -2,6 +2,7 @@
 
 import concurrent.futures
 import html
+import re
 from dataclasses import dataclass, field
 
 from markupsafe import Markup
@@ -10,6 +11,10 @@ from qagenius import llm
 from qagenius.models import DuelComparison, Interpretation
 from qagenius.prompts import duel_compare_prompt, duel_reader_prompt
 from qagenius.providers import get_provider
+from qagenius.vague import find_vague_words
+
+NOT_STATED_A = "not stated by Reader A"
+NOT_STATED_B = "not stated by Reader B"
 
 
 @dataclass
@@ -22,6 +27,70 @@ class DuelResult:
     notes: list[str] = field(default_factory=list)
     provider_name: str = "unknown provider"
     used_index: int = 0
+    vague_rewrites: dict[int, list[str]] = field(default_factory=dict)
+    removed_claims: int = 0
+
+
+def reader_text(reading: Interpretation) -> str:
+    """Everything a reader wrote, lowercased, joined by ' | '."""
+    parts: list[str] = []
+    parts.extend(reading.actors)
+    for rule in reading.rules:
+        parts.append(rule.topic)
+        parts.append(rule.reading)
+    for number in reading.numbers:
+        parts.append(number.name)
+        parts.append(number.value)
+    parts.extend(reading.outcomes)
+    parts.extend(reading.assumptions)
+    return " | ".join(parts).lower()
+
+
+def ground_forks(
+    comparison: DuelComparison, reading_a: Interpretation, reading_b: Interpretation
+) -> tuple[DuelComparison, int, list[str]]:
+    """Return (cleaned comparison, removed_claims, notes). Never mutates the input."""
+    removed = 0
+    notes: list[str] = []
+    new_forks = []
+    for fork in comparison.forks:
+        sides = [
+            ("A", fork.reading_a, reading_a, NOT_STATED_A),
+            ("B", fork.reading_b, reading_b, NOT_STATED_B),
+        ]
+        updated = {}
+        for letter, side, reader, not_stated in sides:
+            text_side = side or ""
+            lowered = text_side.strip().lower()
+            if lowered == "not stated" or lowered in (NOT_STATED_A.lower(), NOT_STATED_B.lower()):
+                updated[letter] = not_stated
+                continue
+            numbers = re.findall(r"\d+(?:\.\d+)?", text_side)
+            if not numbers:
+                updated[letter] = text_side
+                continue
+            text = reader_text(reader)
+            missing = any(
+                re.search(r"(?<![\d.])" + re.escape(n) + r"(?![\d.])", text) is None
+                for n in numbers
+            )
+            if missing:
+                updated[letter] = not_stated
+                removed += 1
+                notes.append(
+                    f'Removed an unsupported claim about Reader {letter} in fork "{fork.topic}".'
+                )
+            else:
+                updated[letter] = text_side
+        if updated["A"] == NOT_STATED_A and updated["B"] == NOT_STATED_B:
+            continue
+        new_forks.append(
+            fork.model_copy(
+                update={"reading_a": updated["A"], "reading_b": updated["B"]}
+            )
+        )
+    cleaned = comparison.model_copy(update={"forks": new_forks})
+    return cleaned, removed, notes
 
 
 def _find_first(story_lower: str, phrase: str) -> tuple[int, int] | None:
@@ -135,7 +204,8 @@ def run_duel(
         keys, system_c, user_c, DuelComparison
     )
 
-    notes = list(notes_a) + list(notes_b) + list(notes_c)
+    comparison, removed, guard_notes = ground_forks(comparison, reading_a, reading_b)
+    notes = list(notes_a) + list(notes_b) + list(notes_c) + guard_notes
     n_forks = len(comparison.forks)
     n_agree = len(comparison.agreements)
     if n_forks + n_agree == 0:
@@ -144,6 +214,11 @@ def run_duel(
         agreement_pct = round(100 * n_agree / (n_forks + n_agree))
 
     highlights = build_highlights(user_story, comparison.forks)
+    vague_rewrites = {
+        i: words
+        for i, fork in enumerate(comparison.forks)
+        if (words := find_vague_words(fork.suggested_rewrite))
+    }
 
     provider = get_provider(keys[used_c]["provider"]) if keys else None
     provider_name = provider["name"] if provider else "unknown provider"
@@ -157,4 +232,6 @@ def run_duel(
         notes=notes,
         provider_name=provider_name,
         used_index=used_c,
+        vague_rewrites=vague_rewrites,
+        removed_claims=removed,
     )
