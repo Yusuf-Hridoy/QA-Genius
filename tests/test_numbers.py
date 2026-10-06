@@ -127,3 +127,24 @@ def test_unmatched_reported() -> None:
 
 def test_empty_readers() -> None:
     assert match_numbers(_reading(), _reading()) == []
+
+
+def test_thousands_separator() -> None:
+    quantity = parse_quantity("1,000 attempts")
+    assert quantity is not None
+    assert quantity.family == "count"
+    assert quantity.amount == 1000
+
+
+def test_thousands_separator_with_decimal() -> None:
+    quantity = parse_quantity("12,500.5 seconds")
+    assert quantity is not None
+    assert quantity.family == "time"
+    assert quantity.amount == 12500.5
+
+
+def test_comma_as_decimal_point() -> None:
+    quantity = parse_quantity("1,5 hours")
+    assert quantity is not None
+    assert quantity.family == "time"
+    assert quantity.amount == 5400

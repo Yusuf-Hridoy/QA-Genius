@@ -449,3 +449,12 @@ def test_matches_computed_before_compare() -> None:
     run_duel(KEYS, STORY, "", "", generate=_real_run_generate(captured))
     assert len(captured) == 1
     assert "-> DIFFERENT" in captured[0]
+
+
+def test_thousands_separator_is_one_number() -> None:
+    reading = _reading_with_numbers("1000 attempts")
+    comparison = _fork_sides("threshold", "1,000 attempts", "1000 attempts")
+    cleaned, removed, notes = ground_forks(comparison, reading, reading)
+    assert cleaned.forks[0].reading_a == "1,000 attempts"
+    assert removed == 0
+    assert notes == []

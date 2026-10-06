@@ -6,7 +6,13 @@ from dataclasses import dataclass, field
 
 from qagenius import llm
 from qagenius.models import DuelComparison, Interpretation
-from qagenius.numbers import NumberMatch, match_numbers, name_score
+from qagenius.numbers import (
+    NUMBER_PATTERN,
+    NumberMatch,
+    drop_thousands_commas,
+    match_numbers,
+    name_score,
+)
 from qagenius.prompts import duel_compare_prompt, duel_reader_prompt
 from qagenius.providers import get_provider
 from qagenius.vague import find_vague_words
@@ -64,11 +70,14 @@ def ground_forks(
             if lowered == "not stated" or lowered in (NOT_STATED_A.lower(), NOT_STATED_B.lower()):
                 updated[letter] = not_stated
                 continue
-            numbers = re.findall(r"\d+(?:\.\d+)?", text_side)
+            numbers = [
+                drop_thousands_commas(found)
+                for found in re.findall(NUMBER_PATTERN, text_side)
+            ]
             if not numbers:
                 updated[letter] = text_side
                 continue
-            text = reader_text(reader)
+            text = drop_thousands_commas(reader_text(reader))
             missing = any(
                 re.search(r"(?<![\d.])" + re.escape(n) + r"(?![\d.])", text) is None
                 for n in numbers

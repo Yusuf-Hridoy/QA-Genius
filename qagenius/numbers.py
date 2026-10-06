@@ -6,7 +6,11 @@ from dataclasses import dataclass
 
 from qagenius.models import Interpretation
 
-_NUMBER_RE = re.compile(r"(\d+(?:[.,]\d+)?)\s*([a-zA-Z%]+)?")
+NUMBER_PATTERN = r"(\d{1,3}(?:,\d{3})+(?:\.\d+)?|\d+(?:[.,]\d+)?)"
+_NUMBER_RE = re.compile(NUMBER_PATTERN + r"\s*([a-zA-Z%]+)?")
+_THOUSANDS_RE = re.compile(r"^\d{1,3}(?:,\d{3})+(?:\.\d+)?$")
+# A comma between a digit and exactly three more is a thousands separator.
+_THOUSANDS_COMMA_RE = re.compile(r"(?<=\d),(?=\d{3}(?!\d))")
 
 # unit -> (family, factor to base unit, normalised singular name)
 _UNITS: dict[str, tuple[str, float, str]] = {
@@ -60,15 +64,32 @@ class Quantity:
     text: str  # original value text
 
 
+def drop_thousands_commas(text: str) -> str:
+    """Remove thousands separators, so "1,000" reads as "1000"."""
+    return _THOUSANDS_COMMA_RE.sub("", text)
+
+
+def _to_float(number_text: str) -> float | None:
+    """A comma is a thousands separator when it groups three digits, else a point."""
+    if _THOUSANDS_RE.match(number_text):
+        cleaned = number_text.replace(",", "")
+    elif number_text.count(",") == 1 and "." not in number_text:
+        cleaned = number_text.replace(",", ".")
+    else:
+        cleaned = number_text
+    try:
+        return float(cleaned)
+    except ValueError:
+        return None
+
+
 def parse_quantity(value: str) -> Quantity | None:
     """Parse the first number + unit in `value`. None if there is no number."""
     match = _NUMBER_RE.search(value)
     if match is None:
         return None
-    number_text = match.group(1).replace(",", ".")
-    try:
-        number = float(number_text)
-    except ValueError:
+    number = _to_float(match.group(1))
+    if number is None:
         return None
     raw_unit = (match.group(2) or "").lower()
     if raw_unit in _UNITS:
