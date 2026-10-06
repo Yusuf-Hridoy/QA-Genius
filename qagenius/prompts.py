@@ -216,6 +216,7 @@ def duel_compare_prompt(
     user_story: str = '',
     reading_a_json: str = '',
     reading_b_json: str = '',
+    number_facts: str = '',
 ) -> tuple[str, str]:
     """Prompt for comparing two duel readings and listing forks."""
     vague = ", ".join(VAGUE_WORDS)
@@ -252,4 +253,15 @@ def duel_compare_prompt(
         + '\n\nREADER B (relaxed):\n'
         + reading_b_json
     )
+    if number_facts:
+        system += (
+            '\n- Values marked SAME in the facts are agreements, not forks. '
+            "For values marked DIFFERENT, the fork must quote both readers' "
+            'values exactly.'
+        )
+        user += (
+            '\n\nFACTS COMPUTED BY CODE (these are correct \u2014 do not '
+            'contradict them, do not create forks for values marked SAME):\n'
+            + number_facts
+        )
     return system, user

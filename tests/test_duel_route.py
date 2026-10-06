@@ -10,7 +10,8 @@ import main
 from qagenius import duel as duel_module
 from qagenius import llm
 from qagenius.duel import NOT_STATED_B, DuelResult, build_highlights, ground_forks
-from qagenius.models import DuelComparison, Fork, Interpretation
+from qagenius.models import DuelComparison, Fork, Interpretation, NumberReading
+from qagenius.numbers import match_numbers
 from qagenius.vague import find_vague_words
 
 client = TestClient(main.app)
@@ -172,3 +173,78 @@ def test_sample_duel_is_clean() -> None:
     assert removed == 0
     for fork in comparison.forks:
         assert find_vague_words(fork.suggested_rewrite) == []
+
+
+def _matched_result(story=STORY):
+    """A result whose readers gave the numbers from a real Gemini run."""
+    reading_a = Interpretation(
+        numbers=[
+            NumberReading(
+                name="Lockout Response Time", value="1 second", source_phrase="quickly"
+            ),
+            NumberReading(
+                name="Account Lockout Duration",
+                value="30 minutes",
+                source_phrase="lock",
+            ),
+        ]
+    )
+    reading_b = Interpretation(
+        numbers=[
+            NumberReading(
+                name="Lock execution time limit",
+                value="3 seconds",
+                source_phrase="quickly",
+            ),
+            NumberReading(
+                name="Account lockout duration",
+                value="30 minutes",
+                source_phrase="lock",
+            ),
+        ]
+    )
+    comparison = DuelComparison(forks=[], agreements=["Both agree on the actor."])
+    return DuelResult(
+        reading_a=reading_a,
+        reading_b=reading_b,
+        comparison=comparison,
+        agreement_pct=50,
+        highlights=build_highlights(story, comparison.forks),
+        notes=[],
+        provider_name="Gemini",
+        used_index=0,
+        number_matches=match_numbers(reading_a, reading_b),
+    )
+
+
+def test_values_table_rendered(monkeypatch) -> None:
+    monkeypatch.setattr(
+        duel_module, "run_duel", lambda k, s, t, c: _matched_result(s)
+    )
+    body = client.post(
+        "/requirements/story/duel", data=FORM, headers=KEYS_HEADER
+    ).text
+    assert "Values compared by code" in body
+    assert "1 second" in body
+    assert "3 seconds" in body
+    assert '<span class="pill bad">different</span>' in body
+    assert '<span class="pill ok">same</span>' in body
+    assert "Matched by unit and name, not by AI." in body
+
+
+def test_values_table_hidden_when_empty(monkeypatch) -> None:
+    monkeypatch.setattr(
+        duel_module, "run_duel", lambda k, s, t, c: _fake_result(s)
+    )
+    body = client.post(
+        "/requirements/story/duel", data=FORM, headers=KEYS_HEADER
+    ).text
+    assert "Values compared by code" not in body
+    assert "Matched by unit and name, not by AI." not in body
+
+
+def test_load_example_has_values_table() -> None:
+    body = client.get("/requirements/story/example").text
+    assert "Values compared by code" in body
+    assert '<span class="pill ok">same</span>' in body
+    assert '<span class="pill bad">different</span>' in body

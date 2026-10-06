@@ -1,13 +1,18 @@
 """Duel logic tests. The LLM is faked; no network."""
 
 from qagenius.duel import (
+    NOT_STATED_A,
     NOT_STATED_B,
     DuelResult,
     build_highlights,
+    drop_false_forks,
+    format_number_facts,
     ground_forks,
     run_duel,
 )
 from qagenius.models import DuelComparison, Fork, Interpretation, NumberReading
+from qagenius.numbers import match_numbers
+from qagenius.prompts import duel_compare_prompt
 from qagenius.web import _highlight_duel_story
 
 KEYS = [{"provider": "gemini", "key": "k1", "label": ""}]
@@ -315,3 +320,132 @@ def test_vague_rewrite_detected() -> None:
 
     result = run_duel(KEYS, STORY, "", "", generate=fake)
     assert result.vague_rewrites == {0: ["quickly"]}
+
+
+def _real_readers() -> tuple[Interpretation, Interpretation]:
+    """The numbers a real Gemini run produced for the example story."""
+    reading_a = Interpretation(
+        numbers=[
+            NumberReading(
+                name="Failed Password Attempt Limit",
+                value="5 attempts",
+                source_phrase="too many wrong passwords",
+            ),
+            NumberReading(
+                name="Lockout Response Time", value="1 second", source_phrase="quickly"
+            ),
+            NumberReading(
+                name="Account Lockout Duration", value="30 minutes", source_phrase="lock"
+            ),
+        ]
+    )
+    reading_b = Interpretation(
+        numbers=[
+            NumberReading(
+                name="Failed password threshold",
+                value="5 attempts",
+                source_phrase="too many wrong passwords",
+            ),
+            NumberReading(
+                name="Lock execution time limit",
+                value="3 seconds",
+                source_phrase="quickly",
+            ),
+            NumberReading(
+                name="Account lockout duration",
+                value="30 minutes",
+                source_phrase="lock",
+            ),
+        ]
+    )
+    return reading_a, reading_b
+
+
+def _false_fork() -> Fork:
+    return Fork(
+        topic="Account lock behavior and duration",
+        reading_a=NOT_STATED_A,
+        reading_b="locks the account for 30 minutes",
+        source_phrase="lock",
+        severity="high",
+        suggested_rewrite="a clear rewrite",
+    )
+
+
+def _real_fork() -> Fork:
+    return Fork(
+        topic="Lock speed",
+        reading_a="1 second",
+        reading_b="3 seconds",
+        source_phrase="quickly",
+        severity="high",
+        suggested_rewrite="a clear rewrite",
+    )
+
+
+def test_compare_prompt_contains_facts() -> None:
+    facts = format_number_facts(match_numbers(*_real_readers()))
+    system, user = duel_compare_prompt(STORY, "{}", "{}", number_facts=facts)
+    _, marker, tail = user.partition("FACTS COMPUTED BY CODE")
+    assert marker
+    assert facts in tail
+    assert "-> SAME" in facts
+    assert "-> DIFFERENT" in facts
+    assert "Values marked SAME in the facts are agreements, not forks" in system
+
+
+def test_drop_false_fork_real_run() -> None:
+    matches = match_numbers(*_real_readers())
+    comparison = DuelComparison(forks=[_false_fork()], agreements=[])
+    cleaned, notes = drop_false_forks(comparison, matches)
+    assert cleaned.forks == []
+    assert len(notes) == 1
+    assert "30 minutes" in notes[0]
+    assert "Account lock behavior and duration" in notes[0]
+    # The input is left alone.
+    assert len(comparison.forks) == 1
+
+
+def test_keep_real_fork() -> None:
+    matches = match_numbers(*_real_readers())
+    fork = _real_fork()
+    cleaned, notes = drop_false_forks(DuelComparison(forks=[fork]), matches)
+    assert cleaned.forks == [fork]
+    assert notes == []
+
+
+def _real_run_generate(captured: list | None = None):
+    reading_a, reading_b = _real_readers()
+
+    def _generate(keys, system, user, schema):
+        if schema.__name__ == "Interpretation":
+            return (reading_a if "strictest" in system else reading_b), 0, []
+        if captured is not None:
+            captured.append(user)
+        comparison = DuelComparison(
+            forks=[_false_fork(), _real_fork()],
+            agreements=[
+                "Both readers agree the shopper must be registered.",
+                "Both readers agree a visible message is shown.",
+            ],
+        )
+        return comparison, 0, []
+
+    return _generate
+
+
+def test_run_duel_real_run_shape() -> None:
+    result = run_duel(KEYS, STORY, "", "", generate=_real_run_generate())
+    assert len(result.comparison.forks) == 1
+    assert result.comparison.forks[0].topic == "Lock speed"
+    assert len(result.number_matches) == 3
+    # 2 AI agreements + 2 code-matched same values, against 1 fork.
+    assert result.agreement_pct == 80
+    assert any("30 minutes" in note for note in result.notes)
+
+
+def test_matches_computed_before_compare() -> None:
+    captured: list = []
+    run_duel(KEYS, STORY, "", "", generate=_real_run_generate(captured))
+    assert len(captured) == 1
+    assert "-> DIFFERENT" in captured[0]

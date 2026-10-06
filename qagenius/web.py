@@ -15,6 +15,7 @@ from markupsafe import Markup
 from qagenius import duel, llm
 from qagenius.duel import NOT_STATED_A, NOT_STATED_B, DuelResult, build_highlights
 from qagenius.models import AmbiguityAnalysis, DuelComparison, Interpretation
+from qagenius.numbers import match_numbers
 from qagenius.prompts import story_check_prompt
 from qagenius.providers import PROVIDERS, get_provider, pick_default
 
@@ -319,6 +320,22 @@ def _severity_pill(severity: str) -> str:
     return "info"
 
 
+def _match_pill(status: str) -> str:
+    if status == "same":
+        return "ok"
+    if status == "different":
+        return "bad"
+    return "warn"
+
+
+def _match_label(status: str) -> str:
+    if status == "only_a":
+        return "only Reader A"
+    if status == "only_b":
+        return "only Reader B"
+    return status
+
+
 def _duel_result_context(story: str, result: DuelResult) -> dict:
     forks = result.comparison.forks
     has_high = any(f.severity == "high" for f in forks)
@@ -334,6 +351,8 @@ def _duel_result_context(story: str, result: DuelResult) -> dict:
             story, result.highlights, forks
         ),
         "severity_pill": _severity_pill,
+        "match_pill": _match_pill,
+        "match_label": _match_label,
         "vague_rewrites": result.vague_rewrites,
         "not_stated_values": {NOT_STATED_A, NOT_STATED_B},
         "notes": result.notes,
@@ -347,6 +366,7 @@ def _duel_from_sample(story: str) -> dict:
     reading_a = Interpretation.model_validate(sample["reading_a"])
     reading_b = Interpretation.model_validate(sample["reading_b"])
     comparison = DuelComparison.model_validate(sample["comparison"])
+    matches = match_numbers(reading_a, reading_b)
     n_forks = len(comparison.forks)
     n_agree = len(comparison.agreements)
     pct = 100 if n_forks + n_agree == 0 else round(100 * n_agree / (n_forks + n_agree))
@@ -359,6 +379,7 @@ def _duel_from_sample(story: str) -> dict:
         notes=[],
         provider_name="saved example",
         used_index=0,
+        number_matches=matches,
     )
     return _duel_result_context(story, result)
 

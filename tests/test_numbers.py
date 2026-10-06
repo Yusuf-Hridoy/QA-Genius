@@ -1,4 +1,14 @@
-from qagenius.numbers import parse_quantity
+from qagenius.models import Interpretation, NumberReading
+from qagenius.numbers import match_numbers, parse_quantity
+
+
+def _reading(*pairs: tuple[str, str]) -> Interpretation:
+    return Interpretation(
+        numbers=[
+            NumberReading(name=name, value=value, source_phrase="")
+            for name, value in pairs
+        ]
+    )
 
 
 def test_attempts_are_count() -> None:
@@ -66,3 +76,54 @@ def test_bare_number_is_other() -> None:
     assert quantity is not None
     assert quantity.family == "other"
     assert quantity.amount == 3
+
+
+def test_real_run_numbers() -> None:
+    reading_a = _reading(
+        ("Failed Password Attempt Limit", "5 attempts"),
+        ("Lockout Response Time", "1 second"),
+        ("Account Lockout Duration", "30 minutes"),
+    )
+    reading_b = _reading(
+        ("Failed password threshold", "5 attempts"),
+        ("Lock execution time limit", "3 seconds"),
+        ("Account lockout duration", "30 minutes"),
+    )
+    matches = match_numbers(reading_a, reading_b)
+    assert [(m.name, m.value_a, m.value_b, m.status) for m in matches] == [
+        ("Failed Password Attempt Limit", "5 attempts", "5 attempts", "same"),
+        ("Lockout Response Time", "1 second", "3 seconds", "different"),
+        ("Account Lockout Duration", "30 minutes", "30 minutes", "same"),
+    ]
+
+
+def test_units_converted() -> None:
+    matches = match_numbers(
+        _reading(("Lockout duration", "1 minute")),
+        _reading(("Lockout duration", "60 seconds")),
+    )
+    assert len(matches) == 1
+    assert matches[0].status == "same"
+
+
+def test_different_families_never_pair() -> None:
+    matches = match_numbers(
+        _reading(("Attempt limit", "5 attempts")),
+        _reading(("Attempt limit", "5 minutes")),
+    )
+    assert [m.status for m in matches] == ["only_a", "only_b"]
+
+
+def test_unmatched_reported() -> None:
+    matches = match_numbers(
+        _reading(("Lockout duration", "30 minutes"), ("Session timeout", "20 minutes")),
+        _reading(("Lockout duration", "30 minutes")),
+    )
+    assert [(m.name, m.status) for m in matches] == [
+        ("Lockout duration", "same"),
+        ("Session timeout", "only_a"),
+    ]
+
+
+def test_empty_readers() -> None:
+    assert match_numbers(_reading(), _reading()) == []

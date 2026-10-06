@@ -58,6 +58,21 @@
       {% endif %}
     </div>
   </div>
+  {% if result.number_matches %}
+  <h3>Values compared by code</h3>
+  <table class="grid">
+    <tr><th>Value</th><th>Reader A</th><th>Reader B</th><th></th></tr>
+    {% for m in result.number_matches %}
+    <tr>
+      <td>{{ m.name }}</td>
+      <td>{{ m.value_a or "—" }}</td>
+      <td>{{ m.value_b or "—" }}</td>
+      <td><span class="pill {{ match_pill(m.status) }}">{{ match_label(m.status) }}</span></td>
+    </tr>
+    {% endfor %}
+  </table>
+  <p class="muted small">Matched by unit and name, not by AI.</p>
+  {% endif %}
   <h3>Forks</h3>
   {% if forks %}
   <table class="grid">

@@ -10,8 +10,10 @@ relaxed) to interpret the story separately, then compares them. Forks are
 highlighted in the story text — hover or focus a highlight to see both
 readings and a suggested rewrite. It uses 3 short AI calls. Both readers
 must commit to concrete numbers with units for every vague word. A code
-check removes any reading the comparison invents. Rewrites that are still
-vague are flagged and can't be applied.
+check removes any reading the comparison invents. Numbers from both
+readers are matched by unit and name in code, so "same" and "different"
+are computed, not guessed. Rewrites that are still vague are flagged and
+can't be applied.
 
 ## Troubleshooting
 - `python scripts/check_key.py` checks one provider key with a tiny JSON
