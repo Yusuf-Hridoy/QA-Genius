@@ -1,0 +1,68 @@
+<div class="stat-row">
+  <div class="stat"><div class="num">{{ counts.total }}</div><div class="lbl">Test cases</div></div>
+  <div class="stat"><div class="num">{{ coverage.covered | length }} / {{ criteria | length }}</div><div class="lbl">Criteria covered</div></div>
+  <div class="stat"><div class="num">{{ counts.by_category.get("Negative", 0) }}</div><div class="lbl">Negative</div></div>
+  <div class="stat"><div class="num">{{ counts.by_category.get("Boundary", 0) }}</div><div class="lbl">Boundary</div></div>
+  <div class="stat"><div class="num">{{ counts.by_priority.get("High", 0) }}</div><div class="lbl">High priority</div></div>
+</div>
+<div class="card">
+  <h2>Coverage</h2>
+  <div class="meter" role="img" aria-label="Coverage {{ coverage.percent }} percent">
+    <div class="meter-fill {{ coverage_pill }}" style="width:{{ coverage.percent }}%"></div>
+  </div>
+  <p>Coverage {{ coverage.percent }}% — {{ coverage.covered | length }} of {{ criteria | length }} criteria</p>
+  {% if coverage.uncovered %}
+  <p class="muted small">Not covered:
+    {% for ac_id in coverage.uncovered %}<span class="pill warn" title="{{ ac_text[ac_id] }}">{{ ac_id }}</span> {% endfor %}
+  </p>
+  {% endif %}
+  <p class="muted small">Coverage is counted from the ids each test case lists, not from the AI's own summary.</p>
+</div>
+{% if categories %}
+<div class="row filter-chips" id="tc-filters">
+  <button type="button" class="chip now" data-filter="all">All</button>
+  {% for category in categories %}
+  <button type="button" class="chip" data-filter="{{ category }}">{{ category }}</button>
+  {% endfor %}
+</div>
+{% endif %}
+<div id="tc-list">
+  {% for item in cases %}
+  <div class="card tc-card" data-category="{{ item.case.category }}">
+    <h3>{{ item.case.id }} · {{ item.case.title }}</h3>
+    <p class="row">
+      <span class="pill {{ category_pill(item.case.category) }}">{{ item.case.category }}</span>
+      <span class="pill {{ priority_pill(item.case.priority) }}">{{ item.case.priority }}</span>
+      {% if item.ac_ids %}
+      {% for ac_id in item.ac_ids %}<span class="pill accent" title="{{ ac_text[ac_id] }}">{{ ac_id }}</span>{% endfor %}
+      {% else %}
+      <span class="pill neutral">no AC</span>
+      {% endif %}
+    </p>
+    <p><strong>Pre-conditions:</strong> {{ item.case.pre_conditions }}</p>
+    <ol class="tc-steps">
+      {% for step in item.case.steps %}<li>{{ step }}</li>{% endfor %}
+    </ol>
+    <p><strong>Expected result:</strong> {{ item.case.expected_result }}</p>
+    {% if item.case.test_data %}
+    <p class="mono small">{{ item.case.test_data }}</p>
+    {% endif %}
+    {% if item.case.bdd_scenario %}
+    <details><summary>BDD scenario</summary><pre class="code">{{ item.case.bdd_scenario }}</pre></details>
+    {% endif %}
+    <p class="muted small">Automation: {{ item.case.automation_feasibility }} · effort {{ item.case.automation_effort }}</p>
+  </div>
+  {% endfor %}
+</div>
+<script type="application/json" id="tc-data">{{ tc_data | tojson }}</script>
+<div class="card">
+  <div class="row">
+    <button type="button" class="btn" id="download-csv">Download CSV</button>
+    <button type="button" class="btn" id="download-xlsx">Download Excel</button>
+  </div>
+  <p class="muted small" id="download-status" aria-live="polite"></p>
+  {% if notes %}
+  <p class="muted small">{{ notes | join(" · ") }}</p>
+  {% endif %}
+  <p class="muted small">Answered by {{ provider_name }}.</p>
+</div>

@@ -152,3 +152,34 @@ mark{background:var(--warn-bg);color:inherit;border-radius:3px;
   border-radius:var(--r);padding:12px 14px}
 tr.diff-row td:first-child{border-left:4px solid #E0A82E}
 @media (max-width:768px){.duel-readers{grid-template-columns:1fr}}
+
+/* Test cases: coverage meter, category filters, case cards */
+.pill.accent{background:var(--accent-soft);color:var(--accent);font-weight:600}
+.meter{height:10px;border-radius:999px;background:var(--card-2);
+  border:1px solid var(--border);overflow:hidden;margin:4px 0 10px}
+.meter-fill{height:100%;border-radius:999px;transition:width .2s ease}
+.meter-fill.ok{background:var(--ok-fg)}
+.meter-fill.warn{background:var(--warn-fg)}
+.meter-fill.bad{background:var(--bad-fg)}
+.filter-chips{margin:0 0 12px}
+.chip{padding:5px 12px;border-radius:999px;font-size:13px;cursor:pointer;
+  border:1px solid var(--border-strong);background:var(--card);color:var(--text-2)}
+.chip:hover{background:var(--card-2);color:var(--text)}
+.chip.now{background:var(--accent-soft);color:var(--accent);
+  border-color:var(--accent);font-weight:600}
+.tc-card h3{margin:0 0 8px;font-size:16px}
+.tc-card[hidden]{display:none}
+.tc-steps{margin:8px 0;padding-left:22px}
+.tc-steps li{margin:3px 0}
+
+/* Requirements flow: step links, criteria editor, coverage focus */
+.steps li a{color:inherit;text-decoration:none;display:block}
+.steps li a:hover{text-decoration:underline}
+.ac-list{display:flex;flex-direction:column;gap:10px;margin:12px 0}
+.ac-row{display:flex;gap:10px;align-items:flex-start}
+.ac-row textarea{flex:1;min-height:64px;resize:vertical}
+.ac-actions{flex-wrap:nowrap;align-items:flex-start}
+.tc-form fieldset{border:none;margin:12px 0;padding:0}
+.tc-form legend{padding:0}
+.check{display:inline-flex;align-items:center;gap:4px;margin-right:14px;
+  font-size:14px;color:var(--text-2)}

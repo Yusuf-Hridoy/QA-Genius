@@ -6,3 +6,4 @@ pydantic
 json-repair
 python-multipart
 httpx
+openpyxl

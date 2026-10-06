@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block title %}Acceptance criteria — QA-Genius{% endblock %}
+{% block top_title %}Requirements · Acceptance criteria{% endblock %}
+{% block content %}
+<ol class="steps">
+  <li class="done"><a href="/requirements/story">1 · Story</a></li>
+  <li class="now">2 · Acceptance criteria</li>
+  <li><a href="/requirements/test-cases">3 · Test cases</a></li>
+  <li>4 · Automation <span class="muted small">soon</span></li>
+</ol>
+<div id="criteria-root"></div>
+{% endblock %}
+{% block scripts %}<script src="/requirements_flow.js" defer></script>{% endblock %}

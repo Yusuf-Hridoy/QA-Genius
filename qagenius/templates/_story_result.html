@@ -50,9 +50,12 @@
 <div class="card">
   <h2>Acceptance criteria</h2>
   <pre class="code" id="ac-block">{{ acceptance_criteria }}</pre>
+  <script type="application/json" id="story-criteria">{{ criteria_list | tojson }}</script>
   <div class="row">
     <button type="button" class="btn btn-small" onclick="navigator.clipboard.writeText(document.getElementById('ac-block').innerText)">Copy</button>
+    <button type="button" class="btn btn-primary" id="use-criteria">Use these criteria &rarr;</button>
   </div>
+  <p class="muted small">Takes the story and these criteria to step 2, in your browser only.</p>
 </div>
 {% if result.missing_elements %}
 <div class="card">

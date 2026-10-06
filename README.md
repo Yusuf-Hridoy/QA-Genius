@@ -15,6 +15,20 @@ readers are matched by unit and name in code, so "same" and "different"
 are computed, not guessed. Rewrites that are still vague are flagged and
 can't be applied.
 
+## Test cases
+Requirements runs in three steps: **Story** check, **Acceptance criteria**,
+then **Test cases**. The Use these criteria button carries the story and its
+criteria to step 2, where you can edit, reorder, add and delete them; ids
+stay AC-1..AC-n by position. Step 3 writes test cases from the story plus
+those criteria, and each case shows the criteria it covers as AC chips. The
+coverage meter, the per-category counts and the chips are all computed in
+code from the ids each case lists, never read from the AI's own summary, so
+an uncovered criterion is always reported. Download CSV or Excel for the
+whole suite; the workbook adds a Coverage sheet and both formats quote any
+cell that starts with = + - or @ so a spreadsheet cannot run it as a
+formula. The run lives in your browser's sessionStorage only — the server
+never stores it.
+
 ## Troubleshooting
 - `python scripts/check_key.py` checks one provider key with a tiny JSON
   request. It asks for the provider id and the key (hidden while typing)

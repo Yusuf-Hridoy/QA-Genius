@@ -4,20 +4,35 @@ import logging
 from pathlib import Path
 
 from fastapi import FastAPI, Form, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 
 import openai
 from markupsafe import Markup
 
 from qagenius import duel, llm
 from qagenius.duel import NOT_STATED_A, NOT_STATED_B, DuelResult, build_highlights
-from qagenius.models import AmbiguityAnalysis, DuelComparison, Interpretation
+from qagenius.models import (
+    AmbiguityAnalysis,
+    DuelComparison,
+    Interpretation,
+    TestCaseList,
+)
 from qagenius.numbers import match_numbers
-from qagenius.prompts import story_check_prompt
+from qagenius.prompts import story_check_prompt, test_cases_prompt
 from qagenius.providers import PROVIDERS, get_provider, pick_default
+from qagenius.test_case_exports import to_csv, to_xlsx
+from qagenius.test_cases import (
+    COVERAGE_FOCUS_OPTIONS,
+    Criterion,
+    build_user_text,
+    compute_counts,
+    compute_coverage,
+    number_criteria,
+    traced_ids,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -26,6 +41,8 @@ SAMPLES_DIR = BASE_DIR / "samples"
 
 STORY_LIMIT = 3000
 CONTEXT_LIMIT = 1000
+CRITERIA_LIMIT = 40
+CRITERION_LIMIT = 1000
 
 app = FastAPI(title="QA-Genius v2")
 templates = Jinja2Templates(directory=BASE_DIR / "templates")
@@ -257,6 +274,7 @@ def _story_result_context(
             story, [vp.phrase for vp in result.vague_phrases]
         ),
         "acceptance_criteria": "\n\n".join(result.generated_acceptance_criteria),
+        "criteria_list": result.generated_acceptance_criteria,
         "notes": notes,
         "provider_name": provider_name,
     }
@@ -554,6 +572,231 @@ def story_duel(
         _duel_result_context(user_story, result),
     )
 
+
+
+CATEGORY_PILLS = {
+    "Functional": "info",
+    "Negative": "warn",
+    "Boundary": "ok",
+    "Edge Case": "neutral",
+}
+PRIORITY_PILLS = {"High": "bad", "Medium": "warn", "Low": "ok"}
+
+
+class ExportRequest(BaseModel):
+    """Body of the export routes. The browser sends back what it was given."""
+
+    result: TestCaseList
+    criteria: list[str] = []
+
+    @field_validator("criteria")
+    @classmethod
+    def _within_limits(cls, value: list[str]) -> list[str]:
+        if len(value) > CRITERIA_LIMIT:
+            raise ValueError(f"Send at most {CRITERIA_LIMIT} criteria.")
+        if any(len(text) > CRITERION_LIMIT for text in value):
+            raise ValueError(f"Keep each criterion under {CRITERION_LIMIT} characters.")
+        return value
+
+
+def _parse_criteria_json(raw: str) -> list[str] | None:
+    """The posted criteria, or None when the payload is not a short list of short strings."""
+    try:
+        value = json.loads(raw or "[]")
+    except json.JSONDecodeError:
+        return None
+    if not isinstance(value, list) or len(value) > CRITERIA_LIMIT:
+        return None
+    if not all(isinstance(item, str) for item in value):
+        return None
+    if any(len(item) > CRITERION_LIMIT for item in value):
+        return None
+    return value
+
+
+def _category_pill(category: str) -> str:
+    return CATEGORY_PILLS.get(category.strip().title(), "neutral")
+
+
+def _priority_pill(priority: str) -> str:
+    return PRIORITY_PILLS.get(priority.strip().title(), "neutral")
+
+
+def _coverage_pill(percent: int) -> str:
+    if percent >= 100:
+        return "ok"
+    if percent >= 60:
+        return "warn"
+    return "bad"
+
+
+def _test_cases_result_context(
+    result: TestCaseList,
+    criteria: list[Criterion],
+    notes: list[str],
+    provider_name: str,
+) -> dict:
+    """Everything the result card shows is computed here, never read from result.summary."""
+    coverage = compute_coverage(result, criteria)
+    counts = compute_counts(result)
+    valid_ids = {criterion.id for criterion in criteria}
+    cases = [
+        {"case": test_case, "ac_ids": traced_ids(test_case, valid_ids)}
+        for test_case in result.test_cases
+    ]
+    return {
+        "cases": cases,
+        "criteria": criteria,
+        "coverage": coverage,
+        "counts": counts,
+        "categories": list(counts.by_category),
+        "ac_text": {criterion.id: criterion.text for criterion in criteria},
+        "category_pill": _category_pill,
+        "priority_pill": _priority_pill,
+        "coverage_pill": _coverage_pill(coverage.percent),
+        "tc_data": {
+            "result": result.model_dump(),
+            "criteria": [criterion.text for criterion in criteria],
+        },
+        "notes": notes,
+        "provider_name": provider_name,
+    }
+
+
+@app.get("/requirements/criteria", response_class=HTMLResponse)
+def criteria_page(request: Request) -> HTMLResponse:
+    """Step 2. The page is empty; the browser fills it from sessionStorage."""
+    return templates.TemplateResponse(
+        request, "criteria.html", {"active": "requirements"}
+    )
+
+
+@app.get("/requirements/test-cases", response_class=HTMLResponse)
+def test_cases_page(request: Request) -> HTMLResponse:
+    """Step 3. The page is empty; the browser fills it from sessionStorage."""
+    return templates.TemplateResponse(
+        request, "test_cases.html", {"active": "requirements"}
+    )
+
+
+@app.post("/requirements/test-cases/run", response_class=HTMLResponse)
+def test_cases_run(
+    request: Request,
+    user_story: str = Form(default=""),
+    criteria_json: str = Form(default="[]"),
+    coverage_focus: list[str] = Form(default=[]),
+) -> HTMLResponse:
+    user_story = user_story.strip()
+    if not user_story:
+        return _error_card(request, "Please paste a user story first.")
+    if len(user_story) > STORY_LIMIT:
+        return _error_card(
+            request,
+            f"That story is too long. Keep it under {STORY_LIMIT} characters.",
+        )
+    texts = _parse_criteria_json(criteria_json)
+    if texts is None:
+        return _error_card(request, "Please check the story and criteria.")
+    if any(focus not in COVERAGE_FOCUS_OPTIONS for focus in coverage_focus):
+        return _error_card(request, "Please check the story and criteria.")
+    keys = _request_keys(request)
+    if not keys:
+        # The browser opens the keys drawer (HX-Trigger: open-keys).
+        return HTMLResponse(
+            '<p class="muted">Add an API key to write test cases.</p>',
+            headers={"HX-Trigger": "open-keys"},
+        )
+    criteria = number_criteria(texts)
+    system, base_user = test_cases_prompt(user_story)
+    user = build_user_text(base_user, list(coverage_focus), criteria)
+    try:
+        result, used_index, notes = llm.generate_json(keys, system, user, TestCaseList)
+    except llm.NoKeysError:
+        return HTMLResponse(
+            '<p class="muted">Add an API key to write test cases.</p>',
+            headers={"HX-Trigger": "open-keys"},
+        )
+    except llm.AllKeysBusyError as e:
+        return _error_card(
+            request,
+            "All your keys are busy. Try again in a minute or add another key.",
+            e.notes,
+        )
+    except llm.InvalidKeyError as e:
+        return _error_card(
+            request,
+            "Your key was rejected. Check it on the Your API keys page "
+            "and try again.",
+            e.notes,
+        )
+    except llm.ModelUnavailableError as e:
+        return _error_card(
+            request,
+            "The AI model isn't available right now. Your keys are fine -- "
+            "QA-Genius needs a model update.",
+            e.notes,
+        )
+    except llm.ProviderError as e:
+        return _error_card(request, str(e))
+    except llm.BadOutputError as e:
+        return _error_card(request, str(e))
+    provider = get_provider(keys[used_index]["provider"])
+    return templates.TemplateResponse(
+        request,
+        "_test_cases_result.html",
+        _test_cases_result_context(
+            result,
+            criteria,
+            notes,
+            provider["name"] if provider else "unknown provider",
+        ),
+    )
+
+
+def _test_cases_sample() -> tuple[TestCaseList, list[Criterion]]:
+    with open(SAMPLES_DIR / "test_cases.json", encoding="utf-8") as f:
+        sample = json.load(f)
+    return (
+        TestCaseList.model_validate(sample["result"]),
+        number_criteria(sample["criteria"]),
+    )
+
+
+@app.get("/requirements/test-cases/example", response_class=HTMLResponse)
+def test_cases_example(request: Request) -> HTMLResponse:
+    """Load example: a saved suite. No key needed, no AI call."""
+    result, criteria = _test_cases_sample()
+    return templates.TemplateResponse(
+        request,
+        "_test_cases_result.html",
+        _test_cases_result_context(result, criteria, [], "saved example"),
+    )
+
+
+@app.post("/requirements/test-cases/export.csv")
+def test_cases_export_csv(payload: ExportRequest) -> Response:
+    data = to_csv(payload.result, number_criteria(payload.criteria))
+    return Response(
+        content=data,
+        media_type="text/csv; charset=utf-8",
+        headers={
+            "Content-Disposition": 'attachment; filename="qa-genius-test-cases.csv"'
+        },
+    )
+
+
+@app.post("/requirements/test-cases/export.xlsx")
+def test_cases_export_xlsx(payload: ExportRequest) -> Response:
+    data = to_xlsx(payload.result, number_criteria(payload.criteria))
+    return Response(
+        content=data,
+        media_type=(
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        ),
+        headers={
+            "Content-Disposition": 'attachment; filename="qa-genius-test-cases.xlsx"'
+        },
+    )
 
 # Served from the site root (e.g. /style.css). On Vercel the CDN serves
 # public/ first; locally this mount serves the same files. It must stay

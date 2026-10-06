@@ -4,9 +4,9 @@
 {% block content %}
 <ol class="steps">
   <li class="now">1 · Story</li>
-  <li>2 · Acceptance criteria</li>
-  <li>3 · Test cases</li>
-  <li>4 · Automation</li>
+  <li><a href="/requirements/criteria">2 · Acceptance criteria</a></li>
+  <li><a href="/requirements/test-cases">3 · Test cases</a></li>
+  <li>4 · Automation <span class="muted small">soon</span></li>
 </ol>
 <div class="card">
   <h2>Story check</h2>
@@ -41,3 +41,4 @@
 <div id="story-output"></div>
 <div id="duel-output"></div>
 {% endblock %}
+{% block scripts %}<script src="/requirements_flow.js" defer></script>{% endblock %}

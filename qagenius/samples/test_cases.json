@@ -1,0 +1,246 @@
+{
+  "story": "As a shopper, I want my Aurora Storefront account to lock after too many wrong password attempts, so that nobody can guess their way into my account.",
+  "criteria": [
+    "Scenario: Lock after repeated failures\n  Given a shopper with an active account\n  When they enter a wrong password 5 times within 10 minutes\n  Then the account is locked",
+    "Scenario: Lock duration\n  Given a locked account\n  When 30 minutes have not yet passed\n  Then sign-in is refused even with the correct password",
+    "Scenario: The shopper is told\n  Given the account has just locked\n  When the lock message appears\n  Then it names the 30 minute duration",
+    "Scenario: Counter resets\n  Given a shopper has failed fewer than 5 times\n  When they sign in successfully\n  Then the failed attempt counter returns to zero",
+    "Scenario: Support unlock\n  Given a locked account\n  When support staff unlock it from the admin console\n  Then the shopper can sign in straight away"
+  ],
+  "result": {
+    "test_cases": [
+      {
+        "id": "TC-001",
+        "title": "Account locks on the fifth wrong password within 10 minutes",
+        "category": "Functional",
+        "pre_conditions": "Shopper 'dana.reed@example.com' has an active Aurora Storefront account and 0 recorded failed attempts",
+        "steps": [
+          "Open the Aurora Storefront sign-in page",
+          "Enter 'dana.reed@example.com' in the email field",
+          "Enter 'WrongPass1!' in the password field and submit",
+          "Repeat the wrong password submission four more times within 10 minutes",
+          "Observe the response after the fifth submission"
+        ],
+        "expected_result": "After the fifth failure the account state changes to Locked, the sign-in form is replaced by the lockout message, and no session cookie is issued",
+        "priority": "High",
+        "test_data": "email=dana.reed@example.com, password=WrongPass1!, attempts=5, window=10 minutes",
+        "bdd_scenario": "Given a shopper with an active account\nAnd the account has no recorded failed attempts\nWhen the shopper submits a wrong password 5 times within 10 minutes\nThen the account is locked\nAnd no session is created",
+        "automation_feasibility": "High",
+        "automation_effort": "Low",
+        "tags": ["login", "lockout", "security", "smoke", "regression"],
+        "traceability": "AC-1"
+      },
+      {
+        "id": "TC-002",
+        "title": "Locked account refuses the correct password for 30 minutes",
+        "category": "Functional",
+        "pre_conditions": "Account 'dana.reed@example.com' was locked 5 minutes ago",
+        "steps": [
+          "Open the sign-in page",
+          "Enter 'dana.reed@example.com' and the correct password 'RightPass9!'",
+          "Submit the form"
+        ],
+        "expected_result": "Sign-in is refused, the lockout message is shown with the remaining time, and the audit log records a blocked attempt on a locked account",
+        "priority": "High",
+        "test_data": "email=dana.reed@example.com, password=RightPass9!, minutes_since_lock=5",
+        "bdd_scenario": "Given a locked account\nAnd 30 minutes have not yet passed\nWhen the shopper submits the correct password\nThen sign-in is refused",
+        "automation_feasibility": "High",
+        "automation_effort": "Low",
+        "tags": ["login", "lockout", "security", "regression"],
+        "traceability": "AC-2"
+      },
+      {
+        "id": "TC-003",
+        "title": "Lockout message names the 30 minute duration",
+        "category": "Functional",
+        "pre_conditions": "Account 'dana.reed@example.com' has just reached its fifth failed attempt",
+        "steps": [
+          "Trigger the fifth failed sign-in attempt",
+          "Read the message shown above the sign-in form"
+        ],
+        "expected_result": "The message reads 'Your account is locked for 30 minutes.' and the duration is stated in minutes, not in a relative phrase such as 'a while'",
+        "priority": "Medium",
+        "test_data": "expected_copy=Your account is locked for 30 minutes.",
+        "bdd_scenario": "Given the account has just locked\nWhen the lock message appears\nThen it names the 30 minute duration",
+        "automation_feasibility": "High",
+        "automation_effort": "Low",
+        "tags": ["login", "lockout", "copy", "regression"],
+        "traceability": "AC-3"
+      },
+      {
+        "id": "TC-004",
+        "title": "Successful sign-in resets the failed attempt counter",
+        "category": "Functional",
+        "pre_conditions": "Account 'dana.reed@example.com' has 3 recorded failed attempts and is not locked",
+        "steps": [
+          "Sign in with the correct password 'RightPass9!'",
+          "Sign out",
+          "Enter a wrong password twice",
+          "Check the stored failed attempt count"
+        ],
+        "expected_result": "The counter is 0 immediately after the successful sign-in and 2 after the two later failures, so the account does not lock",
+        "priority": "High",
+        "test_data": "email=dana.reed@example.com, failures_before=3, failures_after=2",
+        "bdd_scenario": "Given a shopper has failed fewer than 5 times\nWhen they sign in successfully\nThen the failed attempt counter returns to zero",
+        "automation_feasibility": "High",
+        "automation_effort": "Moderate",
+        "tags": ["login", "counter", "regression"],
+        "traceability": "AC-4"
+      },
+      {
+        "id": "TC-005",
+        "title": "Lockout message does not reveal whether the email is registered",
+        "category": "Negative",
+        "pre_conditions": "The email 'nobody@example.com' has no Aurora Storefront account",
+        "steps": [
+          "Submit 'nobody@example.com' with a wrong password five times",
+          "Compare the message with the one shown for a registered email"
+        ],
+        "expected_result": "Both paths show the same generic message and the same response timing, so an attacker cannot tell registered emails from unregistered ones",
+        "priority": "High",
+        "test_data": "unknown_email=nobody@example.com, known_email=dana.reed@example.com",
+        "bdd_scenario": "Given an email with no account\nWhen five wrong passwords are submitted\nThen the response is indistinguishable from a registered email",
+        "automation_feasibility": "Medium",
+        "automation_effort": "Moderate",
+        "tags": ["login", "security", "enumeration", "regression"],
+        "traceability": "Covers AC-1, AC-3"
+      },
+      {
+        "id": "TC-006",
+        "title": "Password reset is still refused while the account is locked",
+        "category": "Negative",
+        "pre_conditions": "Account 'dana.reed@example.com' locked 2 minutes ago",
+        "steps": [
+          "Open the sign-in page",
+          "Follow the 'Forgot password' link",
+          "Submit 'dana.reed@example.com'"
+        ],
+        "expected_result": "The reset flow does not silently unlock the account; after setting a new password the shopper still waits out the remaining lock time",
+        "priority": "Medium",
+        "test_data": "email=dana.reed@example.com, minutes_since_lock=2",
+        "bdd_scenario": "Given a locked account\nWhen the shopper completes a password reset\nThen the lock is still in force",
+        "automation_feasibility": "Medium",
+        "automation_effort": "High",
+        "tags": ["login", "lockout", "password-reset", "security"],
+        "traceability": "AC-2"
+      },
+      {
+        "id": "TC-007",
+        "title": "Four failures followed by the correct password do not lock the account",
+        "category": "Boundary",
+        "pre_conditions": "Account 'dana.reed@example.com' has 0 recorded failed attempts",
+        "steps": [
+          "Submit a wrong password four times within 10 minutes",
+          "Submit the correct password 'RightPass9!'"
+        ],
+        "expected_result": "Sign-in succeeds on the fifth submission, the account is never locked, and the counter is reset to 0",
+        "priority": "High",
+        "test_data": "failures=4, then_correct=RightPass9!",
+        "bdd_scenario": "Given a shopper with 0 failed attempts\nWhen they fail 4 times and then succeed\nThen the account is not locked",
+        "automation_feasibility": "High",
+        "automation_effort": "Low",
+        "tags": ["login", "boundary", "regression"],
+        "traceability": "AC-1, AC-4"
+      },
+      {
+        "id": "TC-008",
+        "title": "Five failures spread over more than 10 minutes do not lock the account",
+        "category": "Boundary",
+        "pre_conditions": "Account 'dana.reed@example.com' has 0 recorded failed attempts and the clock can be controlled",
+        "steps": [
+          "Submit a wrong password four times over 9 minutes",
+          "Advance the clock to 11 minutes after the first attempt",
+          "Submit a wrong password once more"
+        ],
+        "expected_result": "The first attempt has fallen outside the 10 minute window, so only 4 attempts count and the account stays unlocked",
+        "priority": "Medium",
+        "test_data": "attempt_times=0,3,6,9,11 minutes",
+        "bdd_scenario": "Given four failures inside the window\nWhen a fifth failure happens after the window has moved on\nThen the account is not locked",
+        "automation_feasibility": "Medium",
+        "automation_effort": "High",
+        "tags": ["login", "boundary", "timing"],
+        "traceability": "AC-1"
+      },
+      {
+        "id": "TC-009",
+        "title": "Sign-in works again at exactly 30 minutes after the lock",
+        "category": "Boundary",
+        "pre_conditions": "Account 'dana.reed@example.com' locked exactly 30 minutes ago",
+        "steps": [
+          "Wait until the clock reads 30 minutes after the lock",
+          "Submit the correct password 'RightPass9!'"
+        ],
+        "expected_result": "Sign-in succeeds at 30:00, and a check at 29:59 is still refused",
+        "priority": "Medium",
+        "test_data": "lock_age=30:00, control=29:59",
+        "bdd_scenario": "Given an account locked 30 minutes ago\nWhen the shopper submits the correct password\nThen sign-in succeeds",
+        "automation_feasibility": "Medium",
+        "automation_effort": "Moderate",
+        "tags": ["login", "boundary", "timing", "regression"],
+        "traceability": "AC-2"
+      },
+      {
+        "id": "TC-010",
+        "title": "Failures from two browsers count towards the same account lock",
+        "category": "Edge Case",
+        "pre_conditions": "Account 'dana.reed@example.com' has 0 recorded failed attempts; two browsers are open",
+        "steps": [
+          "Submit three wrong passwords in browser A",
+          "Submit two wrong passwords in browser B within the same 10 minutes",
+          "Attempt to sign in from either browser"
+        ],
+        "expected_result": "The counter is held per account, not per browser, so the fifth failure locks the account for both browsers",
+        "priority": "Medium",
+        "test_data": "browser_a_failures=3, browser_b_failures=2",
+        "bdd_scenario": "Given failures from two browsers\nWhen the combined count reaches 5 within 10 minutes\nThen the account is locked everywhere",
+        "automation_feasibility": "Medium",
+        "automation_effort": "High",
+        "tags": ["login", "lockout", "edge-case", "session"],
+        "traceability": "AC-1"
+      },
+      {
+        "id": "TC-011",
+        "title": "Lock survives closing and reopening the browser",
+        "category": "Edge Case",
+        "pre_conditions": "Account 'dana.reed@example.com' locked 1 minute ago",
+        "steps": [
+          "Close the browser completely",
+          "Reopen it and clear cookies",
+          "Submit the correct password 'RightPass9!'"
+        ],
+        "expected_result": "The lock is stored against the account on the server, so a fresh browser is still refused and the message still names the remaining time",
+        "priority": "Low",
+        "test_data": "email=dana.reed@example.com, cookies=cleared",
+        "bdd_scenario": "Given a locked account\nWhen the shopper returns in a fresh browser\nThen sign-in is still refused",
+        "automation_feasibility": "Medium",
+        "automation_effort": "Moderate",
+        "tags": ["login", "lockout", "edge-case", "persistence"],
+        "traceability": "AC-2, AC-3"
+      }
+    ],
+    "summary": {
+      "total_generated": 11,
+      "category_breakdown": [
+        {"category": "Functional", "count": 4},
+        {"category": "Negative", "count": 2},
+        {"category": "Boundary", "count": 3},
+        {"category": "Edge Case", "count": 2}
+      ],
+      "priority_breakdown": [
+        {"priority": "High", "count": 5},
+        {"priority": "Medium", "count": 5},
+        {"priority": "Low", "count": 1}
+      ],
+      "automation_coverage_potential": "55% -- the lock and counter rules are straightforward to automate; the timing and multi-browser cases need clock control and parallel sessions.",
+      "coverage_gaps": [
+        "Support staff unlocking an account early from the admin console is not covered.",
+        "No case checks the audit trail an unlock writes."
+      ],
+      "recommendations": [
+        "Add a case for the support unlock path before release.",
+        "Give the test environment a controllable clock so the timing cases can run unattended.",
+        "Run the enumeration case on every release; it guards a security promise."
+      ]
+    }
+  }
+}

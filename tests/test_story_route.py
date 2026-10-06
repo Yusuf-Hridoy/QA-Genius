@@ -172,3 +172,23 @@ def test_story_run_sends_schema_to_model(monkeypatch) -> None:
     system_text = received["messages"][0]["content"]
     assert "ambiguity_score" in system_text
     assert '"properties"' in system_text
+
+
+def test_story_result_carries_criteria_to_step_two(monkeypatch) -> None:
+    """The Use these criteria button and its JSON ride along with the result."""
+    body = client.get("/requirements/story/example").text
+    assert 'id="use-criteria"' in body
+    assert '<script type="application/json" id="story-criteria">' in body
+    raw = body.split('<script type="application/json" id="story-criteria">')[1]
+    raw = raw.split("</script>")[0]
+    criteria = json.loads(raw)
+    assert isinstance(criteria, list)
+    assert len(criteria) >= 1
+    assert all(isinstance(text, str) for text in criteria)
+
+
+def test_story_criteria_json_is_escaped_not_safe() -> None:
+    """tojson must escape a closing tag so AI text cannot break out of the script."""
+    body = client.get("/requirements/story/example").text
+    block = body.split('id="story-criteria">')[1].split("</script>")[0]
+    assert "</script" not in block
