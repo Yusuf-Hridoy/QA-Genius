@@ -1,0 +1,24 @@
+<div class="card tc-card{% if card_class %} {{ card_class }}{% endif %}" data-category="{{ card_case.category }}">
+  <h3>{{ card_case.id }} · {{ card_case.title }}</h3>
+  <p class="row">
+    <span class="pill {{ category_pill(card_case.category) }}">{{ card_case.category }}</span>
+    <span class="pill {{ priority_pill(card_case.priority) }}">{{ card_case.priority }}</span>
+    {% if card_ac_ids %}
+    {% for ac_id in card_ac_ids %}<span class="pill accent" title="{{ ac_text[ac_id] }}">{{ ac_id }}</span>{% endfor %}
+    {% else %}
+    <span class="pill neutral">no AC</span>
+    {% endif %}
+  </p>
+  <p><strong>Pre-conditions:</strong> {{ card_case.pre_conditions }}</p>
+  <ol class="tc-steps">
+    {% for step in card_case.steps %}<li>{{ step }}</li>{% endfor %}
+  </ol>
+  <p><strong>Expected result:</strong> {{ card_case.expected_result }}</p>
+  {% if card_case.test_data %}
+  <p class="mono small">{{ card_case.test_data }}</p>
+  {% endif %}
+  {% if card_case.bdd_scenario %}
+  <details><summary>BDD scenario</summary><pre class="code">{{ card_case.bdd_scenario }}</pre></details>
+  {% endif %}
+  <p class="muted small">Automation: {{ card_case.automation_feasibility }} · effort {{ card_case.automation_effort }}</p>
+</div>

@@ -11,6 +11,11 @@
     <div class="meter-fill {{ coverage_pill }}" style="width:{{ coverage.percent }}%"></div>
   </div>
   <p>Coverage {{ coverage.percent }}% — {{ coverage.covered | length }} of {{ criteria | length }} criteria</p>
+  {% if depth.thin_ids %}
+  <p class="depth-line thin">Depth: {{ depth.thin_ids | length }} of {{ depth.rows | length }} criteria thin</p>
+  {% else %}
+  <p class="depth-line solid">Depth: every criterion has negative and boundary cases</p>
+  {% endif %}
   {% if coverage.uncovered %}
   <p class="muted small">Not covered:
     {% for ac_id in coverage.uncovered %}<span class="pill warn" title="{{ ac_text[ac_id] }}">{{ ac_id }}</span> {% endfor %}
@@ -18,6 +23,48 @@
   {% endif %}
   <p class="muted small">Coverage is counted from the ids each test case lists, not from the AI's own summary.</p>
 </div>
+{% if depth.rows %}
+<div class="card">
+  <h2>Depth by criterion</h2>
+  <table class="grid">
+    <tr><th>Criterion</th><th>Cases</th><th>Kinds</th><th>Status</th></tr>
+    {% for row in depth.rows %}
+    <tr>
+      <td><span class="pill accent" title="{{ row.text }}">{{ row.id }}</span></td>
+      <td>{{ row.case_ids | length }}{% if row.case_ids %} <span class="mono small">· {{ row.case_ids | join(", ") }}</span>{% endif %}</td>
+      <td>{% for kind in row.kinds %}<span class="pill neutral small">{{ kind }}</span> {% endfor %}</td>
+      <td>
+        {% if row.thin %}<span class="pill warn">thin</span> <span class="muted small">{{ row.reasons | join(", ") }}</span>
+        {% else %}<span class="pill ok">solid</span>{% endif %}
+      </td>
+    </tr>
+    {% endfor %}
+  </table>
+  <div class="row" id="tc-actions">
+    {% if depth.thin_ids %}
+    <button type="button" class="btn" id="strengthen-btn"
+      hx-post="/requirements/test-cases/refine" hx-target="#tc-proposal" hx-swap="innerHTML" hx-indicator="#tc-refine-progress">Strengthen thin criteria</button>
+    {% endif %}
+    <button type="button" class="btn" id="refine-open">Refine…</button>
+    <button type="button" class="btn" id="undo-btn" hidden>Undo last change</button>
+  </div>
+  <div id="refine-panel" hidden>
+    <div class="field">
+      <label for="refine-instruction">What should change?</label>
+      <textarea id="refine-instruction" rows="3" maxlength="1000"
+        placeholder="e.g. Use exact times at the 15-minute boundary and add a case for an unknown email."></textarea>
+      <span class="hint"><span id="refine-count">0</span>/1000</span>
+    </div>
+    <div class="row">
+      <button type="button" class="btn" id="refine-submit"
+        hx-post="/requirements/test-cases/refine" hx-target="#tc-proposal" hx-swap="innerHTML" hx-indicator="#tc-refine-progress">Propose changes</button>
+      <button type="button" class="btn" id="refine-cancel">Cancel</button>
+    </div>
+  </div>
+  <p id="tc-refine-progress" class="htmx-indicator muted">Asking the AI for changes…</p>
+</div>
+{% endif %}
+<div id="tc-proposal"></div>
 {% if categories %}
 <div class="row filter-chips" id="tc-filters">
   <button type="button" class="chip now" data-filter="all">All</button>
@@ -28,30 +75,7 @@
 {% endif %}
 <div id="tc-list">
   {% for item in cases %}
-  <div class="card tc-card" data-category="{{ item.case.category }}">
-    <h3>{{ item.case.id }} · {{ item.case.title }}</h3>
-    <p class="row">
-      <span class="pill {{ category_pill(item.case.category) }}">{{ item.case.category }}</span>
-      <span class="pill {{ priority_pill(item.case.priority) }}">{{ item.case.priority }}</span>
-      {% if item.ac_ids %}
-      {% for ac_id in item.ac_ids %}<span class="pill accent" title="{{ ac_text[ac_id] }}">{{ ac_id }}</span>{% endfor %}
-      {% else %}
-      <span class="pill neutral">no AC</span>
-      {% endif %}
-    </p>
-    <p><strong>Pre-conditions:</strong> {{ item.case.pre_conditions }}</p>
-    <ol class="tc-steps">
-      {% for step in item.case.steps %}<li>{{ step }}</li>{% endfor %}
-    </ol>
-    <p><strong>Expected result:</strong> {{ item.case.expected_result }}</p>
-    {% if item.case.test_data %}
-    <p class="mono small">{{ item.case.test_data }}</p>
-    {% endif %}
-    {% if item.case.bdd_scenario %}
-    <details><summary>BDD scenario</summary><pre class="code">{{ item.case.bdd_scenario }}</pre></details>
-    {% endif %}
-    <p class="muted small">Automation: {{ item.case.automation_feasibility }} · effort {{ item.case.automation_effort }}</p>
-  </div>
+  {% with card_case = item.case, card_ac_ids = item.ac_ids %}{% include "_test_case_card.html" %}{% endwith %}
   {% endfor %}
 </div>
 <script type="application/json" id="tc-data">{{ tc_data | tojson }}</script>
@@ -59,6 +83,11 @@
   <div class="row">
     <button type="button" class="btn" id="download-csv">Download CSV</button>
     <button type="button" class="btn" id="download-xlsx">Download Excel</button>
+    {% if is_example %}
+    <button type="button" class="btn" id="example-strengthen"
+      hx-get="/requirements/test-cases/example-strengthen"
+      hx-target="#tc-proposal" hx-swap="innerHTML">Try Strengthen on the example</button>
+    {% endif %}
   </div>
   <p class="muted small" id="download-status" aria-live="polite"></p>
   {% if notes %}

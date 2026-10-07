@@ -23,7 +23,16 @@ from qagenius.models import (
 from qagenius.numbers import match_numbers
 from qagenius.prompts import story_check_prompt, test_cases_prompt
 from qagenius.providers import PROVIDERS, get_provider, pick_default
+from qagenius.test_case_depth import compute_depth
+from qagenius.test_case_diff import diff_cases
 from qagenius.test_case_exports import to_csv, to_xlsx
+from qagenius.test_case_refine import (
+    INSTRUCTION_LIMIT,
+    MAX_CASES,
+    merge_strengthened,
+    refine_user_text,
+    strengthen_instruction,
+)
 from qagenius.test_cases import (
     COVERAGE_FOCUS_OPTIONS,
     Criterion,
@@ -43,6 +52,8 @@ STORY_LIMIT = 3000
 CONTEXT_LIMIT = 1000
 CRITERIA_LIMIT = 40
 CRITERION_LIMIT = 1000
+CURRENT_JSON_LIMIT = 200000
+REFINE_MODES = ("strengthen", "instruction")
 
 app = FastAPI(title="QA-Genius v2")
 templates = Jinja2Templates(directory=BASE_DIR / "templates")
@@ -583,8 +594,8 @@ CATEGORY_PILLS = {
 PRIORITY_PILLS = {"High": "bad", "Medium": "warn", "Low": "ok"}
 
 
-class ExportRequest(BaseModel):
-    """Body of the export routes. The browser sends back what it was given."""
+class _SuiteBody(BaseModel):
+    """A test case list plus its criteria, as the browser hands it back."""
 
     result: TestCaseList
     criteria: list[str] = []
@@ -597,6 +608,21 @@ class ExportRequest(BaseModel):
         if any(len(text) > CRITERION_LIMIT for text in value):
             raise ValueError(f"Keep each criterion under {CRITERION_LIMIT} characters.")
         return value
+
+    @field_validator("result")
+    @classmethod
+    def _not_too_many_cases(cls, value: TestCaseList) -> TestCaseList:
+        if len(value.test_cases) > MAX_CASES:
+            raise ValueError(f"Send at most {MAX_CASES} test cases.")
+        return value
+
+
+class ExportRequest(_SuiteBody):
+    """Body of the export routes."""
+
+
+class RenderRequest(_SuiteBody):
+    """Body of the re-render route, used after accept and undo."""
 
 
 def _parse_criteria_json(raw: str) -> list[str] | None:
@@ -635,10 +661,12 @@ def _test_cases_result_context(
     criteria: list[Criterion],
     notes: list[str],
     provider_name: str,
+    is_example: bool = False,
 ) -> dict:
     """Everything the result card shows is computed here, never read from result.summary."""
     coverage = compute_coverage(result, criteria)
     counts = compute_counts(result)
+    depth = compute_depth(result, criteria)
     valid_ids = {criterion.id for criterion in criteria}
     cases = [
         {"case": test_case, "ac_ids": traced_ids(test_case, valid_ids)}
@@ -649,6 +677,7 @@ def _test_cases_result_context(
         "criteria": criteria,
         "coverage": coverage,
         "counts": counts,
+        "depth": depth,
         "categories": list(counts.by_category),
         "ac_text": {criterion.id: criterion.text for criterion in criteria},
         "category_pill": _category_pill,
@@ -658,6 +687,7 @@ def _test_cases_result_context(
             "result": result.model_dump(),
             "criteria": [criterion.text for criterion in criteria],
         },
+        "is_example": is_example,
         "notes": notes,
         "provider_name": provider_name,
     }
@@ -769,7 +799,9 @@ def test_cases_example(request: Request) -> HTMLResponse:
     return templates.TemplateResponse(
         request,
         "_test_cases_result.html",
-        _test_cases_result_context(result, criteria, [], "saved example"),
+        _test_cases_result_context(
+            result, criteria, [], "saved example", is_example=True
+        ),
     )
 
 
@@ -796,6 +828,261 @@ def test_cases_export_xlsx(payload: ExportRequest) -> Response:
         headers={
             "Content-Disposition": 'attachment; filename="qa-genius-test-cases.xlsx"'
         },
+    )
+
+
+def _refine_rows(
+    current: TestCaseList, proposed: TestCaseList, criteria: list[Criterion]
+) -> list[dict]:
+    """The before -> after line. Every number is computed, none comes from the AI."""
+    before_counts = compute_counts(current)
+    after_counts = compute_counts(proposed)
+    before_depth = compute_depth(current, criteria)
+    after_depth = compute_depth(proposed, criteria)
+    rows = [
+        ("Test cases", before_counts.total, after_counts.total, "up", ""),
+        (
+            "Coverage",
+            compute_coverage(current, criteria).percent,
+            compute_coverage(proposed, criteria).percent,
+            "up",
+            "%",
+        ),
+        (
+            "Thin criteria",
+            len(before_depth.thin_ids),
+            len(after_depth.thin_ids),
+            "down",
+            "",
+        ),
+        (
+            "Negative",
+            before_counts.by_category.get("Negative", 0),
+            after_counts.by_category.get("Negative", 0),
+            "up",
+            "",
+        ),
+        (
+            "Boundary",
+            before_counts.by_category.get("Boundary", 0),
+            after_counts.by_category.get("Boundary", 0),
+            "up",
+            "",
+        ),
+    ]
+    return [
+        {
+            "label": label,
+            "before": f"{before}{suffix}",
+            "after": f"{after}{suffix}",
+            "tone": _delta_tone(before, after, good),
+        }
+        for label, before, after, good, suffix in rows
+    ]
+
+
+def _delta_tone(before: int, after: int, good: str) -> str:
+    if after == before:
+        return "same"
+    improved = after > before if good == "up" else after < before
+    return "good" if improved else "bad"
+
+
+def _diff_context(
+    current: TestCaseList,
+    proposed: TestCaseList,
+    criteria: list[Criterion],
+    mode: str,
+    notes: list[str],
+    provider_name: str,
+) -> dict:
+    diff = diff_cases(current, proposed)
+    valid_ids = {criterion.id for criterion in criteria}
+    items = [
+        {
+            "item": item,
+            "case": item.after or item.before,
+            "ac_ids": traced_ids(item.after or item.before, valid_ids),
+        }
+        for item in diff.items
+    ]
+    return {
+        "diff": diff,
+        "items": items,
+        "rows": _refine_rows(current, proposed, criteria),
+        "mode": mode,
+        "ac_text": {criterion.id: criterion.text for criterion in criteria},
+        "category_pill": _category_pill,
+        "priority_pill": _priority_pill,
+        "field_labels": FIELD_LABELS,
+        "proposal": {
+            "result": proposed.model_dump(),
+            "criteria": [criterion.text for criterion in criteria],
+        },
+        "notes": notes,
+        "provider_name": provider_name,
+    }
+
+
+FIELD_LABELS = {
+    "title": "Title",
+    "category": "Category",
+    "priority": "Priority",
+    "pre_conditions": "Pre-conditions",
+    "steps": "Steps",
+    "expected_result": "Expected result",
+    "test_data": "Test data",
+    "bdd_scenario": "BDD scenario",
+    "traceability": "Traceability",
+}
+
+
+@app.post("/requirements/test-cases/render", response_class=HTMLResponse)
+def test_cases_render(request: Request, payload: RenderRequest) -> HTMLResponse:
+    """Re-draw the result card from a list the browser already holds. No AI call."""
+    criteria = number_criteria(payload.criteria)
+    return templates.TemplateResponse(
+        request,
+        "_test_cases_result.html",
+        _test_cases_result_context(payload.result, criteria, [], "your saved list"),
+    )
+
+
+def _parse_current(raw: str) -> TestCaseList | None:
+    """The posted test case list, or None when it is missing, huge or malformed."""
+    if not raw or len(raw) > CURRENT_JSON_LIMIT:
+        return None
+    try:
+        value = json.loads(raw)
+    except json.JSONDecodeError:
+        return None
+    try:
+        current = TestCaseList.model_validate(value)
+    except ValueError:
+        return None
+    if not current.test_cases or len(current.test_cases) > MAX_CASES:
+        return None
+    return current
+
+
+@app.post("/requirements/test-cases/refine", response_class=HTMLResponse)
+def test_cases_refine(
+    request: Request,
+    user_story: str = Form(default=""),
+    criteria_json: str = Form(default="[]"),
+    current_json: str = Form(default=""),
+    mode: str = Form(default="strengthen"),
+    instruction: str = Form(default=""),
+    coverage_focus: list[str] = Form(default=[]),
+) -> HTMLResponse:
+    bad_input = "Please check the test cases and instruction."
+    user_story = user_story.strip()
+    instruction = instruction.strip()
+    if not user_story or len(user_story) > STORY_LIMIT:
+        return _error_card(request, bad_input)
+    if mode not in REFINE_MODES:
+        return _error_card(request, bad_input)
+    if len(instruction) > INSTRUCTION_LIMIT:
+        return _error_card(request, bad_input)
+    if mode == "instruction" and not instruction:
+        return _error_card(
+            request, "Type what you want changed, then press Propose changes."
+        )
+    texts = _parse_criteria_json(criteria_json)
+    if texts is None:
+        return _error_card(request, bad_input)
+    if any(focus not in COVERAGE_FOCUS_OPTIONS for focus in coverage_focus):
+        return _error_card(request, bad_input)
+    current = _parse_current(current_json)
+    if current is None:
+        return _error_card(request, bad_input)
+
+    criteria = number_criteria(texts)
+    depth = compute_depth(current, criteria)
+    if mode == "strengthen" and not depth.thin_ids:
+        return HTMLResponse(
+            '<div class="card"><p class="muted">Every criterion already has '
+            "enough cases.</p></div>"
+        )
+
+    keys = _request_keys(request)
+    if not keys:
+        # The browser opens the keys drawer (HX-Trigger: open-keys).
+        return HTMLResponse(
+            '<p class="muted">Add an API key to ask for changes.</p>',
+            headers={"HX-Trigger": "open-keys"},
+        )
+
+    system, base_user = test_cases_prompt(user_story)
+    base = build_user_text(base_user, list(coverage_focus), criteria)
+    asked = instruction if mode == "instruction" else strengthen_instruction(depth)
+    user = refine_user_text(base, current, criteria, asked)
+    try:
+        ai_result, used_index, notes = llm.generate_json(
+            keys, system, user, TestCaseList
+        )
+    except llm.NoKeysError:
+        return HTMLResponse(
+            '<p class="muted">Add an API key to ask for changes.</p>',
+            headers={"HX-Trigger": "open-keys"},
+        )
+    except llm.AllKeysBusyError as e:
+        return _error_card(
+            request,
+            "All your keys are busy. Try again in a minute or add another key.",
+            e.notes,
+        )
+    except llm.InvalidKeyError as e:
+        return _error_card(
+            request,
+            "Your key was rejected. Check it on the Your API keys page "
+            "and try again.",
+            e.notes,
+        )
+    except llm.ModelUnavailableError as e:
+        return _error_card(
+            request,
+            "The AI model isn't available right now. Your keys are fine -- "
+            "QA-Genius needs a model update.",
+            e.notes,
+        )
+    except llm.ProviderError as e:
+        return _error_card(request, str(e))
+    except llm.BadOutputError as e:
+        return _error_card(request, str(e))
+
+    # Strengthen is additive: code drops any edit or deletion the AI tried.
+    proposed = (
+        merge_strengthened(current, ai_result) if mode == "strengthen" else ai_result
+    )
+    provider = get_provider(keys[used_index]["provider"])
+    return templates.TemplateResponse(
+        request,
+        "_test_cases_diff.html",
+        _diff_context(
+            current,
+            proposed,
+            criteria,
+            mode,
+            notes,
+            provider["name"] if provider else "unknown provider",
+        ),
+    )
+
+
+@app.get("/requirements/test-cases/example-strengthen", response_class=HTMLResponse)
+def test_cases_example_strengthen(request: Request) -> HTMLResponse:
+    """What Strengthen does to the saved example. No key needed, no AI call."""
+    current, criteria = _test_cases_sample()
+    with open(SAMPLES_DIR / "test_cases_strengthened.json", encoding="utf-8") as f:
+        sample = json.load(f)
+    proposed = TestCaseList.model_validate(sample["result"])
+    return templates.TemplateResponse(
+        request,
+        "_test_cases_diff.html",
+        _diff_context(
+            current, proposed, criteria, "strengthen", [], "saved example"
+        ),
     )
 
 # Served from the site root (e.g. /style.css). On Vercel the CDN serves

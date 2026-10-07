@@ -101,7 +101,7 @@ class Counts:
     by_priority: dict[str, int]
 
 
-def _normalise(value: str) -> str:
+def normalise_label(value: str) -> str:
     """'edge case ' -> 'Edge Case'."""
     return " ".join(str(value or "").split()).title()
 
@@ -109,7 +109,7 @@ def _normalise(value: str) -> str:
 def _tally(values: list[str], first: tuple[str, ...]) -> dict[str, int]:
     counts: dict[str, int] = {}
     for value in values:
-        name = _normalise(value)
+        name = normalise_label(value)
         if not name:
             continue
         counts[name] = counts.get(name, 0) + 1

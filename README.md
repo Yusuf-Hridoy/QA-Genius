@@ -29,6 +29,17 @@ cell that starts with = + - or @ so a spreadsheet cannot run it as a
 formula. The run lives in your browser's sessionStorage only — the server
 never stores it.
 
+Coverage only says a criterion was touched, so the card also shows
+**depth**: how many cases reach each criterion and whether any of them is
+negative or boundary; a criterion with one happy-path case is marked thin.
+**Strengthen thin criteria** asks the AI for just the missing kinds of case
+and is additive by construction — code keeps every existing case exactly as
+it was and drops any edit or deletion the AI attempted. **Refine…** takes an
+instruction in your own words; either way the proposal arrives as a
+before/after view with added, changed and removed cases counted in code,
+which you can **Accept** or **Keep current**, and **Undo last change**
+steps back through the last five accepted lists.
+
 ## Troubleshooting
 - `python scripts/check_key.py` checks one provider key with a tiny JSON
   request. It asks for the provider id and the key (hidden while typing)

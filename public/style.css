@@ -183,3 +183,23 @@ tr.diff-row td:first-child{border-left:4px solid #E0A82E}
 .tc-form legend{padding:0}
 .check{display:inline-flex;align-items:center;gap:4px;margin-right:14px;
   font-size:14px;color:var(--text-2)}
+
+/* Depth, refine panel and the before/after view */
+.depth-line{font-weight:600;margin:6px 0}
+.depth-line.thin{color:var(--warn-fg)}
+.depth-line.solid{color:var(--ok-fg)}
+.pill.small{font-size:11px;padding:2px 8px}
+#refine-panel{margin-top:12px}
+.proposal{border-left:4px solid var(--accent)}
+.delta-line{margin:8px 0;font-size:14px}
+.delta{font-weight:600}
+.delta.good{color:var(--ok-fg)}
+.delta.bad{color:var(--bad-fg)}
+.delta.same{color:var(--text-2)}
+.diff-added{border-left:4px solid var(--ok-fg)}
+.diff-changed{border-left:4px solid var(--warn-fg)}
+.diff-removed{border-left:4px solid var(--bad-fg)}
+.field-change{margin:10px 0;padding-left:10px;border-left:1px solid var(--border)}
+.field-change p{margin:2px 0}
+.before,.tc-steps.before li{color:var(--muted);text-decoration:line-through}
+.after{color:var(--text)}

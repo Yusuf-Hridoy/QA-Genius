@@ -7,6 +7,7 @@
 
   var RUN_KEY = "qag.run";
   var FOCUS_OPTIONS = ["Functional", "Negative", "Boundary", "Edge Case"];
+  var HISTORY_MAX = 5;
 
   function readRun() {
     try {
@@ -401,6 +402,9 @@
       run.autorun_test_cases = false;
       writeRun(run);
       if (window.htmx) window.htmx.trigger(form, "submit");
+    } else if (run.test_cases && run.test_cases.result) {
+      /* A refresh keeps whatever list the user last accepted. */
+      renderList(run.test_cases);
     }
   }
 
@@ -471,6 +475,114 @@
       });
   }
 
+  /* ---------- the displayed list, its history, and proposals ---------- */
+
+  /* Read the list the result card is showing right now. */
+  function displayedList() {
+    var holder = document.getElementById("tc-data");
+    if (!holder) return null;
+    try {
+      return JSON.parse(holder.textContent);
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function proposedList() {
+    var holder = document.getElementById("tc-proposed");
+    if (!holder) return null;
+    try {
+      return JSON.parse(holder.textContent);
+    } catch (e) {
+      return null;
+    }
+  }
+
+  /* Remember what is on screen. A fresh list starts its history over. */
+  function rememberDisplayed(fresh) {
+    var shown = displayedList();
+    if (!shown) return;
+    var run = readRun() || {};
+    run.test_cases = shown;
+    if (fresh) run.test_cases_history = [];
+    writeRun(run);
+    showUndo();
+  }
+
+  function showUndo() {
+    var button = document.getElementById("undo-btn");
+    if (!button) return;
+    var run = readRun() || {};
+    var history = run.test_cases_history || [];
+    button.hidden = history.length === 0;
+  }
+
+  /* Draw a list the browser already holds. The HTML comes from the server. */
+  function renderList(payload) {
+    var target = document.getElementById("test-cases-output");
+    if (!target || !payload) return;
+    fetch("/requirements/test-cases/render", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    })
+      .then(function (response) {
+        if (!response.ok) throw new Error("render failed");
+        return response.text();
+      })
+      .then(function (html) {
+        target.innerHTML = html;
+        if (window.htmx) window.htmx.process(target);
+        showUndo();
+      })
+      .catch(function () {
+        /* Leave what is on screen alone; the saved run is still intact. */
+      });
+  }
+
+  function acceptChanges() {
+    var proposal = proposedList();
+    if (!proposal) return;
+    var run = readRun() || {};
+    var history = run.test_cases_history || [];
+    if (run.test_cases) {
+      history.push(run.test_cases);
+      while (history.length > HISTORY_MAX) history.shift();
+    }
+    run.test_cases_history = history;
+    run.test_cases = proposal;
+    writeRun(run);
+    clearProposal();
+    renderList(proposal);
+  }
+
+  function undoLastChange() {
+    var run = readRun() || {};
+    var history = run.test_cases_history || [];
+    if (!history.length) return;
+    var previous = history.pop();
+    run.test_cases_history = history;
+    run.test_cases = previous;
+    writeRun(run);
+    clearProposal();
+    renderList(previous);
+  }
+
+  function clearProposal() {
+    var panel = document.getElementById("tc-proposal");
+    if (panel) panel.textContent = "";
+  }
+
+  function toggleRefinePanel(open) {
+    var panel = document.getElementById("refine-panel");
+    if (!panel) return;
+    panel.hidden = !open;
+    if (open) {
+      var box = document.getElementById("refine-instruction");
+      if (box) box.focus();
+    }
+  }
+
   document.addEventListener("click", function (event) {
     if (closest(event.target, "#use-criteria")) {
       useCriteria();
@@ -487,6 +599,80 @@
     }
     if (closest(event.target, "#download-xlsx")) {
       download("xlsx", "qa-genius-test-cases.xlsx");
+      return;
+    }
+    if (closest(event.target, "#refine-open")) {
+      toggleRefinePanel(true);
+      return;
+    }
+    if (closest(event.target, "#refine-cancel")) {
+      toggleRefinePanel(false);
+      return;
+    }
+    if (closest(event.target, "#accept-changes")) {
+      acceptChanges();
+      return;
+    }
+    if (closest(event.target, "#keep-current")) {
+      clearProposal();
+      return;
+    }
+    if (closest(event.target, "#undo-btn")) {
+      undoLastChange();
+    }
+  });
+
+  document.addEventListener("input", function (event) {
+    var box = closest(event.target, "#refine-instruction");
+    if (!box) return;
+    var counter = document.getElementById("refine-count");
+    if (counter) counter.textContent = String(box.value.length);
+  });
+
+  /* Strengthen and Refine post the list the browser holds, never the server. */
+  document.addEventListener("htmx:configRequest", function (event) {
+    var detail = event.detail;
+    if (!detail || !detail.path) return;
+    if (detail.path.indexOf("/requirements/test-cases/refine") === -1) return;
+    var run = readRun() || {};
+    var current = run.test_cases || displayedList() || {};
+    var source = detail.elt ? detail.elt.id : "";
+    var instruction = "";
+    var box = document.getElementById("refine-instruction");
+    if (source === "refine-submit" && box) instruction = box.value;
+    detail.parameters.user_story = run.story || "";
+    detail.parameters.criteria_json = JSON.stringify(
+      current.criteria || nonEmpty(run)
+    );
+    detail.parameters.current_json = JSON.stringify(current.result || {});
+    detail.parameters.mode = source === "refine-submit" ? "instruction" : "strengthen";
+    detail.parameters.instruction = instruction;
+    detail.parameters.coverage_focus = checkedFocus();
+  });
+
+  function checkedFocus() {
+    var boxes = document.querySelectorAll(
+      '#tc-form input[name="coverage_focus"]:checked'
+    );
+    var values = [];
+    Array.prototype.forEach.call(boxes, function (box) {
+      values.push(box.value);
+    });
+    return values.length ? values : FOCUS_OPTIONS.slice();
+  }
+
+  document.addEventListener("htmx:afterSwap", function (event) {
+    var detail = event.detail;
+    var path = detail && detail.pathInfo ? detail.pathInfo.requestPath : "";
+    if (!path && detail && detail.xhr) path = detail.xhr.responseURL || "";
+    if (path.indexOf("/requirements/test-cases/run") !== -1) {
+      rememberDisplayed(true);
+    } else if (path.indexOf("/requirements/test-cases/example-strengthen") !== -1) {
+      /* A proposal, not a list: nothing to remember. */
+    } else if (path.indexOf("/requirements/test-cases/example") !== -1) {
+      rememberDisplayed(true);
+    } else if (path.indexOf("/requirements/test-cases/render") !== -1) {
+      rememberDisplayed(false);
     }
   });
 
