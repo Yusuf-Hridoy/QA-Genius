@@ -1,6 +1,6 @@
 """Shared builders for test-case fixtures. Not a test module; pytest does not collect it."""
 
-from qagenius.models import TestCase, TestCaseList, TestSuiteSummary
+from qagenius.models import AutomationScript, TestCase, TestCaseList, TestSuiteSummary
 from qagenius.test_cases import Criterion, number_criteria
 
 
@@ -75,3 +75,25 @@ def real_run() -> tuple[TestCaseList, list[Criterion]]:
         for cid, category, trace, title in _REAL_RUN_CASES
     ]
     return suite(*cases), number_criteria(REAL_RUN_CRITERIA)
+
+
+def script(**overrides) -> AutomationScript:
+    """A complete, valid automation project. Any field can be overridden by keyword."""
+    values = {
+        "framework": "Playwright (JavaScript) with TypeScript",
+        "project_structure": ["pages/LoginPage.ts", "tests/login.spec.ts"],
+        "page_object_file_name": "pages/LoginPage.ts",
+        "page_object_code": "export class LoginPage {}\n",
+        "test_file_name": "tests/login.spec.ts",
+        "test_code": "test('TC-001: the account locks', async () => {});\n",
+        "conftest_file_name": None,
+        "conftest_code": None,
+        "config_file_name": "playwright.config.ts",
+        "config_code": "export default { testDir: './tests' };\n",
+        "requirements_txt": None,
+        "setup_instructions": ["npm install", "npx playwright install"],
+        "execution_command": "npx playwright test",
+        "design_notes": "Role-based locators, one test per test case.",
+    }
+    values.update(overrides)
+    return AutomationScript(**values)

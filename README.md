@@ -40,6 +40,23 @@ before/after view with added, changed and removed cases counted in code,
 which you can **Accept** or **Keep current**, and **Undo last change**
 steps back through the last five accepted lists.
 
+## Automation
+Step 3 cards carry a checkbox, so you can tick up to twelve cases and hit
+**Automate selected →** to reach step 4, where you choose a framework and
+language (Playwright, Cypress or Selenium), Page Object Model or flat
+scripts, the browsers to run, and an optional base URL. The AI writes the
+project; code then checks it, as always. **Traceability** reports how many
+of the selected cases have a test that names their id, listing any that do
+not. Python files are parsed with `ast.parse`, so `valid` there means it
+really parses; TypeScript and JavaScript only get a **basic check** that
+brackets, quotes and comments balance — it is not a compile and not a type
+check, and the result card says so. Any `waitForTimeout`, `time.sleep`,
+numeric `cy.wait` or `Thread.sleep` is flagged as a fixed-wait warning with
+its file and line. **Download ZIP** packs every file under one folder, with
+a README carrying the setup steps, the run command and the same checks; the
+file names the AI chose are cleaned first, so nothing can be written outside
+that folder.
+
 ## Troubleshooting
 - `python scripts/check_key.py` checks one provider key with a tiny JSON
   request. It asks for the provider id and the key (hidden while typing)

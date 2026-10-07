@@ -1,0 +1,83 @@
+<div class="stat-row">
+  <div class="stat"><div class="num">{{ report.files | length }}</div><div class="lbl">Files</div></div>
+  <div class="stat"><div class="num">{{ report.traced | length }} / {{ traced_total }}</div><div class="lbl">Tests traced</div></div>
+  <div class="stat"><div class="num">{{ syntax_label }}</div><div class="lbl">Syntax</div></div>
+  <div class="stat"><div class="num">{{ warnings | length }}</div><div class="lbl">Warnings</div></div>
+</div>
+<div class="card">
+  <h2>Checks</h2>
+  <p>{{ report.traced | length }} of {{ traced_total }} selected test cases have a matching test</p>
+  <p class="row">
+    {% for case_id in report.traced %}<span class="pill ok">{{ case_id }}</span>{% endfor %}
+    {% for case_id in report.missing %}<span class="pill bad">No test mentions {{ case_id }}</span>{% endfor %}
+  </p>
+  <table class="grid">
+    <tr><th>File</th><th>Syntax</th></tr>
+    {% for file in report.files %}
+    {% set status = report.syntax.get(file.name, "not checked") %}
+    <tr>
+      <td class="mono small">{{ file.name }}</td>
+      <td>
+        {% if status == "error" %}<span class="pill bad">error</span>
+        {% elif status == "not checked" %}<span class="pill neutral">not checked</span>
+        {% else %}<span class="pill ok">{{ status }}</span>{% endif %}
+      </td>
+    </tr>
+    {% endfor %}
+  </table>
+  {% if report.findings %}
+  <ul class="findings">
+    {% for finding in report.findings %}
+    <li class="{{ finding.level }}">
+      <span class="mono small">{{ finding.file }}{% if finding.line %}:{{ finding.line }}{% endif %}</span>
+      — {{ finding.message }}
+    </li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+  <p class="muted small">Python is parsed; TypeScript/JavaScript get a basic bracket and quote check, not a full compile.</p>
+</div>
+<div class="card">
+  <h2>Files</h2>
+  <div class="file-view">
+    <div class="file-list">
+      {% for file in report.files %}
+      <button type="button" class="file-tab{% if loop.first %} now{% endif %}" data-file="{{ loop.index0 }}">{{ file.name }}</button>
+      {% endfor %}
+    </div>
+    <div class="file-code">
+      <div class="row">
+        <button type="button" class="btn btn-small" id="copy-code">Copy</button>
+        <span class="muted small" id="copy-status" aria-live="polite"></span>
+      </div>
+      {% for file in report.files %}
+      <pre class="code file-body" data-file="{{ loop.index0 }}"{% if not loop.first %} hidden{% endif %}><code>{{ file.code }}</code></pre>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+<div class="card">
+  <h2>Run it</h2>
+  <ol class="setup-steps">
+    {% for step in script.setup_instructions %}<li>{{ step }}</li>{% endfor %}
+  </ol>
+  <pre class="code"><code id="run-command">{{ script.execution_command }}</code></pre>
+  <div class="row">
+    <button type="button" class="btn btn-small" id="copy-command">Copy</button>
+    <span class="muted small" id="command-status" aria-live="polite"></span>
+  </div>
+</div>
+{% if script.design_notes %}
+<details class="card"><summary>Design notes</summary><p class="muted">{{ script.design_notes }}</p></details>
+{% endif %}
+<script type="application/json" id="automation-data">{{ automation_data | tojson }}</script>
+<div class="card">
+  <div class="row">
+    <button type="button" class="btn" id="download-zip">Download ZIP</button>
+  </div>
+  <p class="muted small" id="automation-status" aria-live="polite"></p>
+  {% if notes %}
+  <p class="muted small">{{ notes | join(" · ") }}</p>
+  {% endif %}
+  <p class="muted small">Answered by {{ provider_name }}.</p>
+</div>

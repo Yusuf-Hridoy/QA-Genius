@@ -1,14 +1,14 @@
 {% extends "base.html" %}
-{% block title %}Test cases — QA-Genius{% endblock %}
-{% block top_title %}Requirements · Test cases{% endblock %}
+{% block title %}Automation — QA-Genius{% endblock %}
+{% block top_title %}Requirements · Automation{% endblock %}
 {% block content %}
 <ol class="steps">
   <li class="done"><a href="/requirements/story">1 · Story</a></li>
   <li class="done"><a href="/requirements/criteria">2 · Acceptance criteria</a></li>
-  <li class="now">3 · Test cases</li>
-  <li><a href="/requirements/automation">4 · Automation</a></li>
+  <li class="done"><a href="/requirements/test-cases">3 · Test cases</a></li>
+  <li class="now">4 · Automation</li>
 </ol>
-<div id="test-cases-root"></div>
-<div id="test-cases-output"></div>
+<div id="automation-root"></div>
+<div id="automation-output"></div>
 {% endblock %}
 {% block scripts %}<script src="/requirements_flow.js" defer></script>{% endblock %}

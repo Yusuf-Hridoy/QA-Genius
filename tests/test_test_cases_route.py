@@ -265,7 +265,6 @@ def test_step_bar_links_between_steps() -> None:
     body = client.get("/requirements/criteria").text
     assert '<a href="/requirements/story">1 \u00b7 Story</a>' in body
     assert '<a href="/requirements/test-cases">3 \u00b7 Test cases</a>' in body
-    # The current step is marked, and step 4 is not a link yet.
+    # The current step is marked, and step 4 is a link now that automation exists.
     assert '<li class="now">2 \u00b7 Acceptance criteria</li>' in body
-    assert "4 \u00b7 Automation" in body
-    assert '<a href="/requirements/automation"' not in body
+    assert '<a href="/requirements/automation">4 \u00b7 Automation</a>' in body

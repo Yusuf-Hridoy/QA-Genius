@@ -73,9 +73,18 @@
   {% endfor %}
 </div>
 {% endif %}
+<div class="card" id="tc-select-bar">
+  <div class="row">
+    <button type="button" class="btn btn-small" id="select-all-cases">Select all</button>
+    <button type="button" class="btn btn-small" id="clear-selected-cases">Clear</button>
+    <span class="muted small" id="selected-count" aria-live="polite">0 selected</span>
+    <button type="button" class="btn" id="automate-selected" disabled>Automate selected →</button>
+  </div>
+  <p class="muted small" id="select-hint"></p>
+</div>
 <div id="tc-list">
   {% for item in cases %}
-  {% with card_case = item.case, card_ac_ids = item.ac_ids %}{% include "_test_case_card.html" %}{% endwith %}
+  {% with card_case = item.case, card_ac_ids = item.ac_ids, card_select = true %}{% include "_test_case_card.html" %}{% endwith %}
   {% endfor %}
 </div>
 <script type="application/json" id="tc-data">{{ tc_data | tojson }}</script>

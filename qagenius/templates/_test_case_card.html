@@ -1,5 +1,5 @@
 <div class="card tc-card{% if card_class %} {{ card_class }}{% endif %}" data-category="{{ card_case.category }}">
-  <h3>{{ card_case.id }} · {{ card_case.title }}</h3>
+  <h3>{% if card_select %}<input type="checkbox" class="tc-select" data-case-id="{{ card_case.id }}" aria-label="Select {{ card_case.id }}"> {% endif %}{{ card_case.id }} · {{ card_case.title }}</h3>
   <p class="row">
     <span class="pill {{ category_pill(card_case.category) }}">{{ card_case.category }}</span>
     <span class="pill {{ priority_pill(card_case.priority) }}">{{ card_case.priority }}</span>

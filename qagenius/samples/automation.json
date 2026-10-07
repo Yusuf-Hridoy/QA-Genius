@@ -1,0 +1,32 @@
+{
+  "selected_ids": [
+    "TC-001",
+    "TC-003",
+    "TC-004"
+  ],
+  "script": {
+    "framework": "Playwright (TypeScript)",
+    "project_structure": [
+      "pages/LoginPage.ts",
+      "tests/login-lockout.spec.ts",
+      "playwright.config.ts"
+    ],
+    "page_object_file_name": "pages/LoginPage.ts",
+    "page_object_code": "import { expect, Locator, Page } from '@playwright/test';\n\nexport class LoginPage {\n  readonly page: Page;\n  readonly emailInput: Locator;\n  readonly passwordInput: Locator;\n  readonly signInButton: Locator;\n  readonly errorMessage: Locator;\n\n  constructor(page: Page) {\n    this.page = page;\n    this.emailInput = page.getByLabel('Email');\n    this.passwordInput = page.getByLabel('Password');\n    this.signInButton = page.getByRole('button', { name: 'Sign in' });\n    this.errorMessage = page.getByRole('alert');\n  }\n\n  async goto(): Promise<void> {\n    await this.page.goto('/sign-in');\n    await expect(this.emailInput).toBeVisible();\n  }\n\n  async signIn(email: string, password: string): Promise<void> {\n    await this.emailInput.fill(email);\n    await this.passwordInput.fill(password);\n    await this.signInButton.click();\n  }\n\n  async failSignIn(email: string, times: number): Promise<void> {\n    for (let attempt = 1; attempt <= times; attempt += 1) {\n      await this.signIn(email, 'wrong-password-' + attempt);\n      await expect(this.errorMessage).toBeVisible();\n    }\n  }\n\n  async expectAccountPage(): Promise<void> {\n    await expect(this.page.getByRole('heading', { name: 'Your account' })).toBeVisible();\n  }\n\n  async signOut(): Promise<void> {\n    await this.page.getByRole('button', { name: 'Sign out' }).click();\n  }\n}\n",
+    "test_file_name": "tests/login-lockout.spec.ts",
+    "test_code": "import { expect, test } from '@playwright/test';\nimport { LoginPage } from '../pages/LoginPage';\n\nconst shopper = 'dana.reed@example.com';\nconst goodPassword = 'Aurora-Storefront-1';\n\ntest('TC-001: Account locks on the fifth wrong password within 10 minutes', async ({ page }) => {\n  const login = new LoginPage(page);\n  await login.goto();\n\n  await login.failSignIn(shopper, 5);\n\n  await expect(login.errorMessage).toContainText('locked');\n});\n\ntest('TC-003: Lockout message names the 30 minute duration', async ({ page }) => {\n  const login = new LoginPage(page);\n  await login.goto();\n\n  await login.failSignIn(shopper, 5);\n\n  await expect(login.errorMessage).toContainText('30 minutes');\n});\n\ntest('TC-004: Successful sign-in resets the failed attempt counter', async ({ page }) => {\n  const login = new LoginPage(page);\n  await login.goto();\n\n  await login.failSignIn(shopper, 4);\n  await login.signIn(shopper, goodPassword);\n  await login.expectAccountPage();\n  await login.signOut();\n\n  // The counter is cleared in the background; wait for that call instead of this pause.\n  await page.waitForTimeout(1000);\n\n  await login.goto();\n  await login.failSignIn(shopper, 4);\n  await login.signIn(shopper, goodPassword);\n  await login.expectAccountPage();\n});\n",
+    "conftest_file_name": null,
+    "conftest_code": null,
+    "config_file_name": "playwright.config.ts",
+    "config_code": "import { defineConfig, devices } from '@playwright/test';\n\nexport default defineConfig({\n  testDir: './tests',\n  timeout: 30000,\n  expect: { timeout: 5000 },\n  retries: 1,\n  reporter: [['list'], ['html', { open: 'never' }]],\n  use: {\n    baseURL: 'https://staging.aurora-shop.dev',\n    screenshot: 'only-on-failure',\n    trace: 'retain-on-failure',\n  },\n  projects: [\n    { name: 'chromium', use: { ...devices['Desktop Chrome'] } },\n  ],\n});\n",
+    "requirements_txt": null,
+    "setup_instructions": [
+      "npm init -y",
+      "npm install --save-dev @playwright/test typescript",
+      "npx playwright install chromium",
+      "Copy pages/ , tests/ and playwright.config.ts into the project root"
+    ],
+    "execution_command": "npx playwright test",
+    "design_notes": "Role and label locators keep the tests readable when the markup changes. The repeated sign-in failures live on the page object so each test reads as one scenario. Only chromium is configured; add projects to playwright.config.ts for more browsers."
+  }
+}

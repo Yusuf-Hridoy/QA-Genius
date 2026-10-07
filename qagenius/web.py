@@ -7,21 +7,25 @@ from fastapi import FastAPI, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, ValidationError, field_validator
 
 import openai
 from markupsafe import Markup
 
-from qagenius import duel, llm
+from qagenius import automation, duel, llm
+from qagenius.automation_checks import CheckReport, check_project
+from qagenius.automation_exports import build_zip
 from qagenius.duel import NOT_STATED_A, NOT_STATED_B, DuelResult, build_highlights
 from qagenius.models import (
     AmbiguityAnalysis,
+    AutomationScript,
     DuelComparison,
     Interpretation,
+    TestCase,
     TestCaseList,
 )
 from qagenius.numbers import match_numbers
-from qagenius.prompts import story_check_prompt, test_cases_prompt
+from qagenius.prompts import automation_prompt, story_check_prompt, test_cases_prompt
 from qagenius.providers import PROVIDERS, get_provider, pick_default
 from qagenius.test_case_depth import compute_depth
 from qagenius.test_case_diff import diff_cases
@@ -54,6 +58,9 @@ CRITERIA_LIMIT = 40
 CRITERION_LIMIT = 1000
 CURRENT_JSON_LIMIT = 200000
 REFINE_MODES = ("strengthen", "instruction")
+SELECTED_JSON_LIMIT = 100000
+EXPORT_BODY_LIMIT = 500000
+BASE_URL_LIMIT = 200
 
 app = FastAPI(title="QA-Genius v2")
 templates = Jinja2Templates(directory=BASE_DIR / "templates")
@@ -1084,6 +1091,236 @@ def test_cases_example_strengthen(request: Request) -> HTMLResponse:
             current, proposed, criteria, "strengthen", [], "saved example"
         ),
     )
+
+def _parse_selected(raw: str) -> list[TestCase] | None:
+    """The posted test cases, or None when the payload is not 1..12 valid cases."""
+    if len(raw or "") > SELECTED_JSON_LIMIT:
+        return None
+    try:
+        value = json.loads(raw or "[]")
+    except json.JSONDecodeError:
+        return None
+    if not isinstance(value, list):
+        return None
+    if not 1 <= len(value) <= automation.MAX_SELECTED:
+        return None
+    try:
+        return [TestCase.model_validate(item) for item in value]
+    except ValidationError:
+        return None
+
+
+def _valid_base_url(base_url: str) -> bool:
+    """Empty is fine. Anything else must be a short http(s) URL."""
+    text = (base_url or "").strip()
+    if not text:
+        return True
+    if len(text) > BASE_URL_LIMIT:
+        return False
+    return text.startswith("http://") or text.startswith("https://")
+
+
+def _browsers_text(framework: str, browsers: list[str]) -> str:
+    """The browsers line for the prompt. Only Playwright runs more than one."""
+    if not framework.startswith("Playwright"):
+        return "chromium"
+    picked = [name for name in automation.BROWSER_OPTIONS if name in browsers]
+    return ", ".join(picked) or "chromium"
+
+
+def _automation_result_context(
+    script: AutomationScript,
+    report: CheckReport,
+    selected_ids: list[str],
+    notes: list[str],
+    provider_name: str,
+    is_example: bool = False,
+) -> dict:
+    warnings = [finding for finding in report.findings if finding.level == "warning"]
+    errors = [finding for finding in report.findings if finding.level == "error"]
+    return {
+        "script": script,
+        "report": report,
+        "selected_ids": selected_ids,
+        "traced_total": len(report.traced) + len(report.missing),
+        "warnings": warnings,
+        "errors": errors,
+        "syntax_label": "all valid" if not errors else f"{len(errors)} error"
+        + ("s" if len(errors) != 1 else ""),
+        "notes": notes,
+        "provider_name": provider_name,
+        "is_example": is_example,
+        # What the Download ZIP button posts back to the export route.
+        "automation_data": {
+            "script": script.model_dump(),
+            "selected_ids": selected_ids,
+        },
+    }
+
+
+@app.get("/requirements/automation", response_class=HTMLResponse)
+def automation_page(request: Request) -> HTMLResponse:
+    """Step 4. The page is empty; the browser fills it from sessionStorage."""
+    return templates.TemplateResponse(
+        request, "automation.html", {"active": "requirements"}
+    )
+
+
+@app.post("/requirements/automation/run", response_class=HTMLResponse)
+def automation_run(
+    request: Request,
+    selected_json: str = Form(default="[]"),
+    framework_choice: str = Form(default=""),
+    structure_choice: str = Form(default=""),
+    browsers: list[str] = Form(default=[]),
+    base_url: str = Form(default=""),
+) -> HTMLResponse:
+    cases = _parse_selected(selected_json)
+    settings_ok = (
+        cases is not None
+        and framework_choice in automation.FRAMEWORK_OPTIONS
+        and structure_choice in automation.STRUCTURE_OPTIONS
+        and all(name in automation.BROWSER_OPTIONS for name in browsers)
+        and _valid_base_url(base_url)
+    )
+    if not settings_ok or cases is None:
+        return _error_card(
+            request, "Please check the selected test cases and settings."
+        )
+    keys = _request_keys(request)
+    if not keys:
+        # The browser opens the keys drawer (HX-Trigger: open-keys).
+        return HTMLResponse(
+            '<p class="muted">Add an API key to write automation.</p>',
+            headers={"HX-Trigger": "open-keys"},
+        )
+
+    framework, language = automation.FRAMEWORK_OPTIONS[framework_choice]
+    structure = automation.STRUCTURE_OPTIONS[structure_choice]
+    site_type = f"Custom web app at {automation.effective_base_url(base_url)}"
+    scenario = automation.build_scenario(cases)
+    system, base_user = automation_prompt(
+        scenario,
+        framework,
+        language,
+        structure,
+        _browsers_text(framework, list(browsers)),
+        site_type,
+    )
+    user = automation.build_user_text(base_user, cases, base_url)
+    try:
+        script, used_index, notes = llm.generate_json(
+            keys, system, user, AutomationScript
+        )
+    except llm.NoKeysError:
+        return HTMLResponse(
+            '<p class="muted">Add an API key to write automation.</p>',
+            headers={"HX-Trigger": "open-keys"},
+        )
+    except llm.AllKeysBusyError as e:
+        return _error_card(
+            request,
+            "All your keys are busy. Try again in a minute or add another key.",
+            e.notes,
+        )
+    except llm.InvalidKeyError as e:
+        return _error_card(
+            request,
+            "Your key was rejected. Check it on the Your API keys page "
+            "and try again.",
+            e.notes,
+        )
+    except llm.ModelUnavailableError as e:
+        return _error_card(
+            request,
+            "The AI model isn't available right now. Your keys are fine -- "
+            "QA-Genius needs a model update.",
+            e.notes,
+        )
+    except llm.ProviderError as e:
+        return _error_card(request, str(e))
+    except llm.BadOutputError as e:
+        return _error_card(request, str(e))
+
+    selected_ids = [case.id for case in cases]
+    report = check_project(script, selected_ids)
+    provider = get_provider(keys[used_index]["provider"])
+    return templates.TemplateResponse(
+        request,
+        "_automation_result.html",
+        _automation_result_context(
+            script,
+            report,
+            selected_ids,
+            notes,
+            provider["name"] if provider else "unknown provider",
+        ),
+    )
+
+
+def _automation_sample() -> tuple[AutomationScript, list[str]]:
+    with open(SAMPLES_DIR / "automation.json", encoding="utf-8") as f:
+        sample = json.load(f)
+    return (
+        AutomationScript.model_validate(sample["script"]),
+        [str(one) for one in sample["selected_ids"]],
+    )
+
+
+@app.get("/requirements/automation/example", response_class=HTMLResponse)
+def automation_example(request: Request) -> HTMLResponse:
+    """Load example: a saved project. No key needed, no AI call."""
+    script, selected_ids = _automation_sample()
+    report = check_project(script, selected_ids)
+    return templates.TemplateResponse(
+        request,
+        "_automation_result.html",
+        _automation_result_context(
+            script, report, selected_ids, [], "saved example", is_example=True
+        ),
+    )
+
+
+class AutomationExportRequest(BaseModel):
+    """Body of the ZIP route, as the browser hands it back."""
+
+    script: AutomationScript
+    selected_ids: list[str] = []
+
+    @field_validator("selected_ids")
+    @classmethod
+    def _within_limits(cls, value: list[str]) -> list[str]:
+        if len(value) > automation.MAX_SELECTED:
+            raise ValueError(f"Send at most {automation.MAX_SELECTED} test case ids.")
+        return value
+
+
+@app.post("/requirements/automation/export.zip")
+async def automation_export_zip(request: Request) -> Response:
+    raw = await request.body()
+    if len(raw) > EXPORT_BODY_LIMIT:
+        return Response(
+            content='{"detail":"That project is too large to pack."}',
+            media_type="application/json",
+            status_code=422,
+        )
+    try:
+        payload = AutomationExportRequest.model_validate_json(raw)
+    except ValidationError:
+        return Response(
+            content='{"detail":"Could not read the project."}',
+            media_type="application/json",
+            status_code=422,
+        )
+    report = check_project(payload.script, payload.selected_ids)
+    return Response(
+        content=build_zip(payload.script, report),
+        media_type="application/zip",
+        headers={
+            "Content-Disposition": 'attachment; filename="qa-genius-automation.zip"'
+        },
+    )
+
 
 # Served from the site root (e.g. /style.css). On Vercel the CDN serves
 # public/ first; locally this mount serves the same files. It must stay

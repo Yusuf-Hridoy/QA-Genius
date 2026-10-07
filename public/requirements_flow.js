@@ -1,4 +1,4 @@
-/* QA-Genius v2: the Requirements flow (story -> criteria -> test cases).
+/* QA-Genius v2: the Requirements flow (story -> criteria -> test cases -> automation).
  * The run lives in sessionStorage under "qag.run" and never reaches the
  * server as stored state. Criterion ids are always recomputed from position,
  * so AC-1..AC-n follow the order on screen. */
@@ -8,6 +8,18 @@
   var RUN_KEY = "qag.run";
   var FOCUS_OPTIONS = ["Functional", "Negative", "Boundary", "Edge Case"];
   var HISTORY_MAX = 5;
+  var MAX_SELECTED = 12;
+  /* These must match FRAMEWORK_OPTIONS, STRUCTURE_OPTIONS and BROWSER_OPTIONS
+   * in qagenius/automation.py; the server refuses anything else. */
+  var FRAMEWORK_CHOICES = [
+    "Playwright · TypeScript",
+    "Playwright · JavaScript",
+    "Playwright · Python",
+    "Cypress · JavaScript",
+    "Selenium · Python"
+  ];
+  var STRUCTURE_CHOICES = ["Page Object Model", "Flat scripts"];
+  var BROWSER_CHOICES = ["chromium", "firefox", "webkit"];
 
   function readRun() {
     try {
@@ -475,6 +487,330 @@
       });
   }
 
+  /* ---------- step 4: settings, the generated project, the ZIP ---------- */
+
+  function selectEl(name, options, value) {
+    var box = el("select");
+    box.name = name;
+    box.id = name;
+    options.forEach(function (option) {
+      var item = el("option", null, option);
+      item.value = option;
+      if (option === value) item.selected = true;
+      box.appendChild(item);
+    });
+    return box;
+  }
+
+  function labelled(text, control) {
+    var field = el("div", "field");
+    var label = el("label", null, text);
+    label.setAttribute("for", control.id);
+    field.appendChild(label);
+    field.appendChild(control);
+    return field;
+  }
+
+  function selectedCasesCard(cases) {
+    var card = el("div", "card");
+    card.appendChild(el("h2", null, "Selected test cases"));
+    card.appendChild(
+      el("p", "muted", cases.length + " test case" + (cases.length === 1 ? "" : "s"))
+    );
+    var list = el("ul", "picked-cases");
+    cases.forEach(function (one) {
+      list.appendChild(el("li", null, one.id + " · " + one.title));
+    });
+    card.appendChild(list);
+    var change = el("a", null, "Change selection");
+    change.setAttribute("href", "/requirements/test-cases");
+    var line = el("p", "muted small");
+    line.appendChild(change);
+    card.appendChild(line);
+    return card;
+  }
+
+  /* Browsers only mean something for Playwright. */
+  function toggleBrowsers(form) {
+    var choice = form.querySelector('[name="framework_choice"]');
+    var box = form.querySelector("#browser-field");
+    if (!choice || !box) return;
+    box.hidden = choice.value.indexOf("Playwright") !== 0;
+  }
+
+  function settingsCard() {
+    var card = el("div", "card");
+    card.appendChild(el("h2", null, "Settings"));
+    card.appendChild(
+      labelled(
+        "Framework & language",
+        selectEl("framework_choice", FRAMEWORK_CHOICES, FRAMEWORK_CHOICES[0])
+      )
+    );
+    card.appendChild(
+      labelled(
+        "Structure",
+        selectEl("structure_choice", STRUCTURE_CHOICES, STRUCTURE_CHOICES[0])
+      )
+    );
+
+    var browsers = el("fieldset", "field");
+    browsers.id = "browser-field";
+    browsers.appendChild(el("legend", "hint", "Browsers"));
+    BROWSER_CHOICES.forEach(function (name, index) {
+      var wrap = el("label", "check");
+      var input = el("input");
+      input.type = "checkbox";
+      input.name = "browsers";
+      input.value = name;
+      input.checked = index === 0;
+      wrap.appendChild(input);
+      wrap.appendChild(document.createTextNode(" " + name));
+      browsers.appendChild(wrap);
+    });
+    card.appendChild(browsers);
+
+    var url = el("input");
+    url.type = "url";
+    url.name = "base_url";
+    url.id = "base_url";
+    url.maxLength = 200;
+    url.placeholder = "https://staging.aurora-shop.dev";
+    card.appendChild(labelled("Base URL (optional)", url));
+    return card;
+  }
+
+  function exampleButton() {
+    var example = el("button", "btn", "Load example");
+    example.setAttribute("type", "button");
+    example.setAttribute("hx-get", "/requirements/automation/example");
+    example.setAttribute("hx-target", "#automation-output");
+    example.setAttribute("hx-swap", "innerHTML");
+    return example;
+  }
+
+  function renderAutomation() {
+    var root = document.getElementById("automation-root");
+    if (!root) return;
+    root.textContent = "";
+    var run = readRun() || {};
+    var cases = run.automation_cases || [];
+
+    if (!cases.length) {
+      var empty = el("div", "card");
+      empty.appendChild(el("h2", null, "No test cases selected"));
+      empty.appendChild(
+        el("p", "muted", "Pick the cases you want automated on step 3.")
+      );
+      var pick = el("a", "btn", "Pick test cases");
+      pick.setAttribute("href", "/requirements/test-cases");
+      var actions = el("div", "row");
+      actions.appendChild(pick);
+      actions.appendChild(exampleButton());
+      empty.appendChild(actions);
+      root.appendChild(empty);
+      if (window.htmx) window.htmx.process(root);
+      return;
+    }
+
+    root.appendChild(selectedCasesCard(cases));
+
+    var form = el("form", "tc-form");
+    form.id = "automation-form";
+    form.setAttribute("hx-post", "/requirements/automation/run");
+    form.setAttribute("hx-target", "#automation-output");
+    form.setAttribute("hx-swap", "innerHTML");
+    form.setAttribute("hx-indicator", "#automation-progress");
+
+    var selected = el("input");
+    selected.type = "hidden";
+    selected.name = "selected_json";
+    selected.value = JSON.stringify(cases);
+    form.appendChild(selected);
+
+    form.appendChild(settingsCard());
+
+    var actions = el("div", "row");
+    var generate = el("button", "btn btn-primary");
+    generate.id = "automation-generate";
+    generate.type = "submit";
+    generate.appendChild(el("span", "btn-label", "Generate automation"));
+    actions.appendChild(generate);
+    actions.appendChild(exampleButton());
+    form.appendChild(actions);
+
+    var progress = el(
+      "p",
+      "htmx-indicator muted",
+      "Writing tests for " + cases.length + " test case" +
+        (cases.length === 1 ? "" : "s") + "…"
+    );
+    progress.id = "automation-progress";
+    form.appendChild(progress);
+
+    root.appendChild(form);
+    if (window.htmx) window.htmx.process(root);
+    toggleBrowsers(form);
+
+    /* Always send what sessionStorage holds right now. */
+    form.addEventListener("htmx:configRequest", function (event) {
+      var latest = readRun() || run;
+      event.detail.parameters.selected_json = JSON.stringify(
+        latest.automation_cases || cases
+      );
+    });
+  }
+
+  /* Show one file of the generated project. */
+  function showFile(tab) {
+    var wanted = tab.getAttribute("data-file");
+    var tabs = document.querySelectorAll(".file-tab");
+    Array.prototype.forEach.call(tabs, function (other) {
+      other.classList.toggle("now", other === tab);
+    });
+    var bodies = document.querySelectorAll(".file-body");
+    Array.prototype.forEach.call(bodies, function (body) {
+      body.hidden = body.getAttribute("data-file") !== wanted;
+    });
+  }
+
+  function copyText(text, statusId) {
+    var status = document.getElementById(statusId);
+    function done(message) {
+      if (status) status.textContent = message;
+    }
+    if (!text) return;
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(
+        function () {
+          done("Copied");
+        },
+        function () {
+          done("Could not copy");
+        }
+      );
+      return;
+    }
+    done("Could not copy");
+  }
+
+  function visibleCode() {
+    var bodies = document.querySelectorAll(".file-body");
+    for (var i = 0; i < bodies.length; i += 1) {
+      if (!bodies[i].hidden) return bodies[i].textContent;
+    }
+    return "";
+  }
+
+  function downloadZip() {
+    var holder = document.getElementById("automation-data");
+    var status = document.getElementById("automation-status");
+    if (!holder) return;
+    if (status) status.textContent = "Building the ZIP…";
+    var payload;
+    try {
+      payload = JSON.parse(holder.textContent);
+    } catch (e) {
+      if (status) status.textContent = "Could not read the project.";
+      return;
+    }
+    fetch("/requirements/automation/export.zip", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    })
+      .then(function (response) {
+        if (!response.ok) throw new Error("export failed");
+        return response.blob();
+      })
+      .then(function (blob) {
+        var url = URL.createObjectURL(blob);
+        var link = document.createElement("a");
+        link.href = url;
+        link.download = "qa-genius-automation.zip";
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+        if (status) status.textContent = "";
+      })
+      .catch(function () {
+        if (status) status.textContent = "Could not build the ZIP. Try again.";
+      });
+  }
+
+  /* ---------- choosing test cases to automate (step 3 -> step 4) ---------- */
+
+  function caseBoxes() {
+    return document.querySelectorAll("#tc-list .tc-select");
+  }
+
+  /* The ids ticked on screen right now, in list order. */
+  function readSelection() {
+    var ids = [];
+    Array.prototype.forEach.call(caseBoxes(), function (box) {
+      if (box.checked) ids.push(box.getAttribute("data-case-id"));
+    });
+    return ids;
+  }
+
+  function saveSelection(ids) {
+    var run = readRun() || {};
+    run.automation_selection = ids;
+    writeRun(run);
+  }
+
+  function updateSelectionUi() {
+    var ids = readSelection();
+    var count = document.getElementById("selected-count");
+    var button = document.getElementById("automate-selected");
+    var hint = document.getElementById("select-hint");
+    if (count) count.textContent = ids.length + " selected";
+    if (button) button.disabled = ids.length === 0 || ids.length > MAX_SELECTED;
+    if (hint) {
+      hint.textContent =
+        ids.length > MAX_SELECTED ? "Select up to " + MAX_SELECTED : "";
+    }
+  }
+
+  /* Tick what the run remembers, and forget ids this list no longer has. */
+  function restoreSelection() {
+    var boxes = caseBoxes();
+    if (!boxes.length) return;
+    var run = readRun() || {};
+    var wanted = run.automation_selection || [];
+    Array.prototype.forEach.call(boxes, function (box) {
+      box.checked = wanted.indexOf(box.getAttribute("data-case-id")) !== -1;
+    });
+    saveSelection(readSelection());
+    updateSelectionUi();
+  }
+
+  function setAllSelected(on) {
+    Array.prototype.forEach.call(caseBoxes(), function (box) {
+      box.checked = on;
+    });
+    saveSelection(readSelection());
+    updateSelectionUi();
+  }
+
+  /* Hand the chosen cases to step 4. They travel in sessionStorage, never the server. */
+  function automateSelected() {
+    var ids = readSelection();
+    if (!ids.length || ids.length > MAX_SELECTED) return;
+    var shown = displayedList();
+    var all = shown && shown.result ? shown.result.test_cases || [] : [];
+    var chosen = all.filter(function (one) {
+      return ids.indexOf(one.id) !== -1;
+    });
+    if (!chosen.length) return;
+    var run = readRun() || {};
+    run.automation_selection = ids;
+    run.automation_cases = chosen;
+    writeRun(run);
+    window.location.href = "/requirements/automation";
+  }
+
   /* ---------- the displayed list, its history, and proposals ---------- */
 
   /* Read the list the result card is showing right now. */
@@ -534,6 +870,7 @@
         target.innerHTML = html;
         if (window.htmx) window.htmx.process(target);
         showUndo();
+        restoreSelection();
       })
       .catch(function () {
         /* Leave what is on screen alone; the saved run is still intact. */
@@ -601,6 +938,36 @@
       download("xlsx", "qa-genius-test-cases.xlsx");
       return;
     }
+    var tab = closest(event.target, ".file-tab");
+    if (tab) {
+      showFile(tab);
+      return;
+    }
+    if (closest(event.target, "#copy-code")) {
+      copyText(visibleCode(), "copy-status");
+      return;
+    }
+    if (closest(event.target, "#copy-command")) {
+      var command = document.getElementById("run-command");
+      copyText(command ? command.textContent : "", "command-status");
+      return;
+    }
+    if (closest(event.target, "#download-zip")) {
+      downloadZip();
+      return;
+    }
+    if (closest(event.target, "#select-all-cases")) {
+      setAllSelected(true);
+      return;
+    }
+    if (closest(event.target, "#clear-selected-cases")) {
+      setAllSelected(false);
+      return;
+    }
+    if (closest(event.target, "#automate-selected")) {
+      automateSelected();
+      return;
+    }
     if (closest(event.target, "#refine-open")) {
       toggleRefinePanel(true);
       return;
@@ -620,6 +987,17 @@
     if (closest(event.target, "#undo-btn")) {
       undoLastChange();
     }
+  });
+
+  document.addEventListener("change", function (event) {
+    var form = document.getElementById("automation-form");
+    if (form && closest(event.target, '[name="framework_choice"]')) {
+      toggleBrowsers(form);
+      return;
+    }
+    if (!closest(event.target, "#tc-list .tc-select")) return;
+    saveSelection(readSelection());
+    updateSelectionUi();
   });
 
   document.addEventListener("input", function (event) {
@@ -674,10 +1052,12 @@
     } else if (path.indexOf("/requirements/test-cases/render") !== -1) {
       rememberDisplayed(false);
     }
+    restoreSelection();
   });
 
   document.addEventListener("DOMContentLoaded", function () {
     renderCriteria();
     renderTestCases();
+    renderAutomation();
   });
 })();
