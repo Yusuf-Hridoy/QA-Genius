@@ -98,6 +98,50 @@ def test_a_lowercase_id_counts() -> None:
     assert report.traced == ["TC-002"]
 
 
+def test_a_python_test_name_traces_the_id() -> None:
+    report = check_project(
+        script(
+            framework="Playwright (Python)",
+            page_object_code=None,
+            config_code=None,
+            test_file_name="tests/test_login.py",
+            test_code="def test_tc_001_account_locks():\n    assert True\n",
+        ),
+        ["TC-001"],
+    )
+    assert report.traced == ["TC-001"]
+
+
+def test_an_id_without_a_separator_traces() -> None:
+    report = check_project(
+        script(test_code="test('tc001 locks', async () => {});\n"), ["TC-001"]
+    )
+    assert report.traced == ["TC-001"]
+
+
+def test_an_underscore_id_traces() -> None:
+    report = check_project(
+        script(test_code="test('TC_002 locks', async () => {});\n"), ["TC-002"]
+    )
+    assert report.traced == ["TC-002"]
+
+
+def test_a_spaced_id_traces() -> None:
+    report = check_project(
+        script(test_code="test('TC 003 locks', async () => {});\n"), ["TC-003"]
+    )
+    assert report.traced == ["TC-003"]
+
+
+def test_a_longer_id_still_does_not_count_in_any_spelling() -> None:
+    for code in ("TC-0011", "TC_0011", "tc0011"):
+        report = check_project(
+            script(test_code=f"test('{code} locks', async () => {{}});\n"), ["TC-001"]
+        )
+        assert report.traced == [], code
+        assert report.missing == ["TC-001"]
+
+
 def test_a_missing_id_is_reported() -> None:
     report = check_project(
         script(test_code="test('TC-001: locks', async () => {});\n"),
@@ -196,6 +240,53 @@ def test_a_bracket_closed_out_of_order_is_an_error() -> None:
 
 def test_a_stray_closing_bracket_is_an_error() -> None:
     assert basic_js_check("const a = 1;\n}\n") == (2, "Unexpected }")
+
+
+def test_a_regex_holding_a_closing_bracket_passes() -> None:
+    assert basic_js_check("const r = /[}]/g;\n") is None
+    assert basic_js_check("const r = /}/;\n") is None
+    assert basic_js_check("const r = /[)]/;\n") is None
+
+
+def test_a_regex_at_the_start_of_a_line_passes() -> None:
+    assert basic_js_check("/[)]/.test(x);\n") is None
+
+
+def test_a_regex_holding_an_escaped_slash_passes() -> None:
+    code = "await expect(page).toHaveURL(/.*\\/dashboard/);\n"
+    assert basic_js_check(code) is None
+
+
+def test_a_regex_after_return_passes() -> None:
+    assert basic_js_check("function go() {\n  return /[{]/.test(x);\n}\n") is None
+
+
+def test_division_is_still_division() -> None:
+    assert basic_js_check("const half = total / 2;\nconst q = (a) / (b);\n") is None
+
+
+def test_division_cannot_swallow_a_quote() -> None:
+    # If `/ 2` were read as a regex it would run to the next slash and the
+    # apostrophe below would look like an unclosed string.
+    code = "const half = total / 2;\nconst note = 'half';\n"
+    assert basic_js_check(code) is None
+
+
+def test_an_unclosed_regex_is_an_error() -> None:
+    line, message = basic_js_check("const r = /abc\n")
+    assert line == 1
+    assert message.startswith("Unclosed /")
+
+
+def test_an_unclosed_regex_at_the_end_of_the_file_is_an_error() -> None:
+    line, message = basic_js_check("const r = /abc")
+    assert line == 1
+    assert message.startswith("Unclosed /")
+
+
+def test_a_regex_does_not_hide_a_real_problem() -> None:
+    code = "const r = /[}]/g;\nfunction go() {\n  return r;\n"
+    assert basic_js_check(code) == (2, "Unclosed { opened on line 2")
 
 
 def test_fixed_waits_are_warnings_with_line_numbers() -> None:

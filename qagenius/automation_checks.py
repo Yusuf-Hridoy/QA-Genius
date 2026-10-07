@@ -13,6 +13,9 @@ JS_SUFFIXES = (".ts", ".js", ".tsx", ".jsx", ".mjs", ".cjs")
 _PART = re.compile(r"^[A-Za-z0-9_.-]{1,64}$")
 _MAX_PARTS = 3
 
+# A test case id split into its prefix and number, e.g. TC-001 -> TC, 001.
+_ID_PARTS = re.compile(r"^([A-Za-z]+)[-_ ]?(\d+)$")
+
 # Fixed waits the generated code should not contain.
 _WAIT_PATTERNS = (
     re.compile(r"waitForTimeout\s*\("),
@@ -25,6 +28,13 @@ WAIT_MESSAGE = "Fixed wait — prefer waiting for an element or response"
 _CLOSERS = {")": "(", "]": "[", "}": "{"}
 
 _BACKTICK = "`"
+
+# After one of these, a / opens a regex literal. After anything else (a name, a
+# number, a closing bracket) it divides.
+_REGEX_AFTER = set("(,=:[!&|?{};+-*%<>~^")
+_REGEX_WORDS = {"return", "typeof", "case", "in", "of"}
+_REGEX_FLAGS = "gimsuyd"
+_WORD_CHARS = "_$"
 
 
 @dataclass(frozen=True)
@@ -123,9 +133,18 @@ def project_files(script: AutomationScript) -> list[ProjectFile]:
     return files
 
 
+def _id_pattern(selected_id: str) -> str:
+    """TC-001 also matches TC_001, TC 001 and TC001, the way Python test names spell it."""
+    match = _ID_PARTS.match(selected_id.strip())
+    if match:
+        core = re.escape(match.group(1)) + r"[-_ ]?" + re.escape(match.group(2))
+    else:
+        core = re.escape(selected_id)
+    return r"(?<![A-Za-z0-9-])" + core + r"(?![A-Za-z0-9])"
+
+
 def _is_traced(selected_id: str, code: str) -> bool:
-    pattern = r"(?<![A-Za-z0-9-])" + re.escape(selected_id) + r"(?![A-Za-z0-9])"
-    return re.search(pattern, code, re.IGNORECASE) is not None
+    return re.search(_id_pattern(selected_id), code, re.IGNORECASE) is not None
 
 
 def _python_syntax(file: ProjectFile) -> tuple[str, list[Finding]]:
@@ -158,14 +177,33 @@ def _json_syntax(file: ProjectFile) -> tuple[str, list[Finding]]:
     return "valid", []
 
 
+def _starts_regex(code: str, index: int) -> bool:
+    """True when the / at index opens a regex literal, false when it divides."""
+    back = index - 1
+    while back >= 0 and code[back] in " \t\r":
+        back -= 1
+    if back < 0 or code[back] == "\n":
+        return True
+    char = code[back]
+    if char in _REGEX_AFTER:
+        return True
+    if char.isalnum() or char in _WORD_CHARS:
+        end = back + 1
+        while back >= 0 and (code[back].isalnum() or code[back] in _WORD_CHARS):
+            back -= 1
+        return code[back + 1 : end] in _REGEX_WORDS
+    return False
+
+
 def basic_js_check(code: str) -> tuple[int, str] | None:
     """None when brackets, quotes and comments line up, else (line, message) of the first problem.
 
     A character scan, not a parser: it never compiles or type-checks anything.
     """
     stack: list[tuple[str, int]] = []  # open "(", "[", "{", "${" and template strings
-    mode = "code"  # code, a quote character, line-comment or block-comment
-    opened_at = 0  # the line the current string or block comment started on
+    mode = "code"  # code, a quote character, regex, line-comment or block-comment
+    opened_at = 0  # the line the current string, regex or block comment started on
+    in_class = False  # inside a [...] character class of a regex literal
     line = 1
     index = 0
     length = len(code)
@@ -177,13 +215,25 @@ def basic_js_check(code: str) -> tuple[int, str] | None:
             line += 1
             if mode == "line-comment":
                 mode = "code"
-            elif mode in ("'", '"'):
-                return opened_at, f"Unclosed {mode} opened on line {opened_at}"
+            elif mode in ("'", '"', "regex"):
+                shown = "/" if mode == "regex" else mode
+                return opened_at, f"Unclosed {shown} opened on line {opened_at}"
         elif mode == "line-comment":
             pass
         elif mode == "block-comment":
             if code.startswith("*/", index):
                 mode, step = "code", 2
+        elif mode == "regex":
+            if char == "\\":
+                step = 2
+            elif char == "[":
+                in_class = True
+            elif char == "]":
+                in_class = False
+            elif char == "/" and not in_class:
+                mode = "code"
+                while index + step < length and code[index + step] in _REGEX_FLAGS:
+                    step += 1
         elif mode in ("'", '"', _BACKTICK):
             if char == "\\":
                 step = 2
@@ -198,6 +248,8 @@ def basic_js_check(code: str) -> tuple[int, str] | None:
             mode, step = "line-comment", 2
         elif code.startswith("/*", index):
             mode, opened_at, step = "block-comment", line, 2
+        elif char == "/" and _starts_regex(code, index):
+            mode, opened_at, in_class = "regex", line, False
         elif char in ("'", '"'):
             mode, opened_at = char, line
         elif char == _BACKTICK:
@@ -220,6 +272,8 @@ def basic_js_check(code: str) -> tuple[int, str] | None:
 
     if mode in ("'", '"', _BACKTICK):
         return opened_at, f"Unclosed {mode} opened on line {opened_at}"
+    if mode == "regex":
+        return opened_at, f"Unclosed / opened on line {opened_at}"
     if mode == "block-comment":
         return opened_at, f"Unclosed /* opened on line {opened_at}"
     if stack:
