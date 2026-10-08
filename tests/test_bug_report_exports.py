@@ -2,6 +2,7 @@
 
 import json
 import pathlib
+import re
 
 from qagenius.bug_report import BugInput
 from qagenius.bug_report_checks import check_report
@@ -145,3 +146,11 @@ def test_both_texts_end_with_one_newline() -> None:
     jira = to_jira(report)
     assert markdown.endswith("\n") and not markdown.endswith("\n\n")
     assert jira.endswith("\n") and not jira.endswith("\n\n")
+
+
+def test_environment_text_cannot_close_the_jira_noformat_block() -> None:
+    report = bug_report(environment_details="Safari {noformat} 17 {NOFORMAT}")
+    text = to_jira(report)
+
+    assert len(re.findall(r"\{noformat\}", text, re.IGNORECASE)) == 2
+    assert "Safari { noformat } 17 { NOFORMAT }" in text

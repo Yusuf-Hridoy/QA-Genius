@@ -8,10 +8,18 @@ from qagenius.models import BugReport
 # Characters Jira reads as markup. Escaped so AI or user text cannot break the page.
 _JIRA_SPECIAL = re.compile(r"([{}\[\]|*_])")
 
+# Markers that close a {noformat} or {code} block. Spaced out in any text put inside one.
+_JIRA_BLOCK_MARKER = re.compile(r"\{\s*(?:noformat|code)(?::[^}\n]*)?\s*\}", re.IGNORECASE)
+
 
 def jira_escape(text: str) -> str:
     """Backslash-escape the characters Jira treats as markup."""
     return _JIRA_SPECIAL.sub(r"\\\1", text or "")
+
+
+def jira_block_safe(text: str) -> str:
+    """Defuse the markers that would let text close the block it sits in."""
+    return _JIRA_BLOCK_MARKER.sub(lambda m: "{ " + m.group(0)[1:-1].strip() + " }", text or "")
 
 
 def _clean(text: str) -> str:
@@ -90,7 +98,7 @@ def to_jira(report: BugReport) -> str:
         "",
         "h3. Environment",
         "{noformat}",
-        _clean(report.environment_details) or "Not provided",
+        jira_block_safe(_clean(report.environment_details)) or "Not provided",
         "{noformat}",
     ]
 
