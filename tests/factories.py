@@ -1,6 +1,12 @@
 """Shared builders for test-case fixtures. Not a test module; pytest does not collect it."""
 
-from qagenius.models import AutomationScript, TestCase, TestCaseList, TestSuiteSummary
+from qagenius.models import (
+    AutomationScript,
+    BugReport,
+    TestCase,
+    TestCaseList,
+    TestSuiteSummary,
+)
 from qagenius.test_cases import Criterion, number_criteria
 
 
@@ -97,3 +103,37 @@ def script(**overrides) -> AutomationScript:
     }
     values.update(overrides)
     return AutomationScript(**values)
+
+
+def bug_report(**overrides) -> BugReport:
+    """A complete, valid bug report. Any field can be overridden by keyword."""
+    values = {
+        "title": "Checkout button does nothing on the second click in Safari",
+        "severity": "High",
+        "reproducibility_rate": "Often",
+        "environment_details": "Device: Desktop; OS: macOS 14; Browser/App: Safari 17",
+        "steps_to_reproduce": [
+            "Open the Aurora Storefront cart with two items",
+            "Click Checkout once and wait for the page",
+            "Click Checkout a second time",
+        ],
+        "actual_result": "Nothing happens and the cart total shows 0",
+        "expected_result": "The payment page opens with the correct total",
+        "suggested_fix": "Disable the button until the first request resolves",
+        "root_cause_category": "Race Condition",
+        "business_impact": "Shoppers cannot pay, so the order is lost",
+        "affected_users": "Desktop shoppers on Safari",
+        "regression_risk": "Medium",
+        "workaround": "Reload the cart page and click Checkout once",
+        "related_areas": ["Cart totals", "Payment page"],
+        "screenshot_annotations": ["Cart header showing a total of 0"],
+        "jira_labels": ["checkout", "safari", "race-condition"],
+        "suspected_pattern": "Race Condition",
+        "related_issues": ["Cart badge keeps the old count"],
+        "investigation_steps": [
+            "Check the console for a duplicate POST",
+            "Inspect the network tab for a second checkout call",
+        ],
+    }
+    values.update(overrides)
+    return BugReport(**values)

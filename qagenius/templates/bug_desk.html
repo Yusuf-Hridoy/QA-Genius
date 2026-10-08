@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+{% block title %}Bug desk — QA-Genius{% endblock %}
+{% block top_title %}Bug desk{% endblock %}
+{% block content %}
+<div class="card">
+  <h2>Bug notes</h2>
+  <form id="bug-form" hx-post="/bugs/run" hx-target="#bug-output" hx-swap="innerHTML" hx-indicator="#bug-progress">
+    <div class="field">
+      <label for="bug-notes">What happened?</label>
+      <textarea id="bug-notes" name="notes" rows="5" minlength="20" maxlength="3000" required
+        placeholder="Checkout button does nothing on the second click in Safari, 3 of 5 attempts, cart total shows 0"></textarea>
+      <span class="hint"><span id="bug-notes-count">0</span>/3000 — at least 20 characters.</span>
+    </div>
+
+    <details id="bug-environment">
+      <summary>Environment (optional)</summary>
+      <div class="field">
+        <label for="bug-device">Device</label>
+        <select id="bug-device" name="device">
+          {% for name in devices %}<option value="{{ name }}">{{ name }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="field">
+        <label for="bug-os">OS</label>
+        <input id="bug-os" name="os" maxlength="100" placeholder="macOS 14">
+      </div>
+      <div class="field">
+        <label for="bug-browser">Browser/App</label>
+        <input id="bug-browser" name="browser" maxlength="100" placeholder="Safari 17">
+      </div>
+      <div class="field">
+        <label for="bug-build">Build/Env</label>
+        <input id="bug-build" name="build" maxlength="100" placeholder="2.8.1 staging">
+      </div>
+      <div class="field">
+        <label for="bug-url">URL</label>
+        <input id="bug-url" name="url" type="url" maxlength="500" placeholder="https://staging.aurora-shop.dev/checkout">
+      </div>
+    </details>
+
+    <fieldset class="field">
+      <legend class="hint">Attempts</legend>
+      <div class="row">
+        <label class="check" for="bug-total">Tried
+          <input id="bug-total" name="total_attempts" type="number" min="1" max="100" value="1" class="num-input">
+        </label>
+        <label class="check" for="bug-happened">Happened
+          <input id="bug-happened" name="successful_attempts" type="number" min="0" max="100" value="1" class="num-input">
+        </label>
+      </div>
+      <p class="muted small" id="bug-repro" aria-live="polite">Always</p>
+    </fieldset>
+
+    <fieldset class="field" id="bug-shot-field">
+      <legend class="hint">Screenshot (optional)</legend>
+      <div id="bug-drop" class="drop-zone" tabindex="0">
+        <p class="muted small">Drop an image here, paste with Ctrl+V, or
+          <button type="button" class="btn btn-small" id="bug-pick">choose a file</button>
+        </p>
+        <input id="bug-file" type="file" accept="image/png,image/jpeg,image/webp" hidden>
+      </div>
+      <div id="bug-shot-preview" class="row" hidden>
+        <img id="bug-shot-thumb" class="shot-thumb" alt="Screenshot to send with this report">
+        <span class="muted small" id="bug-shot-size"></span>
+        <button type="button" class="btn btn-small" id="bug-shot-remove">Remove</button>
+      </div>
+      <p class="muted small" id="bug-shot-status" aria-live="polite"></p>
+      <input type="hidden" name="screenshot_mime" id="bug-shot-mime">
+      <input type="hidden" name="screenshot_data" id="bug-shot-data">
+      <p class="muted small">The screenshot is sent to your AI provider with this request only. It is not stored.</p>
+    </fieldset>
+
+    <div class="row">
+      <button id="bug-run" type="submit" class="btn btn-primary"><span class="btn-label">Write bug report</span></button>
+      <button id="bug-example" type="button" class="btn" hx-get="/bugs/example" hx-target="#bug-output" hx-swap="innerHTML">Load example</button>
+    </div>
+    <p id="bug-progress" class="htmx-indicator muted">Writing the bug report…</p>
+  </form>
+</div>
+<div id="bug-output"></div>
+{% endblock %}
+{% block scripts %}<script src="/bug_desk.js" defer></script>{% endblock %}

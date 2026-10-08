@@ -1,0 +1,96 @@
+<div class="card" id="bug-report-card">
+  <div id="bug-shot-shown"></div>
+  <h2>{{ report.title }}</h2>
+  <p class="row">
+    <span class="pill {{ severity_pill }}">{{ report.severity }}</span>
+    <span class="pill neutral">{{ reproducibility }}</span>
+    {% if report.root_cause_category %}<span class="pill neutral">{{ report.root_cause_category }}</span>{% endif %}
+  </p>
+</div>
+<div class="card">
+  <h2>Report checks</h2>
+  <p class="muted small">Checked by code.</p>
+  <div class="meter" role="img" aria-label="Report quality {{ score }} percent">
+    <div class="meter-fill {{ 'ok' if score >= 75 else ('warn' if score >= 50 else 'bad') }}" style="width:{{ score }}%"></div>
+  </div>
+  <p>Report quality {{ score }}% — {{ ok_count }} of {{ checks | length }}</p>
+  <ul class="check-rows">
+    {% for check in checks %}
+    <li>
+      {% if check.ok %}<span class="pill ok">ok</span> {{ check.label }}
+      {% else %}<span class="pill warn">missing</span> {{ check.label }}
+      <span class="muted small">— {{ check.hint }}</span>{% endif %}
+    </li>
+    {% endfor %}
+  </ul>
+</div>
+<div class="card">
+  <h2>Environment</h2>
+  <p class="mono small">{{ environment }}</p>
+  <h2>Steps to reproduce</h2>
+  <ol class="tc-steps">
+    {% for step in report.steps_to_reproduce %}<li>{{ step }}</li>{% endfor %}
+  </ol>
+  <div class="two-cols">
+    <div>
+      <h3>Actual</h3>
+      <p>{{ report.actual_result }}</p>
+    </div>
+    <div>
+      <h3>Expected</h3>
+      <p>{{ report.expected_result }}</p>
+    </div>
+  </div>
+</div>
+{% set has_extra = report.suspected_pattern or report.suggested_fix or report.workaround
+  or report.business_impact or report.affected_users or report.regression_risk
+  or report.related_areas or report.jira_labels or report.investigation_steps
+  or report.related_issues or report.screenshot_annotations %}
+{% if has_extra %}
+<div class="card">
+  <h2>More detail</h2>
+  {% if report.suspected_pattern %}<h3>Suspected pattern</h3><p>{{ report.suspected_pattern }}</p>{% endif %}
+  {% if report.suggested_fix %}<h3>Suggested fix</h3><p>{{ report.suggested_fix }}</p>{% endif %}
+  {% if report.workaround %}<h3>Workaround</h3><p>{{ report.workaround }}</p>{% endif %}
+  {% if report.business_impact %}<h3>Business impact</h3><p>{{ report.business_impact }}</p>{% endif %}
+  {% if report.affected_users %}<h3>Affected users</h3><p>{{ report.affected_users }}</p>{% endif %}
+  {% if report.regression_risk %}<h3>Regression risk</h3><p>{{ report.regression_risk }}</p>{% endif %}
+  {% if report.related_areas %}
+  <h3>Related areas</h3>
+  <p class="row">{% for area in report.related_areas %}<span class="pill neutral">{{ area }}</span>{% endfor %}</p>
+  {% endif %}
+  {% if report.jira_labels %}
+  <h3>Labels</h3>
+  <p class="row">{% for label in report.jira_labels %}<span class="pill accent">{{ label }}</span>{% endfor %}</p>
+  {% endif %}
+  {% if report.investigation_steps %}
+  <h3>Investigation steps</h3>
+  <ul class="checklist">
+    {% for step in report.investigation_steps %}
+    <li><input type="checkbox" disabled aria-hidden="true"> {{ step }}</li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+  {% if report.related_issues %}
+  <h3>Related issues</h3>
+  <ul>{% for issue in report.related_issues %}<li>{{ issue }}</li>{% endfor %}</ul>
+  {% endif %}
+  {% if report.screenshot_annotations %}
+  <h3>Screenshot notes</h3>
+  <ul>{% for note in report.screenshot_annotations %}<li>{{ note }}</li>{% endfor %}</ul>
+  {% endif %}
+</div>
+{% endif %}
+<script type="application/json" id="bug-export">{{ bug_export | tojson }}</script>
+<div class="card">
+  <div class="row">
+    <button type="button" class="btn" id="copy-markdown">Copy as Markdown</button>
+    <button type="button" class="btn" id="copy-jira">Copy for Jira</button>
+    <button type="button" class="btn" id="download-md">Download .md</button>
+  </div>
+  <p class="muted small" id="bug-copy-status" aria-live="polite"></p>
+  {% if notes %}
+  <p class="small {% if image_note %}warn-line{% else %}muted{% endif %}">{{ notes | join(" · ") }}</p>
+  {% endif %}
+  <p class="muted small">Answered by {{ provider_name }}.</p>
+</div>

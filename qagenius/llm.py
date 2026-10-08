@@ -51,6 +51,10 @@ CHAT_DROP = (
 MODEL_RE = re.compile(r"[A-Za-z0-9\-_./:]+")
 KEYLIKE_RE = re.compile(r"[A-Za-z0-9\-_]{20,}")
 
+# A 400/404/422 mentioning one of these means the model cannot read the image,
+# so the same key is worth one more try with the text alone.
+IMAGE_MARKERS = ("image", "vision", "multimodal", "content type", "image_url")
+
 
 class NoKeysError(Exception):
     """Raised when the request carries no keys."""
@@ -161,20 +165,62 @@ def list_chat_models(
 
 
 def _call_once(
-    client: Any, model: str, system: str, user: str, use_json_mode: bool
+    client: Any,
+    model: str,
+    system: str,
+    user: str,
+    use_json_mode: bool,
+    image: tuple[str, str] | None = None,
 ) -> str:
+    """One chat call. With an image the user content becomes a text + image_url list."""
+    content: Any = user
+    if image is not None:
+        mime, data = image
+        content = [
+            {"type": "text", "text": user},
+            {
+                "type": "image_url",
+                "image_url": {"url": f"data:{mime};base64,{data}"},
+            },
+        ]
     kwargs: dict[str, Any] = {
         "model": model,
         "messages": [
             {"role": "system", "content": system},
-            {"role": "user", "content": user},
+            {"role": "user", "content": content},
         ],
     }
     if use_json_mode:
         kwargs["response_format"] = {"type": "json_object"}
     completion = client.chat.completions.create(**kwargs)
-    content = completion.choices[0].message.content
-    return content or ""
+    answer = completion.choices[0].message.content
+    return answer or ""
+
+
+def _call_json_then_plain(
+    client: Any,
+    model: str,
+    system: str,
+    user: str,
+    image: tuple[str, str] | None,
+    label: str,
+) -> str:
+    """The call, falling back to no JSON mode for providers that reject it."""
+    try:
+        return _call_once(client, model, system, user, True, image)
+    except openai.BadRequestError as e:
+        if "response_format" not in str(e).lower():
+            raise
+        logger.info("%s rejected JSON mode, retrying without it", label)
+        return _call_once(client, model, system, user, False, image)
+
+
+def _cannot_read_images(error: openai.APIStatusError, api_key: str) -> bool:
+    """True when the provider refused the call because of the image, not the key."""
+    if (error.status_code or 0) not in (400, 404, 422):
+        return False
+    reason = clean_reason(str(error), api_key).lower()
+    return any(marker in reason for marker in IMAGE_MARKERS)
 
 
 def generate_json(
@@ -184,6 +230,7 @@ def generate_json(
     schema: type[BaseModel],
     client_factory: Callable[[str, str], Any] | None = None,
     models_fetcher: Callable[[str, str], list[str]] | None = None,
+    image: tuple[str, str] | None = None,
 ) -> tuple[BaseModel, int, list[str]]:
     """Call the first working key and return (result, used_key_index, notes).
 
@@ -267,17 +314,21 @@ def generate_json(
         label = _label(index, short, model)
         attempted += 1
         client = client_factory(provider["base_url"], api_key)
+        logger.info("%s called, image attached: %s", label, "yes" if image else "no")
         try:
             try:
-                content = _call_once(
-                    client, model, system, user, use_json_mode=True
+                content = _call_json_then_plain(
+                    client, model, system, user, image, label
                 )
-            except openai.BadRequestError as e:
-                if "response_format" not in str(e).lower():
+            except openai.APIStatusError as e:
+                if image is None or not _cannot_read_images(e, api_key):
                     raise
-                logger.info("%s rejected JSON mode, retrying without it", label)
-                content = _call_once(
-                    client, model, system, user, use_json_mode=False
+                logger.info("%s cannot read images, retrying without it", label)
+                notes.append(
+                    f"{label} can't read images — the screenshot was not used."
+                )
+                content = _call_json_then_plain(
+                    client, model, system, user, None, label
                 )
         except openai.AuthenticationError:
             logger.warning("%s rejected (invalid key)", label)

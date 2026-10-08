@@ -1,0 +1,63 @@
+{
+  "input": {
+    "notes": "Checkout button does nothing on the second click in Safari, cart total shows 0. Tried 5 times, happened 3 times. Works fine in Chrome. Staging checkout page.",
+    "device": "Desktop",
+    "os": "macOS 14",
+    "browser": "Safari 17",
+    "build": "2.8.1",
+    "url": "https://staging.aurora-shop.dev/checkout",
+    "total_attempts": 5,
+    "successful_attempts": 3,
+    "has_screenshot": false
+  },
+  "report": {
+    "title": "Second checkout click is ignored and cart total resets to 0 in Safari",
+    "severity": "High",
+    "reproducibility_rate": "Often",
+    "environment_details": "Device: Desktop; OS: macOS 14; Browser/App: Safari 17; Build/Env: 2.8.1; URL: https://staging.aurora-shop.dev/checkout",
+    "steps_to_reproduce": [
+      "Sign in to Aurora Storefront on Safari 17 and add two items to the cart",
+      "Open https://staging.aurora-shop.dev/checkout",
+      "Click the Checkout button once and wait for the spinner to stop",
+      "Click the Checkout button a second time",
+      "Read the cart total in the order summary panel"
+    ],
+    "actual_result": "The second click does nothing: the page stays on /checkout, no request is sent, and the order summary total changes to 0.00. No error message is shown.",
+    "expected_result": "The second click is ignored safely or re-submits the order, the total keeps its real value, and the shopper is taken to the payment step.",
+    "suggested_fix": "Disable the Checkout button until the first request resolves, and keep the cart total in state instead of re-reading it from the cleared response.",
+    "root_cause_category": "Race Condition",
+    "business_impact": "High - shoppers on Safari cannot complete payment and abandon the order; roughly a fifth of desktop checkout traffic is affected.",
+    "affected_users": "Desktop shoppers using Safari 17 on macOS",
+    "regression_risk": "Medium - the checkout button handler is shared with the saved-cart flow",
+    "workaround": "Reload the checkout page and click Checkout once, without double-clicking.",
+    "related_areas": [
+      "Cart total calculation",
+      "Payment step redirect",
+      "Saved cart flow"
+    ],
+    "screenshot_annotations": [
+      "Order summary panel showing a total of 0.00 after the second click",
+      "Network tab showing only one POST to /api/checkout",
+      "Console showing an unhandled promise rejection"
+    ],
+    "jira_labels": [
+      "checkout",
+      "safari",
+      "race-condition",
+      "frontend",
+      "cart"
+    ],
+    "suspected_pattern": "Race Condition - the second click fires while the first checkout request is still in flight, and the handler clears the cart state before the response arrives.",
+    "related_issues": [
+      "Cart badge keeps the old item count after the total resets",
+      "No error message is shown when a checkout request is dropped"
+    ],
+    "investigation_steps": [
+      "Check the browser console for an unhandled promise rejection on the second click",
+      "Inspect the network tab for a second POST to /api/checkout that never leaves",
+      "Query the staging order service logs for a dropped checkout request",
+      "Try the same flow in Chrome and Firefox to confirm it is Safari only",
+      "Add a temporary log around the cart-total reducer to see what clears it"
+    ]
+  }
+}

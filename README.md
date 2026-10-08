@@ -57,6 +57,24 @@ a README carrying the setup steps, the run command and the same checks; the
 file names the AI chose are cleaned first, so nothing can be written outside
 that folder.
 
+## Bug desk
+Paste rough notes — *"checkout button does nothing on the second click, 3 of
+5 tries"* — add the environment and attempt counts if you have them, and
+optionally one screenshot, and the AI writes a structured report: title,
+severity, numbered steps, actual against expected, plus workaround, suspected
+pattern and investigation steps. **Report checks** is computed in code, not by
+the AI: it scores the report out of seven — clear title, three or more steps,
+actual and expected that differ, environment, reproducibility, evidence and a
+real severity — and prints what to ask the reporter for whatever is missing.
+Reproducibility and the environment line are counted from your inputs, so
+*"Intermittent (3 of 5)"* is arithmetic, not a guess. **Copy as Markdown**,
+**Copy for Jira** and **Download .md** give you the report in the form your
+tracker wants, with Jira's markup characters escaped so a title full of
+brackets cannot break the page. The screenshot is resized in your browser,
+sent to your own provider with that one request and never stored; if the model
+cannot read images, QA-Genius retries the same key with text alone and says so
+on the card.
+
 ## Troubleshooting
 - `python scripts/check_key.py` checks one provider key with a tiny JSON
   request. It asks for the provider id and the key (hidden while typing)

@@ -1,6 +1,8 @@
+import base64
 import html
 import json
 import logging
+from dataclasses import replace
 from pathlib import Path
 
 from fastapi import FastAPI, Form, Request
@@ -12,20 +14,29 @@ from pydantic import BaseModel, ValidationError, field_validator
 import openai
 from markupsafe import Markup
 
-from qagenius import automation, duel, llm
+from qagenius import automation, bug_report, duel, llm
 from qagenius.automation_checks import CheckReport, check_project
 from qagenius.automation_exports import build_zip
+from qagenius.bug_report import BugInput, environment_text, reproducibility_text
+from qagenius.bug_report_checks import Check, check_report, quality_score
+from qagenius.bug_report_exports import to_jira, to_markdown
 from qagenius.duel import NOT_STATED_A, NOT_STATED_B, DuelResult, build_highlights
 from qagenius.models import (
     AmbiguityAnalysis,
     AutomationScript,
+    BugReport,
     DuelComparison,
     Interpretation,
     TestCase,
     TestCaseList,
 )
 from qagenius.numbers import match_numbers
-from qagenius.prompts import automation_prompt, story_check_prompt, test_cases_prompt
+from qagenius.prompts import (
+    automation_prompt,
+    bug_report_prompt,
+    story_check_prompt,
+    test_cases_prompt,
+)
 from qagenius.providers import PROVIDERS, get_provider, pick_default
 from qagenius.test_case_depth import compute_depth
 from qagenius.test_case_diff import diff_cases
@@ -61,6 +72,12 @@ REFINE_MODES = ("strengthen", "instruction")
 SELECTED_JSON_LIMIT = 100000
 EXPORT_BODY_LIMIT = 500000
 BASE_URL_LIMIT = 200
+SCREENSHOT_TYPES = ("image/png", "image/jpeg", "image/webp")
+SCREENSHOT_LIMIT = 2 * 1024 * 1024
+SCREENSHOT_ERROR = "Screenshot must be a PNG, JPG or WebP under 2 MB."
+# Starlette caps a form field at 1 MB, which a 2 MB screenshot exceeds once it is
+# base64 (about 2.7 MB). Raised just for the bug form, still under Vercel's ~4.5 MB body.
+FORM_PART_LIMIT = 4 * 1024 * 1024
 
 app = FastAPI(title="QA-Genius v2")
 templates = Jinja2Templates(directory=BASE_DIR / "templates")
@@ -93,7 +110,9 @@ def keys_page() -> RedirectResponse:
 @app.get("/bugs", response_class=HTMLResponse)
 def bugs_page(request: Request) -> HTMLResponse:
     return templates.TemplateResponse(
-        request, "coming_soon.html", {"active": "bugs", "page": "Bug desk"}
+        request,
+        "bug_desk.html",
+        {"active": "bugs", "devices": bug_report.DEVICE_OPTIONS},
     )
 
 
@@ -1319,6 +1338,197 @@ async def automation_export_zip(request: Request) -> Response:
         headers={
             "Content-Disposition": 'attachment; filename="qa-genius-automation.zip"'
         },
+    )
+
+
+def _as_int(raw: str, fallback: int) -> int | None:
+    """The number the form sent, or None when it is not a plain integer."""
+    text = (raw or "").strip()
+    if not text:
+        return fallback
+    try:
+        return int(text)
+    except ValueError:
+        return None
+
+
+def _bug_severity_pill(severity: str) -> str:
+    name = (severity or "").strip().title()
+    if name in ("Critical", "High"):
+        return "bad"
+    if name == "Medium":
+        return "warn"
+    if name == "Low":
+        return "ok"
+    return "neutral"
+
+
+def _bug_result_context(
+    report: BugReport,
+    bug: BugInput,
+    checks: list[Check],
+    notes: list[str],
+    provider_name: str,
+    is_example: bool = False,
+) -> dict:
+    return {
+        "report": report,
+        "bug": bug,
+        "checks": checks,
+        "score": quality_score(checks),
+        "ok_count": len([check for check in checks if check.ok]),
+        "severity_pill": _bug_severity_pill(report.severity),
+        # Code works these two out; the AI's own wording is not used here.
+        "reproducibility": reproducibility_text(
+            bug.total_attempts, bug.successful_attempts
+        ),
+        "environment": environment_text(bug),
+        "notes": notes,
+        "provider_name": provider_name,
+        "is_example": is_example,
+        # Copy buttons read these; the page never rebuilds the text itself.
+        "bug_export": {
+            "markdown": to_markdown(report, checks),
+            "jira": to_jira(report),
+        },
+        # True when a key refused the screenshot, so the card can say so.
+        "image_note": any("can't read images" in note for note in notes),
+    }
+
+
+def _screenshot_or_error(mime: str, data: str) -> tuple[str, str] | str | None:
+    """(mime, base64) to send, None when there is no screenshot, or an error message."""
+    if not data:
+        return None
+    if mime not in SCREENSHOT_TYPES:
+        return SCREENSHOT_ERROR
+    try:
+        raw = base64.b64decode(data, validate=True)
+    except ValueError:
+        return SCREENSHOT_ERROR
+    if not raw or len(raw) > SCREENSHOT_LIMIT:
+        return SCREENSHOT_ERROR
+    return (mime, data)
+
+
+@app.post("/bugs/run", response_class=HTMLResponse)
+async def bugs_run(request: Request) -> HTMLResponse:
+    # Parsed by hand so the screenshot field may exceed Starlette's 1 MB default.
+    form = await request.form(max_part_size=FORM_PART_LIMIT)
+
+    def field(name: str, default: str = "") -> str:
+        value = form.get(name, default)
+        return value if isinstance(value, str) else default
+
+    notes = field("notes")
+    device = field("device", "Not specified")
+    os = field("os")
+    browser = field("browser")
+    build = field("build")
+    url = field("url")
+    screenshot_mime = field("screenshot_mime")
+    screenshot_data = field("screenshot_data")
+
+    total = _as_int(field("total_attempts", "1"), 1)
+    if total is None:
+        return _error_card(request, bug_report.TOTAL_ERROR)
+    happened = _as_int(field("successful_attempts", "0"), 0)
+    if happened is None:
+        return _error_card(request, bug_report.HAPPENED_ERROR)
+
+    bug = bug_report.validate_bug_input(
+        notes=notes,
+        device=device,
+        os=os,
+        browser=browser,
+        build=build,
+        url=url,
+        total_attempts=total,
+        successful_attempts=happened,
+    )
+    if isinstance(bug, str):
+        return _error_card(request, bug)
+
+    image = _screenshot_or_error(screenshot_mime, screenshot_data)
+    if isinstance(image, str):
+        return _error_card(request, image)
+    if image is not None:
+        bug = replace(bug, has_screenshot=True)
+
+    keys = _request_keys(request)
+    if not keys:
+        # The browser opens the keys drawer (HX-Trigger: open-keys).
+        return HTMLResponse(
+            '<p class="muted">Add an API key to write a bug report.</p>',
+            headers={"HX-Trigger": "open-keys"},
+        )
+
+    system, base_user = bug_report_prompt(bug.notes)
+    user = bug_report.build_user_text(base_user, bug)
+    try:
+        report, used_index, run_notes = llm.generate_json(
+            keys, system, user, BugReport, image=image
+        )
+    except llm.NoKeysError:
+        return HTMLResponse(
+            '<p class="muted">Add an API key to write a bug report.</p>',
+            headers={"HX-Trigger": "open-keys"},
+        )
+    except llm.AllKeysBusyError as e:
+        return _error_card(
+            request,
+            "All your keys are busy. Try again in a minute or add another key.",
+            e.notes,
+        )
+    except llm.InvalidKeyError as e:
+        return _error_card(
+            request,
+            "Your key was rejected. Check it on the Your API keys page "
+            "and try again.",
+            e.notes,
+        )
+    except llm.ModelUnavailableError as e:
+        return _error_card(
+            request,
+            "The AI model isn't available right now. Your keys are fine -- "
+            "QA-Genius needs a model update.",
+            e.notes,
+        )
+    except llm.ProviderError as e:
+        return _error_card(request, str(e))
+    except llm.BadOutputError as e:
+        return _error_card(request, str(e))
+
+    provider = get_provider(keys[used_index]["provider"])
+    return templates.TemplateResponse(
+        request,
+        "_bug_report_result.html",
+        _bug_result_context(
+            report,
+            bug,
+            check_report(report, bug),
+            run_notes,
+            provider["name"] if provider else "unknown provider",
+        ),
+    )
+
+
+def _bug_sample() -> tuple[BugReport, BugInput]:
+    with open(SAMPLES_DIR / "bug_report.json", encoding="utf-8") as f:
+        sample = json.load(f)
+    return BugReport.model_validate(sample["report"]), BugInput(**sample["input"])
+
+
+@app.get("/bugs/example", response_class=HTMLResponse)
+def bugs_example(request: Request) -> HTMLResponse:
+    """Load example: a saved bug report. No key needed, no AI call."""
+    report, bug = _bug_sample()
+    return templates.TemplateResponse(
+        request,
+        "_bug_report_result.html",
+        _bug_result_context(
+            report, bug, check_report(report, bug), [], "saved example", is_example=True
+        ),
     )
 
 
