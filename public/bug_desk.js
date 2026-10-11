@@ -302,6 +302,37 @@
     if (files && files.length) attach(files[0]);
   }
 
+  /* ---------- notes handed over by Quality insights ---------- */
+
+  var PREFILL_KEY = "qag.bug_prefill";
+
+  /* Quality insights leaves one failure group here and sends the user to /bugs.
+   * It is read once, written with textContent only, then thrown away. */
+  function usePrefill() {
+    var notes = byId("bug-notes");
+    if (!notes) return;
+    var raw = null;
+    try {
+      raw = sessionStorage.getItem(PREFILL_KEY);
+      sessionStorage.removeItem(PREFILL_KEY);
+    } catch (e) {
+      return;
+    }
+    if (!raw) return;
+    var text = "";
+    try {
+      text = String(JSON.parse(raw).notes || "");
+    } catch (e) {
+      return;
+    }
+    if (!text) return;
+    notes.value = text;
+    var line = document.createElement("p");
+    line.className = "muted small";
+    line.textContent = "Prefilled from Quality insights";
+    notes.parentNode.appendChild(line);
+  }
+
   document.addEventListener("DOMContentLoaded", function () {
     var zone = byId("bug-drop");
     if (zone) {
@@ -309,6 +340,7 @@
       zone.addEventListener("dragleave", onDragLeave);
       zone.addEventListener("drop", onDrop);
     }
+    usePrefill();
     updateNotes();
     updateAttempts();
   });

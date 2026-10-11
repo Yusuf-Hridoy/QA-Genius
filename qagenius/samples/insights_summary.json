@@ -1,0 +1,31 @@
+{
+  "headline": "Checkout is the one real product problem; the rest looks like slow waits and one unstable search test.",
+  "assessment": "Four checkout payment tests and two cart tests fail the same way in both runs, which is the pattern of a product change rather than test noise. The cart total reading 0.00 is the most serious: it is identical in both browsers and would be visible to every shopper. The checkout timeouts all wait for a button that never becomes ready, so they may share one root cause with the cart total. The search suggestion failure appears in one run only and looks like a timing problem in the test.",
+  "groups": [
+    {
+      "group_id": "G1",
+      "kind": "product bug",
+      "likely_cause": "Every payment button the tests wait for stays disabled, so the click never becomes possible and the wait runs out. The same four tests fail in both browsers, which points at the order being rejected before the button is enabled rather than at a slow page.",
+      "suggested_action": "Place one order by hand on the same build and watch the network tab for the call that enables the pay button."
+    },
+    {
+      "group_id": "G2",
+      "kind": "product bug",
+      "likely_cause": "The cart total is rendered as 0.00 while the line items are present, in both runs and both browsers. A total that ignores its line items is a pricing fault, not a test one.",
+      "suggested_action": "Add a cart with two items in staging and compare the totals endpoint response with what the page shows."
+    },
+    {
+      "group_id": "G3",
+      "kind": "test issue",
+      "likely_cause": "The suggestion list is asserted immediately after typing, so a slower browser returns an empty list before the request comes back. It passed in the other run, which is the signature of a missing wait.",
+      "suggested_action": "Wait for the suggestions response or for the list to be non-empty before asserting its length."
+    }
+  ],
+  "flaky_advice": "Three of the four flaky tests are the checkout and search waits above, so fixing those waits should settle them. The login test that passed on a retry is worth watching for a week before touching it.",
+  "next_steps": [
+    "Reproduce the cart total of 0.00 by hand and raise it as a blocking bug",
+    "Check whether the pay button stays disabled for the same reason",
+    "Replace the fixed wait in the search suggestion test with a wait for the response",
+    "Re-run the nightly suite once the cart fix lands and compare the pass rate"
+  ]
+}

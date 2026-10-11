@@ -75,6 +75,23 @@ sent to your own provider with that one request and never stored; if the model
 cannot read images, QA-Genius retries the same key with text alone and says so
 on the card.
 
+## Quality insights
+Upload one to five test reports — JUnit XML (Playwright's
+`--reporter=junit`, pytest's `--junitxml=report.xml`, Jest, Cypress or
+Maven/Surefire all write it) or Playwright JSON (`--reporter=json`) — and
+**Analyze**. No API key is needed for this: code reads the files and works out
+the pass rate (skipped tests left out), groups the failures by a normalised
+message so twenty timeouts with different millisecond values land in one
+group, and finds the flaky tests — retried and passed, or passed in one run
+and failed in another. **Explain with AI** is optional and sends only those
+computed numbers and error messages to your provider, never the files
+themselves, and every number on the page stays the one code computed; group
+ids the AI invents are dropped with a note. Uploaded files are parsed in
+memory for that one request with `defusedxml`, so an XML bomb or an external
+entity is refused rather than expanded, and nothing is written to disk or
+stored. **Draft bug report →** carries a failure group over to the Bug desk
+with the notes prefilled.
+
 ## Troubleshooting
 - `python scripts/check_key.py` checks one provider key with a tiny JSON
   request. It asks for the provider id and the key (hidden while typing)

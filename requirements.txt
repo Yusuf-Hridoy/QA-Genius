@@ -7,3 +7,4 @@ json-repair
 python-multipart
 httpx
 openpyxl
+defusedxml

@@ -27,9 +27,11 @@ from qagenius.models import (
     BugReport,
     DuelComparison,
     Interpretation,
+    QualityInsightSummary,
     TestCase,
     TestCaseList,
 )
+from qagenius.insights_summary import clean_summary, facts_text, insights_prompt
 from qagenius.numbers import match_numbers
 from qagenius.prompts import (
     automation_prompt,
@@ -38,6 +40,7 @@ from qagenius.prompts import (
     test_cases_prompt,
 )
 from qagenius.providers import PROVIDERS, get_provider, pick_default
+from qagenius.report_parsers import ReportError, RunReport, parse_report
 from qagenius.test_case_depth import compute_depth
 from qagenius.test_case_diff import diff_cases
 from qagenius.test_case_exports import to_csv, to_xlsx
@@ -57,6 +60,13 @@ from qagenius.test_cases import (
     number_criteria,
     traced_ids,
 )
+from qagenius.test_run_metrics import (
+    Insights,
+    compute_insights,
+    insights_from_dict,
+    insights_markdown,
+    insights_to_dict,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -75,6 +85,21 @@ BASE_URL_LIMIT = 200
 SCREENSHOT_TYPES = ("image/png", "image/jpeg", "image/webp")
 SCREENSHOT_LIMIT = 2 * 1024 * 1024
 SCREENSHOT_ERROR = "Screenshot must be a PNG, JPG or WebP under 2 MB."
+MAX_REPORTS = 5
+REPORT_SIZE_LIMIT = 2 * 1024 * 1024
+# Vercel's request body limit is about 4.5 MB, so the upload has to stay under it.
+REPORT_TOTAL_LIMIT = 4 * 1024 * 1024
+REPORT_LIMIT_ERROR = "Upload up to 5 files, 2 MB each, 4 MB in total."
+FACTS_JSON_LIMIT = 300000
+ANALYZE_AGAIN_ERROR = "Please analyze the reports again."
+SAMPLE_REPORTS = ("nightly-chromium.xml", "nightly-firefox.json")
+# The AI's kind, shown as a pill. Mirrors GroupInsight.kind in models.py.
+KIND_PILLS = {
+    "product bug": "bad",
+    "test issue": "warn",
+    "environment": "info",
+    "unknown": "neutral",
+}
 # Starlette caps a form field at 1 MB, which a 2 MB screenshot exceeds once it is
 # base64 (about 2.7 MB). Raised just for the bug form, still under Vercel's ~4.5 MB body.
 FORM_PART_LIMIT = 4 * 1024 * 1024
@@ -118,9 +143,7 @@ def bugs_page(request: Request) -> HTMLResponse:
 
 @app.get("/insights", response_class=HTMLResponse)
 def insights_page(request: Request) -> HTMLResponse:
-    return templates.TemplateResponse(
-        request, "coming_soon.html", {"active": "insights", "page": "Quality insights"}
-    )
+    return templates.TemplateResponse(request, "insights.html", {"active": "insights"})
 
 
 @app.get("/performance", response_class=HTMLResponse)
@@ -1528,6 +1551,186 @@ def bugs_example(request: Request) -> HTMLResponse:
         "_bug_report_result.html",
         _bug_result_context(
             report, bug, check_report(report, bug), [], "saved example", is_example=True
+        ),
+    )
+
+
+def _pass_rate_pill(percent: int) -> str:
+    if percent >= 95:
+        return "ok"
+    if percent >= 80:
+        return "warn"
+    return "bad"
+
+
+def _insights_result_context(insights: Insights, is_example: bool = False) -> dict:
+    return {
+        "ins": insights,
+        # The page posts this back to Explain; the AI only ever sees facts_text of it.
+        "facts": insights_to_dict(insights),
+        "pass_rate_pill": _pass_rate_pill(insights.overall.pass_rate),
+        "summary_markdown": insights_markdown(insights),
+        "is_example": is_example,
+    }
+
+
+def _explanation_context(
+    summary: QualityInsightSummary,
+    notes: list[str],
+    provider_name: str,
+    is_example: bool = False,
+) -> dict:
+    return {
+        "summary": summary,
+        "notes": notes,
+        "provider_name": provider_name,
+        "is_example": is_example,
+        "kind_pill": KIND_PILLS,
+    }
+
+
+def _unique_label(label: str, taken: list[str]) -> str:
+    """Two files called report.xml become "report" and "report (2)"."""
+    if label not in taken:
+        return label
+    number = 2
+    while f"{label} ({number})" in taken:
+        number += 1
+    return f"{label} ({number})"
+
+
+@app.post("/insights/analyze", response_class=HTMLResponse)
+async def insights_analyze(request: Request) -> HTMLResponse:
+    """Read the uploaded reports with code. No key, no AI call, nothing stored."""
+    form = await request.form()
+    uploads = [
+        item
+        for item in form.getlist("reports")
+        if not isinstance(item, str) and getattr(item, "filename", "")
+    ]
+    if not uploads:
+        return _error_card(request, "Choose a JUnit XML or Playwright JSON file first.")
+    if len(uploads) > MAX_REPORTS:
+        return _error_card(request, REPORT_LIMIT_ERROR)
+
+    reports: list[RunReport] = []
+    labels: list[str] = []
+    total_bytes = 0
+    for upload in uploads:
+        # Checked before the read so an oversized file is never pulled into memory.
+        declared = getattr(upload, "size", None)
+        if isinstance(declared, int) and declared > REPORT_SIZE_LIMIT:
+            return _error_card(request, REPORT_LIMIT_ERROR)
+        content = await upload.read()
+        total_bytes += len(content)
+        if len(content) > REPORT_SIZE_LIMIT or total_bytes > REPORT_TOTAL_LIMIT:
+            return _error_card(request, REPORT_LIMIT_ERROR)
+        try:
+            report = parse_report(upload.filename or "report", content)
+        except ReportError as e:
+            return _error_card(request, str(e))
+        label = _unique_label(report.label, labels)
+        labels.append(label)
+        reports.append(replace(report, label=label))
+
+    return templates.TemplateResponse(
+        request,
+        "_insights_result.html",
+        _insights_result_context(compute_insights(reports)),
+    )
+
+
+def _sample_insights() -> Insights:
+    reports = []
+    for name in SAMPLE_REPORTS:
+        path = SAMPLES_DIR / "reports" / name
+        reports.append(parse_report(name, path.read_bytes()))
+    return compute_insights(reports)
+
+
+@app.get("/insights/example", response_class=HTMLResponse)
+def insights_example(request: Request) -> HTMLResponse:
+    """Load example: two saved runs of the Aurora Storefront suite. No key, no AI."""
+    return templates.TemplateResponse(
+        request,
+        "_insights_result.html",
+        _insights_result_context(_sample_insights(), is_example=True),
+    )
+
+
+@app.get("/insights/example-explained", response_class=HTMLResponse)
+def insights_example_explained(request: Request) -> HTMLResponse:
+    """The saved explanation for the example runs. No key, no AI call."""
+    with open(SAMPLES_DIR / "insights_summary.json", encoding="utf-8") as f:
+        summary = QualityInsightSummary.model_validate(json.load(f))
+    cleaned, notes = clean_summary(summary, _sample_insights())
+    return templates.TemplateResponse(
+        request,
+        "_insights_explanation.html",
+        _explanation_context(cleaned, notes, "saved example", is_example=True),
+    )
+
+
+@app.post("/insights/explain", response_class=HTMLResponse)
+async def insights_explain(request: Request) -> HTMLResponse:
+    """Send only the computed facts to the AI. The uploaded files are long gone."""
+    form = await request.form()
+    raw = form.get("facts_json", "")
+    if not isinstance(raw, str) or not raw or len(raw) > FACTS_JSON_LIMIT:
+        return _error_card(request, ANALYZE_AGAIN_ERROR)
+    try:
+        insights = insights_from_dict(json.loads(raw))
+    except (ValueError, TypeError):
+        return _error_card(request, ANALYZE_AGAIN_ERROR)
+
+    keys = _request_keys(request)
+    if not keys:
+        return HTMLResponse(
+            '<p class="muted">Add an API key to explain these results.</p>',
+            headers={"HX-Trigger": "open-keys"},
+        )
+
+    system, user = insights_prompt(facts_text(insights))
+    try:
+        summary, used_index, run_notes = llm.generate_json(
+            keys, system, user, QualityInsightSummary
+        )
+    except llm.NoKeysError:
+        return HTMLResponse(
+            '<p class="muted">Add an API key to explain these results.</p>',
+            headers={"HX-Trigger": "open-keys"},
+        )
+    except llm.AllKeysBusyError as e:
+        return _error_card(
+            request,
+            "All your keys are busy. Try again in a minute or add another key.",
+            e.notes,
+        )
+    except llm.InvalidKeyError as e:
+        return _error_card(
+            request,
+            "Your key was rejected. Check it on the Your API keys page and try again.",
+            e.notes,
+        )
+    except llm.ModelUnavailableError as e:
+        return _error_card(
+            request,
+            "The AI model isn't available right now. Your keys are fine -- "
+            "QA-Genius needs a model update.",
+            e.notes,
+        )
+    except (llm.ProviderError, llm.BadOutputError) as e:
+        return _error_card(request, str(e))
+
+    cleaned, guard_notes = clean_summary(summary, insights)
+    provider = get_provider(keys[used_index]["provider"])
+    return templates.TemplateResponse(
+        request,
+        "_insights_explanation.html",
+        _explanation_context(
+            cleaned,
+            run_notes + guard_notes,
+            provider["name"] if provider else "unknown provider",
         ),
     )
 

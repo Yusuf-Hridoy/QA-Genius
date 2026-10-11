@@ -1,0 +1,33 @@
+<div class="card" id="insights-explanation-card">
+  <h3>{{ summary.headline }}</h3>
+  <p>{{ summary.assessment }}</p>
+  {% if summary.groups %}
+  <div class="ac-list">
+    {% for group in summary.groups %}
+    <div class="card tc-card">
+      <p class="row">
+        <span class="pill accent">{{ group.group_id }}</span>
+        <span class="pill {{ kind_pill.get(group.kind, "neutral") }}">{{ group.kind }}</span>
+      </p>
+      <p>{{ group.likely_cause }}</p>
+      <p><strong>Next:</strong> {{ group.suggested_action }}</p>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+  {% if summary.flaky_advice %}
+  <h3>Flaky tests</h3>
+  <p>{{ summary.flaky_advice }}</p>
+  {% endif %}
+  {% if summary.next_steps %}
+  <h3>Next steps</h3>
+  <ol class="tc-steps">
+    {% for step in summary.next_steps %}<li>{{ step }}</li>{% endfor %}
+  </ol>
+  {% endif %}
+  {% if notes %}
+  <p class="muted small">{{ notes | join(" · ") }}</p>
+  {% endif %}
+  <p class="muted small">Answered by {{ provider_name }}. Every number on this page was
+    computed by code, not by the AI.</p>
+</div>

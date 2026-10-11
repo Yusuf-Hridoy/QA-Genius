@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="search" tests="2" failures="1" time="2.0">
+  <testcase name="suggestions appear while typing" time="1.5"/>
+  <testcase name="no results shows a hint" time="0.5">
+    <failure message="Expected 'No matches' but found ''"/>
+  </testcase>
+</testsuite>

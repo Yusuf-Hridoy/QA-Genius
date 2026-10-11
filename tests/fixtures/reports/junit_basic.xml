@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites name="Aurora Storefront nightly" tests="6" failures="1" errors="1" skipped="1" time="12.5">
+  <testsuite name="checkout" tests="4" failures="1" errors="1" skipped="0" time="9.25">
+    <testcase classname="checkout.spec" name="pay with card" time="4.5"/>
+    <testcase classname="checkout.spec" name="pay with a saved card" time="1.25">
+      <failure message="Timeout 30000ms exceeded waiting for locator('#pay')" type="TimeoutError">at checkout.spec.ts:42:5</failure>
+    </testcase>
+    <testcase classname="checkout.spec" name="apply a promo code" time="2.5">
+      <error type="RuntimeError">Could not reach the promo service
+second line of the stack</error>
+    </testcase>
+    <testcase classname="checkout.spec" name="show the order summary" time="1.0"/>
+  </testsuite>
+  <testsuite name="cart" tests="2" failures="0" errors="0" skipped="1" time="3.25">
+    <testcase classname="cart.spec" name="update the quantity" time="3.25"/>
+    <testcase name="remove the last item" time="0">
+      <skipped message="Covered by the cart API suite"/>
+    </testcase>
+  </testsuite>
+</testsuites>

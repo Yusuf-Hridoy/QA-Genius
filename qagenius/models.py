@@ -298,3 +298,32 @@ class Fork(BaseModel):
 class DuelComparison(BaseModel):
     forks: List[Fork] = []
     agreements: List[str] = []
+
+
+class GroupInsight(BaseModel):
+    group_id: str
+    kind: Literal["product bug", "test issue", "environment", "unknown"]
+    likely_cause: str
+    suggested_action: str
+
+    @field_validator("kind", mode="before")
+    @classmethod
+    def _kind(cls, value: Any) -> str:
+        text = str(value or "").strip().lower()
+        if text in ("product bug", "test issue", "environment", "unknown"):
+            return text
+        if text in ("bug", "product", "product issue", "app bug"):
+            return "product bug"
+        if text in ("test", "flaky test", "test code", "test bug", "flaky"):
+            return "test issue"
+        if text in ("env", "infrastructure", "infra", "ci", "network"):
+            return "environment"
+        return "unknown"
+
+
+class QualityInsightSummary(BaseModel):
+    headline: str
+    assessment: str
+    groups: List[GroupInsight] = []
+    flaky_advice: str = ""
+    next_steps: List[str] = []

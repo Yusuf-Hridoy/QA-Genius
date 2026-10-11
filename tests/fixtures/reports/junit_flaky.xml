@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites>
+  <testsuite name="login">
+    <testcase classname="login.spec" name="remember me" time="6.0">
+      <rerunFailure message="Timeout 5000ms exceeded waiting for locator('#remember')" type="TimeoutError">first attempt</rerunFailure>
+    </testcase>
+    <testcase classname="login.spec" name="lock after five tries" time="4.0">
+      <flakyFailure message="Flaked once" type="AssertionError">retry text</flakyFailure>
+      <failure message="Expected the account to lock" type="AssertionError">final failure</failure>
+    </testcase>
+  </testsuite>
+</testsuites>

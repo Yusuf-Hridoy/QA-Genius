@@ -1,0 +1,129 @@
+<div class="stat-row">
+  <div class="stat">
+    <div class="num"><span class="pill {{ pass_rate_pill }}">{{ ins.overall.pass_rate }}%</span></div>
+    <div class="lbl">Pass rate</div>
+  </div>
+  <div class="stat"><div class="num">{{ ins.overall.failed }}</div><div class="lbl">Failed</div></div>
+  <div class="stat"><div class="num">{{ ins.overall.flaky }}</div><div class="lbl">Flaky</div></div>
+  <div class="stat"><div class="num">{{ ins.overall.skipped }}</div><div class="lbl">Skipped</div></div>
+  <div class="stat"><div class="num">{{ "%.1f" | format(ins.overall.duration_s) }} s</div><div class="lbl">Duration</div></div>
+</div>
+<div class="card">
+  <h2>{{ ins.overall.total }} results{% if is_example %} <span class="pill info">Example</span>{% endif %}</h2>
+  <p class="muted small">All numbers computed from your files by code.</p>
+  {% if ins.runs | length > 1 %}
+  <table class="grid" id="insights-runs">
+    <thead>
+      <tr><th>Run</th><th>Tests</th><th>Passed</th><th>Failed</th><th>Flaky</th>
+        <th>Skipped</th><th>Pass rate</th><th>Duration</th></tr>
+    </thead>
+    <tbody>
+      {% for run in ins.runs %}
+      <tr>
+        <td>{{ run.label }}</td><td>{{ run.total }}</td><td>{{ run.passed }}</td>
+        <td>{{ run.failed }}</td><td>{{ run.flaky }}</td><td>{{ run.skipped }}</td>
+        <td>{{ run.pass_rate }}%</td><td>{{ "%.1f" | format(run.duration_s) }} s</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+</div>
+
+<div class="card">
+  <h2>Failure groups</h2>
+  {% if not ins.groups %}
+  <p class="muted">No failures in these runs.</p>
+  {% endif %}
+  {% for group in ins.groups %}
+  <div class="card tc-card" id="insights-{{ group.id }}">
+    <h3>
+      <span class="pill accent">{{ group.id }}</span>
+      {{ group.count }} failing result{{ "" if group.count == 1 else "s" }}
+      in {{ group.runs | length }} run{{ "" if group.runs | length == 1 else "s" }}
+    </h3>
+    <p class="mono small">{{ group.signature }}</p>
+    {% if group.example_message %}<p>{{ group.example_message }}</p>{% endif %}
+    {% if group.tests %}
+    <ul class="picked-cases">
+      {% for name in group.tests[:5] %}<li>{{ name }}</li>{% endfor %}
+      {% if group.tests | length > 5 %}
+      <li class="muted">+{{ group.tests | length - 5 }} more</li>
+      {% endif %}
+    </ul>
+    {% endif %}
+    <p class="muted small">Seen in: {{ group.runs | join(", ") }}</p>
+    {% if group.example_details %}
+    <details>
+      <summary>Example details</summary>
+      <pre class="code">{{ group.example_details }}</pre>
+    </details>
+    {% endif %}
+    <div class="row">
+      <button type="button" class="btn btn-small insights-draft-bug"
+        data-message="{{ group.example_message }}"
+        data-tests="{{ group.tests | join('; ') }}"
+        data-runs="{{ group.runs | join(', ') }}">Draft bug report →</button>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+
+<div class="card">
+  <h2>Flaky tests</h2>
+  <p class="muted small">Flaky = retried and passed, or passed in one run and failed in another.</p>
+  {% if not ins.flaky %}
+  <p class="muted">None found.</p>
+  {% else %}
+  <table class="grid" id="insights-flaky">
+    <thead><tr><th>Test</th><th>Suite</th><th>Why</th><th>Runs</th></tr></thead>
+    <tbody>
+      {% for test in ins.flaky %}
+      <tr>
+        <td>{{ test.name }}</td><td>{{ test.suite }}</td><td>{{ test.reason }}</td>
+        <td>{{ test.runs | join(", ") }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+</div>
+
+<div class="card">
+  <h2>Slowest tests</h2>
+  {% if not ins.slowest %}
+  <p class="muted">These reports have no timings.</p>
+  {% else %}
+  <table class="grid" id="insights-slowest">
+    <thead><tr><th>Test</th><th>Seconds</th></tr></thead>
+    <tbody>
+      {% for name, seconds in ins.slowest %}
+      <tr><td>{{ name }}</td><td>{{ "%.1f" | format(seconds) }} s</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+</div>
+
+<script type="application/json" id="insights-facts">{{ facts | tojson }}</script>
+<script type="application/json" id="insights-md">{{ summary_markdown | tojson }}</script>
+<div class="card">
+  <form id="insights-explain-form" hx-post="/insights/explain" hx-target="#insights-explanation"
+        hx-swap="innerHTML" hx-indicator="#insights-explain-progress">
+    <input type="hidden" name="facts_json" id="insights-facts-input">
+    <div class="row">
+      {% if is_example %}
+      {# The example answer is saved, so it opens without a key and without an AI call. #}
+      <button type="button" class="btn" hx-get="/insights/example-explained"
+              hx-target="#insights-explanation" hx-swap="innerHTML">Explain with AI</button>
+      {% else %}
+      <button type="submit" class="btn"><span class="btn-label">Explain with AI</span></button>
+      {% endif %}
+      <button type="button" class="btn" id="insights-copy-md">Copy summary as Markdown</button>
+    </div>
+    <p id="insights-explain-progress" class="htmx-indicator muted">Reading the numbers…</p>
+  </form>
+  <p class="muted small" id="insights-copy-status" aria-live="polite"></p>
+  <p class="muted small">Sends only the numbers and error messages above to your AI provider.</p>
+</div>
+<div id="insights-explanation"></div>

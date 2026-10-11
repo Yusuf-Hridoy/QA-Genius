@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block title %}Quality insights — QA-Genius{% endblock %}
+{% block top_title %}Quality insights{% endblock %}
+{% block content %}
+<div class="card">
+  <h2>Test reports</h2>
+  <p class="muted small">Upload the report your test run wrote. Code reads it — no API key needed.</p>
+  <form id="insights-form" hx-post="/insights/analyze" hx-target="#insights-output" hx-swap="innerHTML"
+        hx-encoding="multipart/form-data" hx-indicator="#insights-progress">
+    <fieldset class="field" id="insights-files-field">
+      <legend class="hint">Report files</legend>
+      <div id="insights-drop" class="drop-zone" tabindex="0">
+        <p class="muted small">Drop report files here, or
+          <button type="button" class="btn btn-small" id="insights-pick">choose files</button>
+        </p>
+        <input id="insights-file" name="reports" type="file" accept=".xml,.json" multiple hidden>
+      </div>
+      <ul class="key-list" id="insights-file-list"></ul>
+      <p class="muted small" id="insights-file-status" aria-live="polite"></p>
+      <p class="muted small">Up to 5 files · 2 MB each · JUnit XML or Playwright JSON</p>
+      <p class="muted small">Playwright: <span class="mono">--reporter=junit</span> or
+        <span class="mono">--reporter=json</span>. pytest: <span class="mono">--junitxml=report.xml</span>.</p>
+    </fieldset>
+
+    <div class="row">
+      <button id="insights-run" type="submit" class="btn btn-primary"><span class="btn-label">Analyze</span></button>
+      <button id="insights-example" type="button" class="btn" hx-get="/insights/example"
+              hx-target="#insights-output" hx-swap="innerHTML">Load example</button>
+    </div>
+    <p id="insights-progress" class="htmx-indicator muted">Reading your reports…</p>
+    <p class="muted small">Files are read on our server for this request only and never stored.
+      Nothing is sent to an AI unless you click Explain with AI.</p>
+  </form>
+</div>
+<div id="insights-output"></div>
+{% endblock %}
+{% block scripts %}<script src="/insights.js" defer></script>{% endblock %}

@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites name="Aurora Storefront nightly" tests="40" failures="6" errors="0" skipped="3" time="215.7">
+  <testsuite name="checkout.spec.ts" tests="10" failures="4" errors="0" skipped="0" time="123.2">
+    <testcase classname="checkout.spec.ts" name="checkout › pay with a saved card" time="42.1">
+      <failure message="Timeout 30000ms exceeded waiting for locator('#pay-now')" type="TimeoutError">TimeoutError: Timeout 30000ms exceeded waiting for locator('#pay-now')
+    at checkout.spec.ts:51:9
+    at runNextTicks (node:internal/process/task_queues:60:5)</failure>
+    </testcase>
+    <testcase classname="checkout.spec.ts" name="checkout › pay with a new card" time="31.6">
+      <failure message="Timeout 30000ms exceeded waiting for locator('#card-submit')" type="TimeoutError">TimeoutError: Timeout 30000ms exceeded waiting for locator('#card-submit')
+    at checkout.spec.ts:74:9
+    at runNextTicks (node:internal/process/task_queues:60:5)</failure>
+    </testcase>
+    <testcase classname="checkout.spec.ts" name="checkout › pay with a gift card" time="16.2">
+      <failure message="Timeout 15000ms exceeded waiting for locator('[data-test=gift-card]')" type="TimeoutError">TimeoutError: Timeout 15000ms exceeded waiting for locator('[data-test=gift-card]')
+    at checkout.spec.ts:96:9
+    at runNextTicks (node:internal/process/task_queues:60:5)</failure>
+    </testcase>
+    <testcase classname="checkout.spec.ts" name="checkout › pay on delivery" time="11.3">
+      <failure message="Timeout 10000ms exceeded waiting for locator('#place-order')" type="TimeoutError">TimeoutError: Timeout 10000ms exceeded waiting for locator('#place-order')
+    at checkout.spec.ts:118:9
+    at runNextTicks (node:internal/process/task_queues:60:5)</failure>
+    </testcase>
+    <testcase classname="checkout.spec.ts" name="checkout › show the order summary" time="3.4"/>
+    <testcase classname="checkout.spec.ts" name="checkout › edit the delivery address" time="4.2"/>
+    <testcase classname="checkout.spec.ts" name="checkout › pick a slower delivery option" time="2.9"/>
+    <testcase classname="checkout.spec.ts" name="checkout › warn about an expired card" time="2.1"/>
+    <testcase classname="checkout.spec.ts" name="checkout › keep the basket after a reload" time="5.6"/>
+    <testcase classname="checkout.spec.ts" name="checkout › send the confirmation email" time="3.8"/>
+  </testsuite>
+  <testsuite name="cart.spec.ts" tests="8" failures="2" errors="0" skipped="1" time="25.9">
+    <testcase classname="cart.spec.ts" name="cart › total updates when a quantity changes" time="6.4">
+      <failure message="Expected the cart total to be 48.00 but it was 0.00" type="AssertionError">AssertionError: Expected the cart total to be 48.00 but it was 0.00
+    at cart.spec.ts:28:7</failure>
+    </testcase>
+    <testcase classname="cart.spec.ts" name="cart › total updates when an item is removed" time="5.9">
+      <failure message="Expected the cart total to be 48.00 but it was 0.00" type="AssertionError">AssertionError: Expected the cart total to be 48.00 but it was 0.00
+    at cart.spec.ts:44:7</failure>
+    </testcase>
+    <testcase classname="cart.spec.ts" name="cart › add an item from the product page" time="2.6"/>
+    <testcase classname="cart.spec.ts" name="cart › add the same item twice" time="2.2"/>
+    <testcase classname="cart.spec.ts" name="cart › empty the cart" time="1.8"/>
+    <testcase classname="cart.spec.ts" name="cart › keep the cart between sessions" time="4.7"/>
+    <testcase classname="cart.spec.ts" name="cart › show the free delivery threshold" time="2.3"/>
+    <testcase classname="cart.spec.ts" name="cart › apply a promo code" time="0.0">
+      <skipped message="Not part of the nightly run"/>
+    </testcase>
+  </testsuite>
+  <testsuite name="search.spec.ts" tests="7" failures="0" errors="0" skipped="0" time="17.2">
+    <testcase classname="search.spec.ts" name="search › suggestions appear while typing" time="3.2"/>
+    <testcase classname="search.spec.ts" name="search › an empty search shows a hint" time="1.4"/>
+    <testcase classname="search.spec.ts" name="search › filter by category" time="2.8"/>
+    <testcase classname="search.spec.ts" name="search › sort by price" time="2.5"/>
+    <testcase classname="search.spec.ts" name="search › paginate the results" time="3.6"/>
+    <testcase classname="search.spec.ts" name="search › keep filters in the url" time="2.0"/>
+    <testcase classname="search.spec.ts" name="search › show a no results message" time="1.7"/>
+  </testsuite>
+  <testsuite name="login.spec.ts" tests="8" failures="0" errors="0" skipped="1" time="31.3">
+    <testcase classname="login.spec.ts" name="login › remember me keeps the session" time="12.4">
+      <rerunFailure message="Timeout 5000ms exceeded waiting for locator('#remember-me')" type="TimeoutError">TimeoutError: Timeout 5000ms exceeded waiting for locator('#remember-me')
+    at login.spec.ts:61:9
+    at runNextTicks (node:internal/process/task_queues:60:5)</rerunFailure>
+    </testcase>
+    <testcase classname="login.spec.ts" name="login › sign in with an email address" time="2.4"/>
+    <testcase classname="login.spec.ts" name="login › reject a wrong password" time="1.9"/>
+    <testcase classname="login.spec.ts" name="login › lock the account after five tries" time="7.2"/>
+    <testcase classname="login.spec.ts" name="login › send a reset link" time="3.1"/>
+    <testcase classname="login.spec.ts" name="login › sign out from the menu" time="1.6"/>
+    <testcase classname="login.spec.ts" name="login › redirect back after signing in" time="2.7"/>
+    <testcase classname="login.spec.ts" name="login › sign in with a one time code" time="0.0">
+      <skipped message="Not part of the nightly run"/>
+    </testcase>
+  </testsuite>
+  <testsuite name="account.spec.ts" tests="7" failures="0" errors="0" skipped="1" time="18.1">
+    <testcase classname="account.spec.ts" name="account › show the order history" time="2.9"/>
+    <testcase classname="account.spec.ts" name="account › change the delivery address" time="3.3"/>
+    <testcase classname="account.spec.ts" name="account › add a second address" time="2.6"/>
+    <testcase classname="account.spec.ts" name="account › download an invoice" time="4.1"/>
+    <testcase classname="account.spec.ts" name="account › change the password" time="3.0"/>
+    <testcase classname="account.spec.ts" name="account › close the account" time="2.2"/>
+    <testcase classname="account.spec.ts" name="account › export the saved cards" time="0.0">
+      <skipped message="Not part of the nightly run"/>
+    </testcase>
+  </testsuite>
+</testsuites>
