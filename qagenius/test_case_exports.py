@@ -37,8 +37,8 @@ _WRAP_COLUMNS = ("Steps", "Expected Result", "BDD Scenario")
 _UNCOVERED_FILL = PatternFill("solid", fgColor="F7DEDA")
 
 
-def _safe_cell(value: str) -> str:
-    """Stop a spreadsheet reading a cell as a formula."""
+def safe_cell(value: str) -> str:
+    """Stop a spreadsheet reading a cell as a formula. Shared with the risk register."""
     text = "" if value is None else str(value)
     if text.startswith(_FORMULA_STARTS):
         return "'" + text
@@ -65,7 +65,7 @@ def _row(test_case: TestCase, valid_ids: set[str]) -> list[str]:
         test_case.automation_effort,
         "; ".join(test_case.tags or []),
     ]
-    return [_safe_cell(value) for value in values]
+    return [safe_cell(value) for value in values]
 
 
 def to_csv(result: TestCaseList, criteria: list[Criterion]) -> bytes:
@@ -106,7 +106,7 @@ def _write_coverage_sheet(sheet, result: TestCaseList, criteria: list[Criterion]
     sheet.column_dimensions["C"].width = 12
     for criterion in criteria:
         count = coverage.cases_per_id[criterion.id]
-        sheet.append([_safe_cell(criterion.id), _safe_cell(criterion.text), count])
+        sheet.append([safe_cell(criterion.id), safe_cell(criterion.text), count])
         if count == 0:
             sheet.cell(row=sheet.max_row, column=3).fill = _UNCOVERED_FILL
     sheet.append(["Coverage", f"{coverage.percent}%"])

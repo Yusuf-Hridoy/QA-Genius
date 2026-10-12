@@ -1,11 +1,15 @@
 """Refine and strengthen tests: prompt text and the additive merge."""
 
 from qagenius.test_case_depth import compute_depth
+from qagenius.models import FailureMode
+from qagenius.risk_radar import ScoredRisk
 from qagenius.test_case_refine import (
+    add_risk_tags,
     current_cases_block,
     merge_strengthened,
     next_case_id,
     refine_user_text,
+    risk_instruction,
     strengthen_instruction,
 )
 from qagenius.test_cases import number_criteria
@@ -132,3 +136,89 @@ def test_next_case_id() -> None:
     assert next_case_id(["TC-001", "TC-12", "TC7"]) == "TC-013"
     assert next_case_id([]) == "TC-001"
     assert next_case_id(["no numbers here"]) == "TC-001"
+
+
+RISK_INSTRUCTION = """Add new test cases only. Do not change or remove any existing test case.
+Write at least one test case for each of these risks. Put the risk id in the test case's tags as "risk:R1" (exactly this format).
+R1 (security): Lockout counter is not shared across servers — Test idea: Fail five times across two servers
+R2 (performance): Lockout email arrives late — Test idea: Lock 200 accounts in one minute
+Use exact values (counts, times, sizes) and include at least one negative or boundary case per risk where it makes sense."""
+
+
+def _scored(risk_id: str, category: str, title: str, test_idea: str) -> ScoredRisk:
+    return ScoredRisk(
+        risk=FailureMode(
+            id=risk_id,
+            title=title,
+            category=category,
+            effect="Shoppers suffer",
+            cause="Something slipped",
+            severity=5,
+            likelihood=4,
+            detectability=4,
+            test_idea=test_idea,
+        ),
+        rpn=80,
+        level="high",
+        coverage="none",
+        covered_tests=[],
+    )
+
+
+ASKED = [
+    _scored(
+        "R1",
+        "security",
+        "Lockout counter is not shared across servers",
+        "Fail five times across two servers",
+    ),
+    _scored(
+        "R2",
+        "performance",
+        "Lockout email arrives late",
+        "Lock 200 accounts in one minute",
+    ),
+]
+
+
+def test_risk_instruction_names_every_risk_and_the_tag_format() -> None:
+    assert risk_instruction(ASKED) == RISK_INSTRUCTION
+
+
+def test_risk_instruction_leaves_out_a_missing_test_idea() -> None:
+    asked = [_scored("R1", "data", "Counter is never cleared", "")]
+    assert "R1 (data): Counter is never cleared\n" in risk_instruction(asked) + "\n"
+
+
+def test_a_new_case_that_names_its_risk_gets_the_tag() -> None:
+    current = suite(case(case_id="TC-001"))
+    proposed = suite(
+        case(case_id="TC-001"),
+        case(case_id="TC-002", traceability="AC-1, R2", tags=["login"]),
+    )
+    merged = add_risk_tags(current, proposed, ["R1", "R2"])
+    assert merged.test_cases[1].tags == ["login", "risk:R2"]
+
+
+def test_the_tag_is_not_added_twice() -> None:
+    current = suite(case(case_id="TC-001"))
+    proposed = suite(
+        case(case_id="TC-001"),
+        case(case_id="TC-002", title="Covers R1", tags=["risk:R1"]),
+    )
+    merged = add_risk_tags(current, proposed, ["R1"])
+    assert merged.test_cases[1].tags == ["risk:R1"]
+
+
+def test_an_existing_case_is_left_alone() -> None:
+    current = suite(case(case_id="TC-001", title="Covers R1", tags=["login"]))
+    proposed = suite(case(case_id="TC-001", title="Covers R1", tags=["login"]))
+    merged = add_risk_tags(current, proposed, ["R1"])
+    assert merged.test_cases[0].tags == ["login"]
+
+
+def test_a_risk_id_nobody_asked_for_is_not_tagged() -> None:
+    current = suite(case(case_id="TC-001"))
+    proposed = suite(case(case_id="TC-001"), case(case_id="TC-002", title="About R9"))
+    merged = add_risk_tags(current, proposed, ["R1"])
+    assert merged.test_cases[1].tags == ["login"]

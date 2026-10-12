@@ -266,3 +266,96 @@ def test_sample_files_validate_as_test_case_lists() -> None:
         result = TestCaseList.model_validate(sample["result"])
         assert result.test_cases
         assert len(sample["criteria"]) == 5
+
+
+RISKS = [
+    {
+        "id": "R1",
+        "category": "security",
+        "title": "Lockout counter is not shared across servers",
+        "test_idea": "Fail five times across two servers",
+    },
+    {
+        "id": "R2",
+        "category": "performance",
+        "title": "Lockout email arrives late",
+        "test_idea": "Lock 200 accounts in one minute",
+    },
+]
+
+
+def _risk_form(**overrides) -> dict:
+    form = {"mode": "risks", "risks_json": json.dumps(RISKS)}
+    form.update(overrides)
+    return _form(**form)
+
+
+def test_risks_mode_asks_for_one_test_per_risk(monkeypatch) -> None:
+    current, _ = real_run()
+    captured: list = []
+    monkeypatch.setattr(llm, "generate_json", _fake(current, captured))
+    response = client.post(
+        "/requirements/test-cases/refine", data=_risk_form(), headers=KEYS_HEADER
+    )
+    assert response.status_code == 200
+    asked = captured[0]
+    assert 'Put the risk id in the test case\'s tags as "risk:R1"' in asked
+    assert "R1 (security): Lockout counter is not shared across servers" in asked
+    assert "R2 (performance): Lockout email arrives late" in asked
+
+
+def test_risks_mode_only_adds_cases(monkeypatch) -> None:
+    current, _ = real_run()
+    # The AI drops everything and rewrites one case: both must be ignored.
+    rewritten = suite(
+        case(case_id="TC-001", title="Rewritten by the AI"),
+        case(case_id="TC-009", title="Counter is shared between servers", tags=["risk:R1"]),
+    )
+    monkeypatch.setattr(llm, "generate_json", _fake(rewritten))
+    body = client.post(
+        "/requirements/test-cases/refine", data=_risk_form(), headers=KEYS_HEADER
+    ).text
+    assert "+1 added" in body
+    assert "−0 removed" in body
+    assert "Rewritten by the AI" not in body
+
+
+def test_a_new_case_that_names_a_risk_is_tagged_by_code(monkeypatch) -> None:
+    current, _ = real_run()
+    # The AI wrote the case for R2 but forgot the tag it was asked for.
+    answer = suite(
+        *current.test_cases,
+        case(
+            case_id="TC-009",
+            title="Lockout email is sent within one minute under load",
+            traceability="AC-3, R2",
+            tags=["email"],
+        ),
+    )
+    monkeypatch.setattr(llm, "generate_json", _fake(answer))
+    body = client.post(
+        "/requirements/test-cases/refine", data=_risk_form(), headers=KEYS_HEADER
+    ).text
+    assert "risk:R2" in body
+
+
+def test_risks_mode_refuses_a_broken_risk_list(monkeypatch) -> None:
+    monkeypatch.setattr(llm, "generate_json", _never)
+    for bad in ["{not json", "[]", json.dumps([{"category": "security"}])]:
+        body = client.post(
+            "/requirements/test-cases/refine",
+            data=_risk_form(risks_json=bad),
+            headers=KEYS_HEADER,
+        ).text
+        assert "Please check the test cases and instruction." in body
+
+
+def test_risks_mode_refuses_more_than_fifteen_risks(monkeypatch) -> None:
+    monkeypatch.setattr(llm, "generate_json", _never)
+    many = json.dumps([dict(RISKS[0], id=f"R{n}") for n in range(1, 17)])
+    body = client.post(
+        "/requirements/test-cases/refine",
+        data=_risk_form(risks_json=many),
+        headers=KEYS_HEADER,
+    ).text
+    assert "Please check the test cases and instruction." in body

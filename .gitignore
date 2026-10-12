@@ -57,6 +57,4 @@ Thumbs.db
 # Local data
 *.csv
 *.xlsx
-*.json
 !requirements*.txt
-!qagenius/samples/*.json

@@ -265,3 +265,35 @@ def duel_compare_prompt(
             + number_facts
         )
     return system, user
+
+
+RISK_RADAR_SYSTEM = '''You are a senior QA lead running a Failure Mode and Effects Analysis (FMEA) for one feature before release.
+
+List 6 to 12 realistic ways this feature can fail in production. Cover at least three different categories from: security, performance, reliability, data, usability, accessibility, functional. Prefer non-obvious failures an experienced tester would worry about (concurrency, multiple servers, caching, time zones, retries, partial outages, large data, slow networks, assistive technology, abuse).
+
+For each failure mode give:
+- severity 1-5 (5 = severe harm to users, money, security or reputation)
+- likelihood 1-5 (5 = very likely to happen)
+- detectability 1-5 (5 = very hard to notice before release; 1 = any basic test would catch it)
+and one short reason for each score.
+
+"related_criteria": only acceptance criteria ids from the list given (AC-1, AC-2, ...).
+"covered_by": only test case ids from the list given, and only if that test case really checks this failure mode. If none does, leave it empty. Do not guess.
+"test_idea": one sentence describing a test that would catch this failure.'''
+
+
+def risk_radar_prompt(
+    user_story: str,
+    criteria_lines: str,
+    test_case_lines: str,
+) -> tuple[str, str]:
+    """Prompt for the FMEA pass: how this one feature can fail in production."""
+    user = (
+        'User story:\n'
+        + user_story
+        + '\n\nAcceptance criteria:\n'
+        + (criteria_lines or '(none yet)')
+        + '\n\nExisting test cases:\n'
+        + (test_case_lines or '(none yet)')
+    )
+    return RISK_RADAR_SYSTEM, user

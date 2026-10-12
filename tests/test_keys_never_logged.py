@@ -176,3 +176,24 @@ def test_models_endpoint_never_logs_key(monkeypatch, caplog) -> None:
     assert response.json()["ok"] is False
     assert SECRET26 not in response.text
     assert SECRET26 not in caplog.text
+
+
+def test_risks_run_error_never_echoes_key(monkeypatch, caplog) -> None:
+    def fake(keys, system, user, schema):
+        raise llm.AllKeysBusyError(["Key 1 (Gemini) was busy, trying the next key"])
+
+    monkeypatch.setattr(llm, "generate_json", fake)
+    client = TestClient(main.app, raise_server_exceptions=False)
+    header = {"X-QAG-Keys": json.dumps([{"provider": "gemini", "key": SECRET}])}
+    with caplog.at_level(logging.WARNING):
+        response = client.post(
+            "/risks/run",
+            data={
+                "user_story": "As a shopper, I want my account to lock.",
+                "criteria_json": json.dumps(["The account locks after 5 attempts"]),
+                "cases_json": "[]",
+            },
+            headers=header,
+        )
+    assert SECRET not in response.text
+    assert SECRET not in caplog.text

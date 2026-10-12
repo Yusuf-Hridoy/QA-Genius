@@ -1,0 +1,82 @@
+{
+  "config": {
+    "version": "1.47.0",
+    "workers": 4
+  },
+  "stats": {
+    "expected": 2,
+    "unexpected": 1,
+    "flaky": 1,
+    "skipped": 0
+  },
+  "suites": [
+    {
+      "title": "checkout.spec.ts",
+      "file": "checkout.spec.ts",
+      "specs": [
+        {
+          "title": "guest checkout",
+          "file": "checkout.spec.ts",
+          "tests": [
+            {
+              "projectName": "chromium",
+              "status": "expected",
+              "results": [
+                {
+                  "status": "skipped",
+                  "duration": 0
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "suites": [
+        {
+          "title": "checkout",
+          "file": "checkout.spec.ts",
+          "specs": [
+            {
+              "title": "pay with card",
+              "file": "checkout.spec.ts",
+              "tests": [
+                {
+                  "projectName": "chromium",
+                  "status": "unexpected",
+                  "results": [
+                    {
+                      "status": "failed",
+                      "duration": 1200,
+                      "error": {
+                        "message": "\u001b[31mTimeout 30000ms exceeded waiting for locator('#pay')\u001b[39m",
+                        "stack": "\u001b[31mTimeoutError\u001b[39m\n    at checkout.spec.ts:42:5"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "projectName": "firefox",
+                  "status": "flaky",
+                  "results": [
+                    {
+                      "status": "failed",
+                      "duration": 800,
+                      "error": {
+                        "message": "Timeout 5000ms exceeded waiting for locator('#pay')",
+                        "stack": "TimeoutError\n    at checkout.spec.ts:42:5"
+                      }
+                    },
+                    {
+                      "status": "passed",
+                      "duration": 450
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

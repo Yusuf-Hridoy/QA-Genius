@@ -12,6 +12,8 @@
   </p>
   {% if mode == "strengthen" %}
   <p class="muted small">Strengthen only adds cases. Any edits the AI made to existing cases were ignored.</p>
+  {% elif mode == "risks" %}
+  <p class="muted small">This run only adds cases for the risks you picked. Any edits the AI made to existing cases were ignored.</p>
   {% endif %}
 </div>
 {% for entry in items %}

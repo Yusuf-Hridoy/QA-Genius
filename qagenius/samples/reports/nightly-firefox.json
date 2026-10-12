@@ -1,0 +1,1035 @@
+{
+  "config": {
+    "configFile": "playwright.config.ts",
+    "reportSlowTests": {
+      "max": 5,
+      "threshold": 15000
+    },
+    "version": "1.47.2",
+    "workers": 4
+  },
+  "suites": [
+    {
+      "title": "checkout.spec.ts",
+      "file": "checkout.spec.ts",
+      "specs": [],
+      "suites": [
+        {
+          "title": "checkout",
+          "file": "checkout.spec.ts",
+          "line": 5,
+          "column": 1,
+          "specs": [
+            {
+              "title": "pay with a saved card",
+              "ok": false,
+              "file": "checkout.spec.ts",
+              "line": 10,
+              "column": 3,
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "expectedStatus": "passed",
+                  "projectName": "",
+                  "status": "unexpected",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "status": "failed",
+                      "duration": 38400,
+                      "retry": 0,
+                      "error": {
+                        "message": "\u001b[31mTimeout 30000ms exceeded waiting for locator('#pay-now')\u001b[39m",
+                        "stack": "\u001b[31mTimeout 30000ms exceeded waiting for locator('#pay-now')\u001b[39m\n    at checkout.spec.ts:51:9"
+                      }
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "title": "pay with a new card",
+              "ok": false,
+              "file": "checkout.spec.ts",
+              "line": 10,
+              "column": 3,
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "expectedStatus": "passed",
+                  "projectName": "",
+                  "status": "unexpected",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "status": "failed",
+                      "duration": 30900,
+                      "retry": 0,
+                      "error": {
+                        "message": "\u001b[31mTimeout 30000ms exceeded waiting for locator('#card-submit')\u001b[39m",
+                        "stack": "\u001b[31mTimeout 30000ms exceeded waiting for locator('#card-submit')\u001b[39m\n    at checkout.spec.ts:74:9"
+                      }
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "title": "pay with a gift card",
+              "ok": true,
+              "file": "checkout.spec.ts",
+              "line": 10,
+              "column": 3,
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "expectedStatus": "passed",
+                  "projectName": "",
+                  "status": "expected",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "status": "passed",
+                      "duration": 4400,
+                      "retry": 0
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "title": "pay on delivery",
+              "ok": true,
+              "file": "checkout.spec.ts",
+              "line": 10,
+              "column": 3,
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "expectedStatus": "passed",
+                  "projectName": "",
+                  "status": "expected",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "status": "passed",
+                      "duration": 3800,
+                      "retry": 0
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "title": "show the order summary",
+              "ok": true,
+              "file": "checkout.spec.ts",
+              "line": 10,
+              "column": 3,
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "expectedStatus": "passed",
+                  "projectName": "",
+                  "status": "expected",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "status": "passed",
+                      "duration": 3100,
+                      "retry": 0
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "title": "edit the delivery address",
+              "ok": true,
+              "file": "checkout.spec.ts",
+              "line": 10,
+              "column": 3,
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "expectedStatus": "passed",
+                  "projectName": "",
+                  "status": "expected",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "status": "passed",
+                      "duration": 4600,
+                      "retry": 0
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "title": "pick a slower delivery option",
+              "ok": true,
+              "file": "checkout.spec.ts",
+              "line": 10,
+              "column": 3,
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "expectedStatus": "passed",
+                  "projectName": "",
+                  "status": "expected",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "status": "passed",
+                      "duration": 3300,
+                      "retry": 0
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "title": "warn about an expired card",
+              "ok": true,
+              "file": "checkout.spec.ts",
+              "line": 10,
+              "column": 3,
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "expectedStatus": "passed",
+                  "projectName": "",
+                  "status": "expected",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "status": "passed",
+                      "duration": 2400,
+                      "retry": 0
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "title": "keep the basket after a reload",
+              "ok": true,
+              "file": "checkout.spec.ts",
+              "line": 10,
+              "column": 3,
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "expectedStatus": "passed",
+                  "projectName": "",
+                  "status": "expected",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "status": "passed",
+                      "duration": 6000,
+                      "retry": 0
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "title": "send the confirmation email",
+              "ok": true,
+              "file": "checkout.spec.ts",
+              "line": 10,
+              "column": 3,
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "expectedStatus": "passed",
+                  "projectName": "",
+                  "status": "expected",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "status": "passed",
+                      "duration": 4100,
+                      "retry": 0
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "cart.spec.ts",
+      "file": "cart.spec.ts",
+      "specs": [],
+      "suites": [
+        {
+          "title": "cart",
+          "file": "cart.spec.ts",
+          "line": 5,
+          "column": 1,
+          "specs": [
+            {
+              "title": "total updates when a quantity changes",
+              "ok": false,
+              "file": "cart.spec.ts",
+              "line": 10,
+              "column": 3,
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "expectedStatus": "passed",
+                  "projectName": "",
+                  "status": "unexpected",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "status": "failed",
+                      "duration": 6800,
+                      "retry": 0,
+                      "error": {
+                        "message": "\u001b[31mExpected the cart total to be 48.00 but it was 0.00\u001b[39m",
+                        "stack": "\u001b[31mExpected the cart total to be 48.00 but it was 0.00\u001b[39m\n    at cart.spec.ts:28:7"
+                      }
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "title": "total updates when an item is removed",
+              "ok": false,
+              "file": "cart.spec.ts",
+              "line": 10,
+              "column": 3,
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "expectedStatus": "passed",
+                  "projectName": "",
+                  "status": "unexpected",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "status": "failed",
+                      "duration": 6100,
+                      "retry": 0,
+                      "error": {
+                        "message": "\u001b[31mExpected the cart total to be 48.00 but it was 0.00\u001b[39m",
+                        "stack": "\u001b[31mExpected the cart total to be 48.00 but it was 0.00\u001b[39m\n    at cart.spec.ts:44:7"
+                      }
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "title": "add an item from the product page",
+              "ok": true,
+              "file": "cart.spec.ts",
+              "line": 10,
+              "column": 3,
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "expectedStatus": "passed",
+                  "projectName": "",
+                  "status": "expected",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "status": "passed",
+                      "duration": 2800,
+                      "retry": 0
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "title": "add the same item twice",
+              "ok": true,
+              "file": "cart.spec.ts",
+              "line": 10,
+              "column": 3,
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "expectedStatus": "passed",
+                  "projectName": "",
+                  "status": "expected",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "status": "passed",
+                      "duration": 2500,
+                      "retry": 0
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "title": "empty the cart",
+              "ok": true,
+              "file": "cart.spec.ts",
+              "line": 10,
+              "column": 3,
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "expectedStatus": "passed",
+                  "projectName": "",
+                  "status": "expected",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "status": "passed",
+                      "duration": 2000,
+                      "retry": 0
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "title": "keep the cart between sessions",
+              "ok": true,
+              "file": "cart.spec.ts",
+              "line": 10,
+              "column": 3,
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "expectedStatus": "passed",
+                  "projectName": "",
+                  "status": "expected",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "status": "passed",
+                      "duration": 5200,
+                      "retry": 0
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "title": "show the free delivery threshold",
+              "ok": true,
+              "file": "cart.spec.ts",
+              "line": 10,
+              "column": 3,
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "expectedStatus": "passed",
+                  "projectName": "",
+                  "status": "expected",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "status": "passed",
+                      "duration": 2600,
+                      "retry": 0
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "title": "apply a promo code",
+              "ok": true,
+              "file": "cart.spec.ts",
+              "line": 10,
+              "column": 3,
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "expectedStatus": "passed",
+                  "projectName": "",
+                  "status": "skipped",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "status": "skipped",
+                      "duration": 0,
+                      "retry": 0
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "search.spec.ts",
+      "file": "search.spec.ts",
+      "specs": [],
+      "suites": [
+        {
+          "title": "search",
+          "file": "search.spec.ts",
+          "line": 5,
+          "column": 1,
+          "specs": [
+            {
+              "title": "suggestions appear while typing",
+              "ok": false,
+              "file": "search.spec.ts",
+              "line": 10,
+              "column": 3,
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "expectedStatus": "passed",
+                  "projectName": "",
+                  "status": "unexpected",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "status": "failed",
+                      "duration": 9600,
+                      "retry": 0,
+                      "error": {
+                        "message": "\u001b[31mExpected the suggestion list to have 5 items but it had 0\u001b[39m",
+                        "stack": "\u001b[31mExpected the suggestion list to have 5 items but it had 0\u001b[39m\n    at search.spec.ts:33:11"
+                      }
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "title": "an empty search shows a hint",
+              "ok": true,
+              "file": "search.spec.ts",
+              "line": 10,
+              "column": 3,
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "expectedStatus": "passed",
+                  "projectName": "",
+                  "status": "expected",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "status": "passed",
+                      "duration": 1600,
+                      "retry": 0
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "title": "filter by category",
+              "ok": true,
+              "file": "search.spec.ts",
+              "line": 10,
+              "column": 3,
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "expectedStatus": "passed",
+                  "projectName": "",
+                  "status": "expected",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "status": "passed",
+                      "duration": 3000,
+                      "retry": 0
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "title": "sort by price",
+              "ok": true,
+              "file": "search.spec.ts",
+              "line": 10,
+              "column": 3,
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "expectedStatus": "passed",
+                  "projectName": "",
+                  "status": "expected",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "status": "passed",
+                      "duration": 2700,
+                      "retry": 0
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "title": "paginate the results",
+              "ok": true,
+              "file": "search.spec.ts",
+              "line": 10,
+              "column": 3,
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "expectedStatus": "passed",
+                  "projectName": "",
+                  "status": "expected",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "status": "passed",
+                      "duration": 3900,
+                      "retry": 0
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "title": "keep filters in the url",
+              "ok": true,
+              "file": "search.spec.ts",
+              "line": 10,
+              "column": 3,
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "expectedStatus": "passed",
+                  "projectName": "",
+                  "status": "expected",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "status": "passed",
+                      "duration": 2200,
+                      "retry": 0
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "title": "show a no results message",
+              "ok": true,
+              "file": "search.spec.ts",
+              "line": 10,
+              "column": 3,
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "expectedStatus": "passed",
+                  "projectName": "",
+                  "status": "expected",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "status": "passed",
+                      "duration": 1900,
+                      "retry": 0
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "login.spec.ts",
+      "file": "login.spec.ts",
+      "specs": [],
+      "suites": [
+        {
+          "title": "login",
+          "file": "login.spec.ts",
+          "line": 5,
+          "column": 1,
+          "specs": [
+            {
+              "title": "remember me keeps the session",
+              "ok": true,
+              "file": "login.spec.ts",
+              "line": 10,
+              "column": 3,
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "expectedStatus": "passed",
+                  "projectName": "",
+                  "status": "expected",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "status": "passed",
+                      "duration": 5100,
+                      "retry": 0
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "title": "sign in with an email address",
+              "ok": true,
+              "file": "login.spec.ts",
+              "line": 10,
+              "column": 3,
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "expectedStatus": "passed",
+                  "projectName": "",
+                  "status": "expected",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "status": "passed",
+                      "duration": 2600,
+                      "retry": 0
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "title": "reject a wrong password",
+              "ok": true,
+              "file": "login.spec.ts",
+              "line": 10,
+              "column": 3,
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "expectedStatus": "passed",
+                  "projectName": "",
+                  "status": "expected",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "status": "passed",
+                      "duration": 2100,
+                      "retry": 0
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "title": "lock the account after five tries",
+              "ok": true,
+              "file": "login.spec.ts",
+              "line": 10,
+              "column": 3,
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "expectedStatus": "passed",
+                  "projectName": "",
+                  "status": "expected",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "status": "passed",
+                      "duration": 7600,
+                      "retry": 0
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "title": "send a reset link",
+              "ok": true,
+              "file": "login.spec.ts",
+              "line": 10,
+              "column": 3,
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "expectedStatus": "passed",
+                  "projectName": "",
+                  "status": "expected",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "status": "passed",
+                      "duration": 3400,
+                      "retry": 0
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "title": "sign out from the menu",
+              "ok": true,
+              "file": "login.spec.ts",
+              "line": 10,
+              "column": 3,
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "expectedStatus": "passed",
+                  "projectName": "",
+                  "status": "expected",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "status": "passed",
+                      "duration": 1800,
+                      "retry": 0
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "title": "redirect back after signing in",
+              "ok": true,
+              "file": "login.spec.ts",
+              "line": 10,
+              "column": 3,
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "expectedStatus": "passed",
+                  "projectName": "",
+                  "status": "expected",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "status": "passed",
+                      "duration": 2900,
+                      "retry": 0
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "title": "sign in with a one time code",
+              "ok": true,
+              "file": "login.spec.ts",
+              "line": 10,
+              "column": 3,
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "expectedStatus": "passed",
+                  "projectName": "",
+                  "status": "skipped",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "status": "skipped",
+                      "duration": 0,
+                      "retry": 0
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "account.spec.ts",
+      "file": "account.spec.ts",
+      "specs": [],
+      "suites": [
+        {
+          "title": "account",
+          "file": "account.spec.ts",
+          "line": 5,
+          "column": 1,
+          "specs": [
+            {
+              "title": "show the order history",
+              "ok": true,
+              "file": "account.spec.ts",
+              "line": 10,
+              "column": 3,
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "expectedStatus": "passed",
+                  "projectName": "",
+                  "status": "expected",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "status": "passed",
+                      "duration": 3200,
+                      "retry": 0
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "title": "change the delivery address",
+              "ok": true,
+              "file": "account.spec.ts",
+              "line": 10,
+              "column": 3,
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "expectedStatus": "passed",
+                  "projectName": "",
+                  "status": "expected",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "status": "passed",
+                      "duration": 3600,
+                      "retry": 0
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "title": "add a second address",
+              "ok": true,
+              "file": "account.spec.ts",
+              "line": 10,
+              "column": 3,
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "expectedStatus": "passed",
+                  "projectName": "",
+                  "status": "expected",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "status": "passed",
+                      "duration": 2800,
+                      "retry": 0
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "title": "download an invoice",
+              "ok": true,
+              "file": "account.spec.ts",
+              "line": 10,
+              "column": 3,
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "expectedStatus": "passed",
+                  "projectName": "",
+                  "status": "expected",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "status": "passed",
+                      "duration": 4500,
+                      "retry": 0
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "title": "change the password",
+              "ok": true,
+              "file": "account.spec.ts",
+              "line": 10,
+              "column": 3,
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "expectedStatus": "passed",
+                  "projectName": "",
+                  "status": "expected",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "status": "passed",
+                      "duration": 3300,
+                      "retry": 0
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "title": "close the account",
+              "ok": true,
+              "file": "account.spec.ts",
+              "line": 10,
+              "column": 3,
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "expectedStatus": "passed",
+                  "projectName": "",
+                  "status": "expected",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "status": "passed",
+                      "duration": 2400,
+                      "retry": 0
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "title": "export the saved cards",
+              "ok": true,
+              "file": "account.spec.ts",
+              "line": 10,
+              "column": 3,
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "expectedStatus": "passed",
+                  "projectName": "",
+                  "status": "skipped",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "status": "skipped",
+                      "duration": 0,
+                      "retry": 0
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "errors": [],
+  "stats": {
+    "expected": 32,
+    "unexpected": 5,
+    "flaky": 0,
+    "skipped": 3
+  }
+}

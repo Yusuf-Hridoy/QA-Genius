@@ -14,7 +14,7 @@ from pydantic import BaseModel, ValidationError, field_validator
 import openai
 from markupsafe import Markup
 
-from qagenius import automation, bug_report, duel, llm
+from qagenius import automation, bug_report, duel, llm, risk_register_exports
 from qagenius.automation_checks import CheckReport, check_project
 from qagenius.automation_exports import build_zip
 from qagenius.bug_report import BugInput, environment_text, reproducibility_text
@@ -26,8 +26,10 @@ from qagenius.models import (
     AutomationScript,
     BugReport,
     DuelComparison,
+    FailureMode,
     Interpretation,
     QualityInsightSummary,
+    RiskAnalysis,
     TestCase,
     TestCaseList,
 )
@@ -36,19 +38,31 @@ from qagenius.numbers import match_numbers
 from qagenius.prompts import (
     automation_prompt,
     bug_report_prompt,
+    risk_radar_prompt,
     story_check_prompt,
     test_cases_prompt,
 )
 from qagenius.providers import PROVIDERS, get_provider, pick_default
 from qagenius.report_parsers import ReportError, RunReport, parse_report
+from qagenius.risk_radar import (
+    MAX_RISKS,
+    RiskReport,
+    ScoredRisk,
+    case_lines,
+    clean_analysis,
+    criteria_lines,
+    score_risks,
+)
 from qagenius.test_case_depth import compute_depth
 from qagenius.test_case_diff import diff_cases
 from qagenius.test_case_exports import to_csv, to_xlsx
 from qagenius.test_case_refine import (
     INSTRUCTION_LIMIT,
     MAX_CASES,
+    add_risk_tags,
     merge_strengthened,
     refine_user_text,
+    risk_instruction,
     strengthen_instruction,
 )
 from qagenius.test_cases import (
@@ -78,7 +92,8 @@ CONTEXT_LIMIT = 1000
 CRITERIA_LIMIT = 40
 CRITERION_LIMIT = 1000
 CURRENT_JSON_LIMIT = 200000
-REFINE_MODES = ("strengthen", "instruction")
+REFINE_MODES = ("strengthen", "instruction", "risks")
+RISKS_JSON_LIMIT = 50000
 SELECTED_JSON_LIMIT = 100000
 EXPORT_BODY_LIMIT = 500000
 BASE_URL_LIMIT = 200
@@ -1014,6 +1029,54 @@ def _parse_current(raw: str) -> TestCaseList | None:
     return current
 
 
+def _parse_risks_json(raw: str) -> list[ScoredRisk] | None:
+    """The risks the Risk radar page asked for tests for, or None when malformed.
+
+    Only the id, category, title and test idea travel; the scores stay on the
+    risk page, so the objects here carry no RPN or level to be mistaken for one.
+    """
+    if len(raw or "") > RISKS_JSON_LIMIT:
+        return None
+    try:
+        value = json.loads(raw or "[]")
+    except json.JSONDecodeError:
+        return None
+    if not isinstance(value, list) or not value or len(value) > MAX_RISKS:
+        return None
+    asked = []
+    for item in value:
+        if not isinstance(item, dict):
+            return None
+        fields = {
+            name: str(item.get(name) or "").strip()
+            for name in ("id", "category", "title", "test_idea")
+        }
+        if not fields["id"] or not fields["title"]:
+            return None
+        if any(len(text) > CRITERION_LIMIT for text in fields.values()):
+            return None
+        asked.append(
+            ScoredRisk(
+                risk=FailureMode(
+                    id=fields["id"],
+                    title=fields["title"],
+                    category=fields["category"],
+                    effect="",
+                    cause="",
+                    severity=3,
+                    likelihood=3,
+                    detectability=3,
+                    test_idea=fields["test_idea"],
+                ),
+                rpn=0,
+                level="high",
+                coverage="none",
+                covered_tests=[],
+            )
+        )
+    return asked
+
+
 @app.post("/requirements/test-cases/refine", response_class=HTMLResponse)
 def test_cases_refine(
     request: Request,
@@ -1022,6 +1085,7 @@ def test_cases_refine(
     current_json: str = Form(default=""),
     mode: str = Form(default="strengthen"),
     instruction: str = Form(default=""),
+    risks_json: str = Form(default="[]"),
     coverage_focus: list[str] = Form(default=[]),
 ) -> HTMLResponse:
     bad_input = "Please check the test cases and instruction."
@@ -1045,6 +1109,9 @@ def test_cases_refine(
     current = _parse_current(current_json)
     if current is None:
         return _error_card(request, bad_input)
+    asked_risks = _parse_risks_json(risks_json) if mode == "risks" else []
+    if asked_risks is None:
+        return _error_card(request, bad_input)
 
     criteria = number_criteria(texts)
     depth = compute_depth(current, criteria)
@@ -1064,7 +1131,12 @@ def test_cases_refine(
 
     system, base_user = test_cases_prompt(user_story)
     base = build_user_text(base_user, list(coverage_focus), criteria)
-    asked = instruction if mode == "instruction" else strengthen_instruction(depth)
+    if mode == "instruction":
+        asked = instruction
+    elif mode == "risks":
+        asked = risk_instruction(asked_risks)
+    else:
+        asked = strengthen_instruction(depth)
     user = refine_user_text(base, current, criteria, asked)
     try:
         ai_result, used_index, notes = llm.generate_json(
@@ -1100,10 +1172,17 @@ def test_cases_refine(
     except llm.BadOutputError as e:
         return _error_card(request, str(e))
 
-    # Strengthen is additive: code drops any edit or deletion the AI tried.
-    proposed = (
-        merge_strengthened(current, ai_result) if mode == "strengthen" else ai_result
-    )
+    # Strengthen and the risk run are additive: code drops any edit or
+    # deletion the AI tried.
+    if mode == "instruction":
+        proposed = ai_result
+    else:
+        proposed = merge_strengthened(current, ai_result)
+    if mode == "risks":
+        # The AI was asked for the risk:Rn tag; code puts it on when it forgot.
+        proposed = add_risk_tags(
+            current, proposed, [item.risk.id for item in asked_risks]
+        )
     provider = get_provider(keys[used_index]["provider"])
     return templates.TemplateResponse(
         request,
@@ -1732,6 +1811,284 @@ async def insights_explain(request: Request) -> HTMLResponse:
             run_notes + guard_notes,
             provider["name"] if provider else "unknown provider",
         ),
+    )
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# RISK RADAR
+# ══════════════════════════════════════════════════════════════════════════════
+
+RISK_BAD_INPUT = "Please check the story, criteria and test cases."
+RISK_NO_STORY = "Start from a story in Requirements first."
+RISK_NO_KEY = '<p class="muted">Add an API key to find risks.</p>'
+LEVEL_PILLS = {"high": "bad", "medium": "warn", "low": "ok"}
+COVERAGE_TONES = {"verified": "ok", "covered": "ok", "weak": "warn", "none": "bad"}
+# A cell of the heat map, coloured by severity x likelihood.
+HEAT_BAD, HEAT_WARN = 15, 8
+
+
+class RiskBody(BaseModel):
+    """A risk analysis plus the run it was made for, as the browser hands it back."""
+
+    analysis: RiskAnalysis
+    cases: list[TestCase] = []
+    criteria: list[str] = []
+
+    @field_validator("criteria")
+    @classmethod
+    def _within_limits(cls, value: list[str]) -> list[str]:
+        if len(value) > CRITERIA_LIMIT:
+            raise ValueError(f"Send at most {CRITERIA_LIMIT} criteria.")
+        if any(len(text) > CRITERION_LIMIT for text in value):
+            raise ValueError(f"Keep each criterion under {CRITERION_LIMIT} characters.")
+        return value
+
+    @field_validator("cases")
+    @classmethod
+    def _not_too_many_cases(cls, value: list[TestCase]) -> list[TestCase]:
+        if len(value) > MAX_CASES:
+            raise ValueError(f"Send at most {MAX_CASES} test cases.")
+        return value
+
+    @field_validator("analysis")
+    @classmethod
+    def _not_too_many_risks(cls, value: RiskAnalysis) -> RiskAnalysis:
+        if len(value.failure_modes) > MAX_RISKS:
+            raise ValueError(f"Send at most {MAX_RISKS} failure modes.")
+        return value
+
+
+def _parse_cases_json(raw: str) -> list[TestCase] | None:
+    """The posted test cases, or None when the payload is huge or malformed."""
+    if len(raw or "") > CURRENT_JSON_LIMIT:
+        return None
+    try:
+        value = json.loads(raw or "[]")
+    except json.JSONDecodeError:
+        return None
+    if not isinstance(value, list) or len(value) > MAX_CASES:
+        return None
+    try:
+        return [TestCase.model_validate(item) for item in value]
+    except ValidationError:
+        return None
+
+
+def _heat_rows(report: RiskReport) -> list[dict]:
+    """The grid the template draws: severity 5 at the top, likelihood 1 on the left."""
+    rows = []
+    for severity in range(5, 0, -1):
+        cells = []
+        for likelihood in range(1, 6):
+            product = severity * likelihood
+            tone = "ok"
+            if product >= HEAT_BAD:
+                tone = "bad"
+            elif product >= HEAT_WARN:
+                tone = "warn"
+            cells.append(
+                {
+                    "severity": severity,
+                    "likelihood": likelihood,
+                    "ids": report.heatmap[(severity, likelihood)],
+                    "tone": tone,
+                }
+            )
+        rows.append({"severity": severity, "cells": cells})
+    return rows
+
+
+def _untested_high(report: RiskReport) -> list[dict[str, str]]:
+    """What the Write tests button sends to step 3."""
+    return [
+        {
+            "id": item.risk.id,
+            "category": item.risk.category,
+            "title": item.risk.title,
+            "test_idea": item.risk.test_idea,
+        }
+        for item in report.risks
+        if item.level == "high" and item.coverage in ("none", "weak")
+    ]
+
+
+def _risk_result_context(
+    analysis: RiskAnalysis,
+    cases: list[TestCase],
+    criteria: list[Criterion],
+    notes: list[str],
+    provider_name: str,
+    is_example: bool = False,
+) -> dict:
+    """Every number here is computed from the analysis, never read back from it."""
+    report = score_risks(analysis, cases)
+    # A weak claim is not coverage: the test the AI named is about something else.
+    covered = sum(
+        1 for item in report.risks if item.coverage in ("verified", "covered")
+    )
+    return {
+        "report": report,
+        "covered": covered,
+        "heat_rows": _heat_rows(report),
+        "untested": _untested_high(report),
+        "level_pill": LEVEL_PILLS,
+        "coverage_tone": COVERAGE_TONES,
+        "ac_text": {criterion.id: criterion.text for criterion in criteria},
+        "risk_data": {
+            "analysis": analysis.model_dump(),
+            "cases": [case.model_dump() for case in cases],
+            "criteria": [criterion.text for criterion in criteria],
+        },
+        "is_example": is_example,
+        "notes": notes,
+        "provider_name": provider_name,
+    }
+
+
+def _risk_result(request: Request, **context) -> HTMLResponse:
+    return templates.TemplateResponse(
+        request, "_risk_radar_result.html", _risk_result_context(**context)
+    )
+
+
+@app.get("/risks", response_class=HTMLResponse)
+def risks_page(request: Request) -> HTMLResponse:
+    """The page is empty; the browser fills it from sessionStorage."""
+    return templates.TemplateResponse(request, "risk_radar.html", {"active": "risks"})
+
+
+@app.post("/risks/run", response_class=HTMLResponse)
+def risks_run(
+    request: Request,
+    user_story: str = Form(default=""),
+    criteria_json: str = Form(default="[]"),
+    cases_json: str = Form(default="[]"),
+) -> HTMLResponse:
+    user_story = user_story.strip()
+    if not user_story:
+        return _error_card(request, RISK_NO_STORY)
+    if len(user_story) > STORY_LIMIT:
+        return _error_card(request, RISK_BAD_INPUT)
+    texts = _parse_criteria_json(criteria_json)
+    if texts is None:
+        return _error_card(request, RISK_BAD_INPUT)
+    cases = _parse_cases_json(cases_json)
+    if cases is None:
+        return _error_card(request, RISK_BAD_INPUT)
+    keys = _request_keys(request)
+    if not keys:
+        # The browser opens the keys drawer (HX-Trigger: open-keys).
+        return HTMLResponse(RISK_NO_KEY, headers={"HX-Trigger": "open-keys"})
+
+    criteria = number_criteria(texts)
+    system, user = risk_radar_prompt(
+        user_story, criteria_lines(criteria), case_lines(cases)
+    )
+    try:
+        result, used_index, notes = llm.generate_json(keys, system, user, RiskAnalysis)
+    except llm.NoKeysError:
+        return HTMLResponse(RISK_NO_KEY, headers={"HX-Trigger": "open-keys"})
+    except llm.AllKeysBusyError as e:
+        return _error_card(
+            request,
+            "All your keys are busy. Try again in a minute or add another key.",
+            e.notes,
+        )
+    except llm.InvalidKeyError as e:
+        return _error_card(
+            request,
+            "Your key was rejected. Check it on the Your API keys page and try again.",
+            e.notes,
+        )
+    except llm.ModelUnavailableError as e:
+        return _error_card(
+            request,
+            "The AI model isn't available right now. Your keys are fine -- "
+            "QA-Genius needs a model update.",
+            e.notes,
+        )
+    except llm.ProviderError as e:
+        return _error_card(request, str(e))
+    except llm.BadOutputError as e:
+        return _error_card(request, str(e))
+
+    analysis, guard_notes = clean_analysis(
+        result,
+        {criterion.id for criterion in criteria},
+        {case.id for case in cases},
+    )
+    provider = get_provider(keys[used_index]["provider"])
+    return _risk_result(
+        request,
+        analysis=analysis,
+        cases=cases,
+        criteria=criteria,
+        notes=notes + guard_notes,
+        provider_name=provider["name"] if provider else "unknown provider",
+    )
+
+
+@app.post("/risks/rescore", response_class=HTMLResponse)
+def risks_rescore(request: Request, payload: RiskBody) -> HTMLResponse:
+    """Re-draw the card after someone adjusted a score. No AI call."""
+    return _risk_result(
+        request,
+        analysis=payload.analysis,
+        cases=payload.cases,
+        criteria=number_criteria(payload.criteria),
+        notes=[],
+        provider_name="your adjusted scores",
+    )
+
+
+def _risk_sample() -> tuple[RiskAnalysis, list[TestCase], list[Criterion]]:
+    with open(SAMPLES_DIR / "risk_radar.json", encoding="utf-8") as f:
+        sample = json.load(f)
+    return (
+        RiskAnalysis.model_validate(sample["analysis"]),
+        [TestCase.model_validate(case) for case in sample["cases"]],
+        number_criteria(sample["criteria"]),
+    )
+
+
+@app.get("/risks/example", response_class=HTMLResponse)
+def risks_example(request: Request) -> HTMLResponse:
+    """Load example: a saved FMEA. No key needed, no AI call."""
+    analysis, cases, criteria = _risk_sample()
+    return _risk_result(
+        request,
+        analysis=analysis,
+        cases=cases,
+        criteria=criteria,
+        notes=[],
+        provider_name="saved example",
+        is_example=True,
+    )
+
+
+@app.post("/risks/export.csv")
+def risks_export_csv(payload: RiskBody) -> Response:
+    report = score_risks(payload.analysis, payload.cases)
+    return Response(
+        content=risk_register_exports.to_csv(report),
+        media_type="text/csv; charset=utf-8",
+        headers={
+            "Content-Disposition": 'attachment; filename="qa-genius-risk-register.csv"'
+        },
+    )
+
+
+@app.post("/risks/export.xlsx")
+def risks_export_xlsx(payload: RiskBody) -> Response:
+    report = score_risks(payload.analysis, payload.cases)
+    return Response(
+        content=risk_register_exports.to_xlsx(report),
+        media_type=(
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        ),
+        headers={
+            "Content-Disposition": 'attachment; filename="qa-genius-risk-register.xlsx"'
+        },
     )
 
 

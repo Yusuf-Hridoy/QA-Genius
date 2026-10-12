@@ -6,7 +6,14 @@ import main
 
 client = TestClient(main.app, raise_server_exceptions=False)
 
-PAGES = ["/", "/requirements/story", "/bugs", "/insights", "/performance"]
+PAGES = [
+    "/",
+    "/requirements/story",
+    "/risks",
+    "/bugs",
+    "/insights",
+    "/performance",
+]
 
 
 def test_every_page_has_chip_and_drawer_once() -> None:
@@ -28,3 +35,10 @@ def test_keys_redirects_to_story_with_flag() -> None:
     response = client.get("/keys", follow_redirects=False)
     assert response.status_code in (301, 302, 303, 307, 308)
     assert response.headers["location"] == "/requirements/story?keys=open"
+
+
+def test_risk_radar_sits_after_requirements_in_the_sidebar() -> None:
+    body = client.get("/risks").text
+    assert body.index('href="/requirements/story"') < body.index('href="/risks"')
+    assert body.index('href="/risks"') < body.index('href="/bugs"')
+    assert '<a href="/risks" class="active">Risk radar</a>' in body

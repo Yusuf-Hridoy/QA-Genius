@@ -9,7 +9,7 @@ import openpyxl
 from qagenius.models import TestCase as Case
 from qagenius.models import TestCaseList as CaseList
 from qagenius.models import TestSuiteSummary as Summary
-from qagenius.test_case_exports import COLUMNS, _safe_cell, to_csv, to_xlsx
+from qagenius.test_case_exports import COLUMNS, safe_cell, to_csv, to_xlsx
 from qagenius.test_cases import number_criteria
 
 CRITERIA = number_criteria(
@@ -95,11 +95,11 @@ def test_csv_missing_optional_fields_are_blank() -> None:
 
 
 def test_safe_cell_blocks_formulas() -> None:
-    assert _safe_cell("=SUM(A1)") == "'=SUM(A1)"
-    assert _safe_cell("-1 day") == "'-1 day"
-    assert _safe_cell("+1") == "'+1"
-    assert _safe_cell("@here") == "'@here"
-    assert _safe_cell("Lock the account") == "Lock the account"
+    assert safe_cell("=SUM(A1)") == "'=SUM(A1)"
+    assert safe_cell("-1 day") == "'-1 day"
+    assert safe_cell("+1") == "'+1"
+    assert safe_cell("@here") == "'@here"
+    assert safe_cell("Lock the account") == "Lock the account"
 
 
 def test_csv_escapes_formula_in_title() -> None:

@@ -19,7 +19,8 @@ COMPARED_FIELDS = (
 TITLE_MATCH = 0.6
 # Compared without regard to letter case.
 _CASELESS_FIELDS = ("category", "priority")
-_TITLE_STOPWORDS = frozenset(
+# Shared with risk scoring in risk_radar.py.
+STOPWORDS = frozenset(
     {
         "a", "an", "the", "of", "to", "in", "on", "for", "with",
         "after", "before", "is", "are", "be",
@@ -65,7 +66,7 @@ def field_text(test_case: TestCase, name: str) -> str:
 
 def _title_tokens(title: str) -> set[str]:
     parts = re.split(r"[^a-z0-9]+", str(title or "").lower())
-    return {part for part in parts if part and part not in _TITLE_STOPWORDS}
+    return {part for part in parts if part and part not in STOPWORDS}
 
 
 def title_score(left: str, right: str) -> float:

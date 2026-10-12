@@ -3,6 +3,7 @@
 import re
 
 from qagenius.models import TestCaseList
+from qagenius.risk_radar import RISK_TAG, ScoredRisk
 from qagenius.test_case_depth import DepthReport
 from qagenius.test_case_diff import TITLE_MATCH, title_score
 from qagenius.test_cases import Criterion, traced_ids
@@ -136,3 +137,60 @@ def merge_strengthened(
         known_titles.append(new_case.title)
         added.append(new_case)
     return TestCaseList(test_cases=kept + added, summary=proposed.summary)
+
+
+_RISK_HEAD = (
+    'Write at least one test case for each of these risks. Put the risk id in '
+    'the test case\'s tags as "risk:R1" (exactly this format).'
+)
+_RISK_TAIL = (
+    "Use exact values (counts, times, sizes) and include at least one negative "
+    "or boundary case per risk where it makes sense."
+)
+# "R2" written anywhere the AI could put it.
+_RISK_ID = re.compile(r"\bR\d+\b", re.IGNORECASE)
+
+
+def risk_instruction(risks: list[ScoredRisk]) -> str:
+    """Ask for one test per untested risk, each tagged with its risk id."""
+    lines = [_STRENGTHEN_HEAD, _RISK_HEAD]
+    for item in risks:
+        risk = item.risk
+        line = f"{risk.id} ({risk.category}): {risk.title}"
+        if risk.test_idea:
+            line += f" — Test idea: {risk.test_idea}"
+        lines.append(line)
+    lines.append(_RISK_TAIL)
+    return "\n".join(lines)
+
+
+def add_risk_tags(
+    current: TestCaseList, proposed: TestCaseList, risk_ids: list[str]
+) -> TestCaseList:
+    """Tag a new case with risk:Rn when it says which risk it is for.
+
+    The AI is asked for the tag; code puts it there when the AI only
+    mentioned the risk in the title or the traceability line.
+    """
+    known = {str(one or "").strip().upper() for one in risk_ids}
+    current_ids = {str(case.id or "").strip().lower() for case in current.test_cases}
+    cases = []
+    for case in proposed.test_cases:
+        if str(case.id or "").strip().lower() in current_ids:
+            cases.append(case)
+            continue
+        tags = list(case.tags or [])
+        have = {str(tag or "").strip().lower() for tag in tags}
+        text = " ".join(
+            [case.traceability or "", case.title or "", " ".join(case.tags or [])]
+        )
+        added = False
+        for found in _RISK_ID.findall(text):
+            risk_id = found.upper()
+            tag = RISK_TAG + risk_id
+            if risk_id in known and tag.lower() not in have:
+                tags.append(tag)
+                have.add(tag.lower())
+                added = True
+        cases.append(case.model_copy(update={"tags": tags}) if added else case)
+    return TestCaseList(test_cases=cases, summary=proposed.summary)

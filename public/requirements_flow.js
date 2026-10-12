@@ -854,7 +854,7 @@
   }
 
   /* Draw a list the browser already holds. The HTML comes from the server. */
-  function renderList(payload) {
+  function renderList(payload, after) {
     var target = document.getElementById("test-cases-output");
     if (!target || !payload) return;
     fetch("/requirements/test-cases/render", {
@@ -871,6 +871,8 @@
         if (window.htmx) window.htmx.process(target);
         showUndo();
         restoreSelection();
+        if (after) after();
+        runPendingRisks();
       })
       .catch(function () {
         /* Leave what is on screen alone; the saved run is still intact. */
@@ -890,7 +892,8 @@
     run.test_cases = proposal;
     writeRun(run);
     clearProposal();
-    renderList(proposal);
+    /* The new list replaces the panel, so the way back is added after it. */
+    renderList(proposal, backToRiskRadar);
   }
 
   function undoLastChange() {
@@ -903,6 +906,38 @@
     writeRun(run);
     clearProposal();
     renderList(previous);
+  }
+
+  /* The Risk radar page saved the risks it wants tests for and sent the user
+   * here. Ask for those cases once, then forget the request. */
+  function runPendingRisks() {
+    var run = readRun();
+    if (!run || !run.pending_risks || !run.pending_risks.length) return;
+    if (!document.getElementById("tc-proposal") || !window.htmx) return;
+    var risks = run.pending_risks;
+    delete run.pending_risks;
+    run.came_from_risks = true;
+    writeRun(run);
+    window.htmx.ajax("POST", "/requirements/test-cases/refine", {
+      target: "#tc-proposal",
+      swap: "innerHTML",
+      values: { mode: "risks", risks_json: JSON.stringify(risks) }
+    });
+  }
+
+  /* After accepting cases written for risks, offer the way back. */
+  function backToRiskRadar() {
+    var run = readRun() || {};
+    var panel = document.getElementById("tc-proposal");
+    if (!panel || !run.came_from_risks) return;
+    var card = el("div", "card");
+    var link = el("a", null, "← Back to Risk radar");
+    link.setAttribute("href", "/risks");
+    link.id = "back-to-risks";
+    card.appendChild(link);
+    panel.appendChild(card);
+    run.came_from_risks = false;
+    writeRun(run);
   }
 
   function clearProposal() {
@@ -1023,7 +1058,10 @@
       current.criteria || nonEmpty(run)
     );
     detail.parameters.current_json = JSON.stringify(current.result || {});
-    detail.parameters.mode = source === "refine-submit" ? "instruction" : "strengthen";
+    if (detail.parameters.mode !== "risks") {
+      detail.parameters.mode =
+        source === "refine-submit" ? "instruction" : "strengthen";
+    }
     detail.parameters.instruction = instruction;
     detail.parameters.coverage_focus = checkedFocus();
   });
@@ -1053,6 +1091,7 @@
       rememberDisplayed(false);
     }
     restoreSelection();
+    runPendingRisks();
   });
 
   document.addEventListener("DOMContentLoaded", function () {

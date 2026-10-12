@@ -57,6 +57,24 @@ a README carrying the setup steps, the run command and the same checks; the
 file names the AI chose are cleaned first, so nothing can be written outside
 that folder.
 
+## Risk radar
+**Risk radar** runs an FMEA over the current run: the AI lists the ways the
+feature can fail in production — security, performance, reliability, data,
+usability, accessibility and functional — and proposes a severity, likelihood
+and detectability from 1 to 5 with a reason for each. Code does the rest: the
+RPN is severity x likelihood x detectability, the level, the 5x5 heat map, the
+counts and the order all come from that one formula, never from the model.
+Coverage is checked rather than believed: a test case tagged `risk:R1` counts
+as **verified**, a test case the AI claims is checked by word overlap and shows
+as **covered** or, when the text does not match, as a **weak** link, and an id
+the AI invented is dropped with a note. Adjust any score in the card and the
+server recomputes everything, so the heat map and the order follow your
+judgement. **Write tests for N untested high risks** sends those risks to step
+3, where an additive refine writes cases tagged `risk:Rn` and shows them in the
+usual Accept / Keep current / Undo view. **Download CSV** and **Download Excel**
+give you the risk register, the Excel one with a Risk register sheet coloured by
+level and a Heat map sheet.
+
 ## Bug desk
 Paste rough notes — *"checkout button does nothing on the second click, 3 of
 5 tries"* — add the environment and attempt counts if you have them, and

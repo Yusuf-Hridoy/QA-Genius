@@ -1,0 +1,115 @@
+<div class="card">
+  <h2>Risk radar</h2>
+  <p class="muted small">RPN = severity × likelihood × detectability, computed by code.</p>
+</div>
+<div class="stat-row">
+  <div class="stat"><div class="num">{{ report.counts.total }}</div><div class="lbl">Failure modes</div></div>
+  <div class="stat"><div class="num">{{ report.counts.high }}</div><div class="lbl">High risk</div></div>
+  <div class="stat"><div class="num">{{ covered }} / {{ report.counts.total }}</div><div class="lbl">Covered by a test</div></div>
+  <div class="stat{% if report.counts.untested_high %} stat-bad{% endif %}">
+    <div class="num">{{ report.counts.untested_high }}</div><div class="lbl">High risk, untested</div>
+  </div>
+</div>
+<div class="risk-split">
+  <div class="card risk-heat">
+    <h3>Heat map</h3>
+    <p class="muted small">Severity down, likelihood across. Click a cell to see those risks.</p>
+    <table class="heat">
+      <tbody>
+        {% for row in heat_rows %}
+        <tr>
+          <th class="heat-axis" scope="row">S{{ row.severity }}</th>
+          {% for cell in row.cells %}
+          <td class="heat-cell {{ cell.tone }}{% if cell.ids %} has-risk{% endif %}"
+              data-cell="{{ cell.severity }}-{{ cell.likelihood }}"
+              data-ids="{{ cell.ids | join(',') }}"
+              title="Severity {{ cell.severity }} · likelihood {{ cell.likelihood }}">
+            {% for risk_id in cell.ids %}<span class="pill neutral">{{ risk_id }}</span>{% endfor %}
+          </td>
+          {% endfor %}
+        </tr>
+        {% endfor %}
+        <tr>
+          <th class="heat-axis"></th>
+          {% for likelihood in [1, 2, 3, 4, 5] %}<th class="heat-axis">L{{ likelihood }}</th>{% endfor %}
+        </tr>
+      </tbody>
+    </table>
+    <p class="muted small heat-labels"><span>Severity</span> · <span>Likelihood</span></p>
+    <p class="row"><a href="#" id="risk-show-all" class="small" hidden>Show all risks</a></p>
+    <h3>By category</h3>
+    <p class="row">
+      {% for name, count in report.by_category.items() %}
+      <span class="pill info">{{ name }} {{ count }}</span>
+      {% endfor %}
+    </p>
+  </div>
+  <div class="risk-list" id="risk-list">
+    {% for item in report.risks %}
+    <div class="card risk-card" data-risk-id="{{ item.risk.id }}">
+      <h3>{{ item.risk.id }} · {{ item.risk.title }}</h3>
+      <p class="row">
+        <span class="pill {{ level_pill[item.level] }}">RPN {{ item.rpn }} · {{ item.level }}</span>
+        <span class="pill neutral">{{ item.risk.category }}</span>
+        <span class="muted small">S{{ item.risk.severity }} L{{ item.risk.likelihood }} D{{ item.risk.detectability }}</span>
+      </p>
+      <p><strong>Effect:</strong> {{ item.risk.effect }}</p>
+      <p class="muted"><strong>Cause:</strong> {{ item.risk.cause }}</p>
+      <p class="small coverage {{ coverage_tone[item.coverage] }}">
+        {% if item.coverage == "verified" %}
+        Verified by {{ item.covered_tests[0][0] }} (tagged risk:{{ item.risk.id }})
+        {% elif item.coverage == "covered" %}
+        Covered by {{ item.covered_tests[0][0] }} — {{ item.covered_tests[0][1] }}
+        {% elif item.coverage == "weak" %}
+        AI says {{ item.covered_tests[0][0] }} covers this, but the test doesn't seem to match
+        {% else %}
+        No test covers this risk
+        {% endif %}
+      </p>
+      {% if item.risk.related_criteria %}
+      <p class="row">
+        {% for ac_id in item.risk.related_criteria %}
+        <span class="pill neutral" title="{{ ac_text.get(ac_id, '') }}">{{ ac_id }}</span>
+        {% endfor %}
+      </p>
+      {% endif %}
+      <details>
+        <summary>Why these scores</summary>
+        <p class="small"><strong>Severity {{ item.risk.severity }}</strong> — {{ item.risk.severity_reason or "no reason given" }}</p>
+        <p class="small"><strong>Likelihood {{ item.risk.likelihood }}</strong> — {{ item.risk.likelihood_reason or "no reason given" }}</p>
+        <p class="small"><strong>Detectability {{ item.risk.detectability }}</strong> — {{ item.risk.detectability_reason or "no reason given" }}</p>
+        {% if item.risk.test_idea %}
+        <p class="small"><strong>Test idea:</strong> {{ item.risk.test_idea }}</p>
+        {% endif %}
+        <div class="row score-row">
+          {% for field, value in [("severity", item.risk.severity), ("likelihood", item.risk.likelihood), ("detectability", item.risk.detectability)] %}
+          <label class="score-field">{{ field | capitalize }}
+            <input type="number" min="1" max="5" step="1" value="{{ value }}"
+                   class="score-input" data-risk-id="{{ item.risk.id }}" data-field="{{ field }}">
+          </label>
+          {% endfor %}
+        </div>
+        <p class="muted small">Scores are the AI's proposal — adjust them with your own judgement.</p>
+      </details>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+<script type="application/json" id="risk-data">{{ risk_data | tojson }}</script>
+<div class="card">
+  <div class="row">
+    <button type="button" class="btn" id="risk-write-tests"
+            data-risk-ids="{{ untested | map(attribute='id') | join(',') }}"{% if not untested %} hidden{% endif %}>
+      Write tests for {{ untested | length }} untested high risk{% if untested | length != 1 %}s{% endif %}
+    </button>
+    <button type="button" class="btn" id="risk-download-csv">Download CSV</button>
+    <button type="button" class="btn" id="risk-download-xlsx">Download Excel</button>
+  </div>
+  {% if is_example %}
+  <p class="muted small">This is a saved example. Add a key and press Find risks to run it on your own story.</p>
+  {% endif %}
+  {% if notes %}
+  <p class="muted small">{{ notes | join(" · ") }}</p>
+  {% endif %}
+  <p class="muted small">Answered by {{ provider_name }}.</p>
+</div>

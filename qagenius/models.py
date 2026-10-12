@@ -1,3 +1,4 @@
+import math
 from typing import Any, List, Literal, Optional
 
 from pydantic import BaseModel, field_validator
@@ -327,3 +328,89 @@ class QualityInsightSummary(BaseModel):
     groups: List[GroupInsight] = []
     flaky_advice: str = ""
     next_steps: List[str] = []
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# RISK RADAR (FMEA) MODELS
+# ══════════════════════════════════════════════════════════════════════════════
+
+RISK_CATEGORIES = (
+    "security",
+    "performance",
+    "reliability",
+    "data",
+    "usability",
+    "accessibility",
+    "functional",
+)
+
+# What the AI tends to write instead of a category name.
+_CATEGORY_SYNONYMS = {
+    "perf": "performance",
+    "load": "performance",
+    "speed": "performance",
+    "sec": "security",
+    "auth": "security",
+    "privacy": "security",
+    "availability": "reliability",
+    "resilience": "reliability",
+    "stability": "reliability",
+    "data integrity": "data",
+    "integrity": "data",
+    "ux": "usability",
+    "a11y": "accessibility",
+}
+SCORE_FALLBACK = 3
+
+
+def _one_score(value: Any) -> int:
+    """A 1-5 score from whatever the AI wrote. Unreadable text scores 3."""
+    if isinstance(value, bool):
+        return SCORE_FALLBACK
+    if isinstance(value, (int, float)):
+        number = float(value)
+    else:
+        # "4/5" and "4 out of 5" both mean 4.
+        head = str(value or "").strip().split("/")[0].split()[:1]
+        try:
+            number = float(head[0]) if head else float("nan")
+        except ValueError:
+            return SCORE_FALLBACK
+    if number != number:  # NaN
+        return SCORE_FALLBACK
+    rounded = int(math.floor(number + 0.5))
+    return max(1, min(5, rounded))
+
+
+class FailureMode(BaseModel):
+    id: str = ""
+    title: str
+    category: str
+    effect: str
+    cause: str
+    severity: int
+    likelihood: int
+    detectability: int
+    severity_reason: str = ""
+    likelihood_reason: str = ""
+    detectability_reason: str = ""
+    related_criteria: List[str] = []
+    covered_by: List[str] = []
+    test_idea: str = ""
+
+    @field_validator("severity", "likelihood", "detectability", mode="before")
+    @classmethod
+    def _tolerant_score(cls, value: Any) -> int:
+        return _one_score(value)
+
+    @field_validator("category", mode="before")
+    @classmethod
+    def _tolerant_category(cls, value: Any) -> str:
+        text = str(value or "").strip().lower()
+        if text in RISK_CATEGORIES:
+            return text
+        return _CATEGORY_SYNONYMS.get(text, "functional")
+
+
+class RiskAnalysis(BaseModel):
+    failure_modes: List[FailureMode] = []
