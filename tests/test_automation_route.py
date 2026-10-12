@@ -56,8 +56,8 @@ class _Spy:
 def test_the_page_shows_the_step_bar() -> None:
     response = client.get("/requirements/automation")
     assert response.status_code == 200
-    assert "4 · Automation" in response.text
-    assert "3 · Test cases" in response.text
+    assert '<span class="step-n">4</span><span class="step-text">Automation</span>' in response.text
+    assert '<span class="step-n">3</span><span class="step-text">Test cases</span>' in response.text
 
 
 def test_every_requirements_page_links_to_step_four() -> None:

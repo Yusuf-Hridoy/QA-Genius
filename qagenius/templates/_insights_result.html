@@ -1,17 +1,35 @@
-<div class="stat-row">
-  <div class="stat">
-    <div class="num"><span class="pill {{ pass_rate_pill }}">{{ ins.overall.pass_rate }}%</span></div>
-    <div class="lbl">Pass rate</div>
+{% if is_example %}
+{% with caption = "Drop your own JUnit or Playwright report in to read a real run." %}
+{% include "_example_flag.html" %}
+{% endwith %}
+{% endif %}
+{# The headline is the pass rate; the tiles beside it are the breakdown.
+   The pass rate used to be a pill among four plain numbers, which read as a
+   different kind of thing when it is the most important one. #}
+<div class="verdict" style="--pct:{{ ins.overall.pass_rate }};--ring-color:var(--{{ pass_rate_pill }}-line)">
+  <div class="score-ring">
+    <span class="score-num">{{ ins.overall.pass_rate }}<span style="font-size:16px">%</span></span>
+    <span class="score-of">passing</span>
   </div>
-  <div class="stat"><div class="num">{{ ins.overall.failed }}</div><div class="lbl">Failed</div></div>
+  <div>
+    <span class="pill {{ pass_rate_pill }}">{{ ins.overall.passed }} of {{ ins.overall.total }} passed</span>
+    <h2>{{ ins.overall.total }} results across
+      {{ ins.runs | length }} run{{ "" if ins.runs | length == 1 else "s" }}</h2>
+    <p>{{ ins.overall.failed }} failed, {{ ins.overall.flaky }} flaky,
+      {{ ins.overall.skipped }} skipped. Every number here was computed from your files
+      by code — nothing was sent to an AI.</p>
+  </div>
+</div>
+<div class="stat-row">
+  <div class="stat{% if ins.overall.failed %} stat-bad{% endif %}"><div class="num">{{ ins.overall.failed }}</div><div class="lbl">Failed</div></div>
   <div class="stat"><div class="num">{{ ins.overall.flaky }}</div><div class="lbl">Flaky</div></div>
   <div class="stat"><div class="num">{{ ins.overall.skipped }}</div><div class="lbl">Skipped</div></div>
-  <div class="stat"><div class="num">{{ "%.1f" | format(ins.overall.duration_s) }} s</div><div class="lbl">Duration</div></div>
+  <div class="stat"><div class="num">{{ ins.groups | length }}</div><div class="lbl">Failure groups</div></div>
+  <div class="stat"><div class="num">{{ "%.1f" | format(ins.overall.duration_s) }}<span class="unit"> s</span></div><div class="lbl">Duration</div></div>
 </div>
+{% if ins.runs | length > 1 %}
 <div class="card">
-  <h2>{{ ins.overall.total }} results{% if is_example %} <span class="pill info">Example</span>{% endif %}</h2>
-  <p class="muted small">All numbers computed from your files by code.</p>
-  {% if ins.runs | length > 1 %}
+  <h2>Run by run</h2>
   <table class="grid" id="insights-runs">
     <thead>
       <tr><th>Run</th><th>Tests</th><th>Passed</th><th>Failed</th><th>Flaky</th>
@@ -27,10 +45,10 @@
       {% endfor %}
     </tbody>
   </table>
-  {% endif %}
 </div>
+{% endif %}
 
-<div class="card">
+<div class="card card-section">
   <h2>Failure groups</h2>
   {% if not ins.groups %}
   <p class="muted">No failures in these runs.</p>
@@ -69,7 +87,7 @@
   {% endfor %}
 </div>
 
-<div class="card">
+<div class="card card-section">
   <h2>Flaky tests</h2>
   <p class="muted small">Flaky = retried and passed, or passed in one run and failed in another.</p>
   {% if not ins.flaky %}
@@ -89,7 +107,7 @@
   {% endif %}
 </div>
 
-<div class="card">
+<div class="card card-section">
   <h2>Slowest tests</h2>
   {% if not ins.slowest %}
   <p class="muted">These reports have no timings.</p>
@@ -121,7 +139,7 @@
       {% endif %}
       <button type="button" class="btn" id="insights-copy-md">Copy summary as Markdown</button>
     </div>
-    <p id="insights-explain-progress" class="htmx-indicator muted">Reading the numbers…</p>
+    <p id="insights-explain-progress" class="htmx-indicator working"><span class="spin"></span>Reading the numbers…</p>
   </form>
   <p class="muted small" id="insights-copy-status" aria-live="polite"></p>
   <p class="muted small">Sends only the numbers and error messages above to your AI provider.</p>

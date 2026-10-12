@@ -1,31 +1,92 @@
-<div class="stat-row">
-  <div class="stat"><div class="num">{{ clarity_score }}</div><div class="lbl">Clarity score</div></div>
-  <div class="stat"><div class="num">{{ invest_passes }} / 6</div><div class="lbl">INVEST passes</div></div>
-  <div class="stat"><div class="num">{{ result.vague_phrases | length }}</div><div class="lbl">Vague words</div></div>
+{% if is_example %}
+{% with caption = "Add a key and press Check story to run this on your own story." %}
+{% include "_example_flag.html" %}
+{% endwith %}
+{% endif %}
+
+{# The answer opens with the one verdict, then the numbers, then the detail.
+   Before this it was twelve cards of the same weight and you had to read all
+   of them to learn whether the story was in trouble. #}
+<div class="verdict" style="--pct:{{ clarity_score }};--ring-color:var(--{{ score_tone }}-line)">
+  <div class="score-ring">
+    <span class="score-num">{{ clarity_score }}</span>
+    <span class="score-of">/ 100</span>
+  </div>
+  <div>
+    <span class="pill {{ score_tone }}">{{ result.clarity_label }}</span>
+    <h2>Clarity score {{ clarity_score }}</h2>
+    <p>{{ invest_passes }} of 6 INVEST dimensions pass and
+      {{ result.vague_phrases | length }} vague
+      phrase{{ "" if result.vague_phrases | length == 1 else "s" }}
+      {{ "needs" if result.vague_phrases | length == 1 else "need" }} a number or a name
+      before anyone can test this.</p>
+  </div>
 </div>
-<div class="card">
+
+<div class="stat-row">
+  <div class="stat">
+    <div class="num">{{ invest_passes }}<span class="unit"> / 6</span></div>
+    <div class="lbl">INVEST passes</div>
+    <div class="meter"><span class="meter-fill {{ 'ok' if invest_passes >= 5 else ('warn' if invest_passes >= 3 else 'bad') }}"
+      style="width:{{ (invest_passes / 6 * 100) | round | int }}%"></span></div>
+  </div>
+  <div class="stat">
+    <div class="num">{{ result.vague_phrases | length }}</div>
+    <div class="lbl">Vague phrases</div>
+  </div>
+  <div class="stat">
+    <div class="num">{{ result.generated_acceptance_criteria | length }}</div>
+    <div class="lbl">Criteria drafted</div>
+  </div>
+</div>
+
+{# The one thing to do next sits above the detail, not six cards below it. #}
+<div class="panel">
+  <div class="panel-head">
+    <h2>Acceptance criteria</h2>
+    <span class="spacer"></span>
+    <span class="pill accent plain">{{ result.generated_acceptance_criteria | length }} drafted</span>
+  </div>
+  <div class="panel-body">
+    <pre class="code" id="ac-block">{{ acceptance_criteria }}</pre>
+    <script type="application/json" id="story-criteria">{{ criteria_list | tojson }}</script>
+    <div class="row">
+      <button type="button" class="btn btn-primary" id="use-criteria">Use these criteria
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button>
+      <button type="button" class="btn" onclick="navigator.clipboard.writeText(document.getElementById('ac-block').innerText)">Copy</button>
+      <span class="spacer"></span>
+      <span class="hint">Carries the story and these criteria to step 2, in your browser only.</span>
+    </div>
+  </div>
+</div>
+
+<div class="card card-section">
   <h2>Your story</h2>
   <p>{{ highlighted_story | safe }}</p>
-  <p><span class="pill info">{{ result.clarity_label }}</span></p>
 </div>
-<div class="card">
+
+<div class="card card-section">
   <h2>INVEST check</h2>
   <table class="grid">
-    <tr><th>Dimension</th><th>Verdict</th></tr>
+    <thead><tr><th>Dimension</th><th>Verdict</th></tr></thead>
+    <tbody>
     {% for row in invest_rows %}
     <tr>
       <td>{{ row.name }}</td>
       <td><span class="pill {{ row.pill }}">{{ row.value }}</span></td>
     </tr>
     {% endfor %}
+    </tbody>
   </table>
   <p class="muted">{{ result.invest_overall }}</p>
 </div>
-<div class="card">
+
+<div class="card card-section">
   <h2>Vague phrases</h2>
   {% if result.vague_phrases %}
   <table class="grid">
-    <tr><th>Phrase</th><th>Severity</th><th>Why it matters</th><th>Say instead</th></tr>
+    <thead><tr><th>Phrase</th><th>Severity</th><th>Why it matters</th><th>Say instead</th></tr></thead>
+    <tbody>
     {% for vp in result.vague_phrases %}
     <tr>
       <td><code class="mono">{{ vp.phrase }}</code></td>
@@ -34,12 +95,14 @@
       <td>{{ vp.replacement }}</td>
     </tr>
     {% endfor %}
+    </tbody>
   </table>
   {% else %}
   <p class="muted">No vague phrases found. Clear story.</p>
   {% endif %}
 </div>
-<div class="card">
+
+<div class="card card-section">
   <h2>Suggested rewrites</h2>
   <ul>
     {% for rewrite in result.suggested_rewrites %}
@@ -47,47 +110,31 @@
     {% endfor %}
   </ul>
 </div>
-<div class="card">
-  <h2>Acceptance criteria</h2>
-  <pre class="code" id="ac-block">{{ acceptance_criteria }}</pre>
-  <script type="application/json" id="story-criteria">{{ criteria_list | tojson }}</script>
-  <div class="row">
-    <button type="button" class="btn btn-small" onclick="navigator.clipboard.writeText(document.getElementById('ac-block').innerText)">Copy</button>
-    <button type="button" class="btn btn-primary" id="use-criteria">Use these criteria &rarr;</button>
-  </div>
-  <p class="muted small">Takes the story and these criteria to step 2, in your browser only.</p>
-</div>
-{% if result.missing_elements %}
-<div class="card">
-  <h2>Missing elements</h2>
+
+{% if result.missing_elements or result.risks or result.recommended_split %}
+<div class="card card-section">
+  <h2>What is still missing</h2>
+  {% if result.missing_elements %}
+  <h3>Missing elements</h3>
   <ul>
-    {% for item in result.missing_elements %}
-    <li>{{ item }}</li>
-    {% endfor %}
+    {% for item in result.missing_elements %}<li>{{ item }}</li>{% endfor %}
   </ul>
-</div>
-{% endif %}
-{% if result.risks %}
-<div class="card">
-  <h2>Risks if built as-is</h2>
+  {% endif %}
+  {% if result.risks %}
+  <h3>Risks if built as-is</h3>
   <ul>
-    {% for risk in result.risks %}
-    <li>{{ risk }}</li>
-    {% endfor %}
+    {% for risk in result.risks %}<li>{{ risk }}</li>{% endfor %}
   </ul>
-</div>
-{% endif %}
-{% if result.recommended_split %}
-<div class="card">
-  <h2>Recommended split</h2>
+  {% endif %}
+  {% if result.recommended_split %}
+  <h3>Recommended split</h3>
   <ul>
-    {% for split in result.recommended_split %}
-    <li>{{ split }}</li>
-    {% endfor %}
+    {% for split in result.recommended_split %}<li>{{ split }}</li>{% endfor %}
   </ul>
+  {% endif %}
 </div>
 {% endif %}
-{% if notes %}
-<p class="muted small">{{ notes | join(" · ") }}</p>
-{% endif %}
-<p class="muted small">Answered by {{ provider_name }}.</p>
+
+<p class="answered-by">
+  {% if notes %}{{ notes | join(" · ") }} · {% endif %}Answered by {{ provider_name }}.
+</p>

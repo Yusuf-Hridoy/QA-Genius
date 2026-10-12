@@ -1,11 +1,26 @@
-<div class="card">
-  <h2>Risk radar</h2>
-  <p class="muted small">RPN = severity × likelihood × detectability, computed by code.</p>
+{% if is_example %}
+{% with caption = "Add a key and press Find risks to run it on your own story." %}
+{% include "_example_flag.html" %}
+{% endwith %}
+{% endif %}
+<div class="verdict" style="--pct:{{ (covered / report.counts.total * 100) | round | int if report.counts.total else 0 }};--ring-color:var(--{{ 'ok' if not report.counts.untested_high else 'bad' }}-line)">
+  <div class="score-ring">
+    <span class="score-num">{{ (covered / report.counts.total * 100) | round | int if report.counts.total else 0 }}<span style="font-size:16px">%</span></span>
+    <span class="score-of">covered</span>
+  </div>
+  <div>
+    <span class="pill {{ 'ok' if not report.counts.untested_high else 'bad' }}">
+      {% if report.counts.untested_high %}{{ report.counts.untested_high }} high risk{{ "" if report.counts.untested_high == 1 else "s" }} with no test{% else %}Every high risk has a test{% endif %}</span>
+    <h2>{{ report.counts.total }} ways this can fail</h2>
+    <p>{{ covered }} of {{ report.counts.total }} are matched to a test case you already
+      have. RPN = severity × likelihood × detectability, computed by code — not guessed
+      by the AI.</p>
+  </div>
 </div>
 <div class="stat-row">
   <div class="stat"><div class="num">{{ report.counts.total }}</div><div class="lbl">Failure modes</div></div>
   <div class="stat"><div class="num">{{ report.counts.high }}</div><div class="lbl">High risk</div></div>
-  <div class="stat"><div class="num">{{ covered }} / {{ report.counts.total }}</div><div class="lbl">Covered by a test</div></div>
+  <div class="stat"><div class="num">{{ covered }}<span class="unit"> / {{ report.counts.total }}</span></div><div class="lbl">Covered by a test</div></div>
   <div class="stat{% if report.counts.untested_high %} stat-bad{% endif %}">
     <div class="num">{{ report.counts.untested_high }}</div><div class="lbl">High risk, untested</div>
   </div>
@@ -24,7 +39,7 @@
               data-cell="{{ cell.severity }}-{{ cell.likelihood }}"
               data-ids="{{ cell.ids | join(',') }}"
               title="Severity {{ cell.severity }} · likelihood {{ cell.likelihood }}">
-            {% for risk_id in cell.ids %}<span class="pill neutral">{{ risk_id }}</span>{% endfor %}
+            {% for risk_id in cell.ids %}<span class="pill plain">{{ risk_id }}</span>{% endfor %}
           </td>
           {% endfor %}
         </tr>
@@ -35,7 +50,10 @@
         </tr>
       </tbody>
     </table>
-    <p class="muted small heat-labels"><span>Severity</span> · <span>Likelihood</span></p>
+    <p class="heat-labels"><span>Low severity</span><span>High likelihood →</span></p>
+    <p class="heat-key"><span>Lower risk</span>
+      <span class="ramp" aria-hidden="true"><i style="background:var(--seq-1)"></i><i style="background:var(--seq-2)"></i><i style="background:var(--seq-3)"></i><i style="background:var(--seq-4)"></i><i style="background:var(--seq-5)"></i><i style="background:var(--seq-6)"></i></span>
+      <span>Higher</span></p>
     <p class="row"><a href="#" id="risk-show-all" class="small" hidden>Show all risks</a></p>
     <h3>By category</h3>
     <p class="row">
@@ -105,11 +123,7 @@
     <button type="button" class="btn" id="risk-download-csv">Download CSV</button>
     <button type="button" class="btn" id="risk-download-xlsx">Download Excel</button>
   </div>
-  {% if is_example %}
-  <p class="muted small">This is a saved example. Add a key and press Find risks to run it on your own story.</p>
-  {% endif %}
-  {% if notes %}
-  <p class="muted small">{{ notes | join(" · ") }}</p>
-  {% endif %}
-  <p class="muted small">Answered by {{ provider_name }}.</p>
+  <p class="answered-by">
+    {% if notes %}{{ notes | join(" · ") }} · {% endif %}Answered by {{ provider_name }}.
+  </p>
 </div>

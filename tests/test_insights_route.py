@@ -69,7 +69,7 @@ def test_the_insights_page_opens() -> None:
     response = client.get("/insights")
 
     assert response.status_code == 200
-    assert "Test reports" in response.text
+    assert "Your report files" in response.text
     assert "Coming soon" not in response.text
     assert "/insights.js" in response.text
 
@@ -89,7 +89,9 @@ def test_analyze_reads_both_sample_runs_without_an_ai_call(monkeypatch) -> None:
     assert "retried and passed" in response.text
     assert "passed in one run, failed in another" in response.text
     assert "nightly-chromium" in response.text
-    assert "All numbers computed from your files by code." in response.text
+    # The promise that no AI touched these numbers is still on the page.
+    assert "computed from your files" in response.text
+    assert "nothing was sent to an AI" in response.text
 
 
 def test_analyze_needs_no_key() -> None:

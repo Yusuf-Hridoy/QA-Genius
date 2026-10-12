@@ -2,14 +2,15 @@
 {% block title %}Story check — QA-Genius{% endblock %}
 {% block top_title %}Requirements · Story check{% endblock %}
 {% block content %}
-<ol class="steps">
-  <li class="now">1 · Story</li>
-  <li><a href="/requirements/criteria">2 · Acceptance criteria</a></li>
-  <li><a href="/requirements/test-cases">3 · Test cases</a></li>
-  <li><a href="/requirements/automation">4 · Automation</a></li>
-</ol>
-<div class="card">
-  <h2>Story check</h2>
+{% with step = 1 %}{% include "_steps.html" %}{% endwith %}
+<div class="page-head">
+  <span class="eyebrow">Step 1 of 4</span>
+  <h1>Is this story ready to test?</h1>
+  <p class="lede">Paste a user story. QA-Genius scores its clarity, runs the INVEST check,
+    names the vague words that will cost you a bug later, and drafts acceptance criteria
+    you can carry into step 2.</p>
+</div>
+<div class="card" id="story-card" data-input-card="Your story">
   <form id="story-form" hx-post="/requirements/story/run" hx-target="#story-output" hx-swap="innerHTML" hx-indicator="#check-btn">
     <div class="field">
       <label for="story-user-story">User story</label>
@@ -30,12 +31,13 @@
       <textarea id="story-context" name="context" maxlength="1000" placeholder="Login page, shoppers sign in with email and password…"></textarea>
     </div>
     <div class="row">
-      <button id="check-btn" type="submit" class="btn btn-primary"><span class="btn-label">Check story</span><span class="htmx-indicator">Checking…</span></button>
+      <button id="check-btn" type="submit" class="btn btn-primary"><span class="btn-label">Check story</span><span class="htmx-indicator"><span class="spin"></span>Checking…</span></button>
       <button id="load-example" type="button" class="btn" hx-get="/requirements/story/example" hx-target="#story-output" hx-swap="innerHTML">Load example</button>
       <button id="duel-btn" type="button" class="btn" hx-post="/requirements/story/duel" hx-target="#duel-output" hx-swap="innerHTML" hx-include="#story-form" hx-indicator="#duel-progress">Run ambiguity duel</button>
+      <span class="spacer"></span>
+      <span class="hint">Ambiguity duel runs 3 short AI calls.</span>
     </div>
-    <span class="hint">Runs 3 short AI calls.</span>
-    <p id="duel-progress" class="htmx-indicator muted">Reader A and Reader B are reading your story…</p>
+    <p id="duel-progress" class="htmx-indicator working"><span class="spin"></span>Reader A and Reader B are reading your story…</p>
   </form>
 </div>
 <div id="story-output"></div>

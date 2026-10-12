@@ -1,9 +1,12 @@
-<aside id="keys-drawer" class="drawer" role="dialog" aria-labelledby="keys-drawer-title" aria-hidden="true" hidden>
+<aside id="keys-drawer" class="drawer" role="dialog" aria-modal="true" aria-labelledby="keys-drawer-title" aria-hidden="true" hidden>
   <div class="drawer-head">
     <h2 id="keys-drawer-title">Your API keys</h2>
-    <button id="keys-close" type="button" class="btn btn-small" aria-label="Close keys panel">×</button>
+    <button id="keys-close" type="button" class="icon-btn" aria-label="Close keys panel">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
+    </button>
   </div>
-  <p><em>Keys are saved only in this browser. Our server uses them for your request and never stores or logs them.</em></p>
+  <p class="note">Keys are saved only in this browser. Our server uses them for your
+    request and never stores or logs them.</p>
   <ul id="drawer-key-list" class="key-list"></ul>
   <p id="drawer-key-empty" class="muted">No keys yet. Add your first key below.</p>
   <div class="row"><button id="test-all" type="button" class="btn btn-small">Test all</button></div>

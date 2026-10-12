@@ -228,7 +228,7 @@ def test_the_result_shows_the_checks(monkeypatch) -> None:
 
     assert response.status_code == 200
     assert "Report checks" in response.text
-    assert "Checked by code." in response.text
+    assert "Checked by code, not by the AI." in response.text
     assert "Steps to reproduce" in response.text
     # No screenshot was sent, so that one check is missing.
     assert "Ask for a screenshot or screen recording." in response.text
@@ -254,7 +254,9 @@ def test_the_example_needs_no_key() -> None:
 
 def test_the_example_passes_six_of_seven_checks() -> None:
     body = client.get("/bugs/example").text
-    assert "Report quality 86% — 6 of 7" in body
+    # The score leads the card; the count says which checks it came from.
+    assert "--pct:86" in body
+    assert "6 of 7 report checks pass" in body
     assert "Ask for a screenshot or screen recording." in body
 
 

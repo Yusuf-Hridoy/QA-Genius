@@ -130,9 +130,10 @@ def health() -> str:
     return "ok"
 
 
-@app.get("/", include_in_schema=False)
-def index() -> RedirectResponse:
-    return RedirectResponse(url="/requirements/story")
+@app.get("/", response_class=HTMLResponse)
+def index(request: Request) -> HTMLResponse:
+    """The overview: what each desk does and where the key lives."""
+    return templates.TemplateResponse(request, "home.html", {"active": "home"})
 
 
 @app.get("/requirements/story", response_class=HTMLResponse)
@@ -152,19 +153,49 @@ def bugs_page(request: Request) -> HTMLResponse:
     return templates.TemplateResponse(
         request,
         "bug_desk.html",
-        {"active": "bugs", "devices": bug_report.DEVICE_OPTIONS},
+        {
+            "active": "bugs",
+            "devices": bug_report.DEVICE_OPTIONS,
+            "page_title": "Turn rough notes into a report worth filing",
+            "page_lede": (
+                "Say what happened in your own words. QA-Genius writes the title, the "
+                "steps, actual vs expected and a severity, then scores the report "
+                "against the checks a developer would ask about."
+            ),
+            "eyebrow": "Bug desk",
+        },
     )
 
 
 @app.get("/insights", response_class=HTMLResponse)
 def insights_page(request: Request) -> HTMLResponse:
-    return templates.TemplateResponse(request, "insights.html", {"active": "insights"})
+    return templates.TemplateResponse(
+        request,
+        "insights.html",
+        {
+            "active": "insights",
+            "page_title": "What your last test run is telling you",
+            "page_lede": (
+                "Drop in JUnit XML or Playwright JSON. Code groups the failures, finds "
+                "the flaky tests and ranks the slow ones — no API key, nothing "
+                "sent to an AI unless you ask for an explanation."
+            ),
+            "eyebrow": "Quality insights",
+        },
+    )
 
 
 @app.get("/performance", response_class=HTMLResponse)
 def performance_page(request: Request) -> HTMLResponse:
     return templates.TemplateResponse(
-        request, "coming_soon.html", {"active": "performance", "page": "Performance"}
+        request,
+        "coming_soon.html",
+        {
+            "active": "performance",
+            "page": "Performance",
+            "page_title": "Performance",
+            "eyebrow": "Not in this phase",
+        },
     )
 
 
@@ -332,6 +363,16 @@ def _invest_rows(result: AmbiguityAnalysis) -> tuple[list[dict[str, str]], int]:
     return rows, passes
 
 
+SAVED_EXAMPLE = "saved example"
+
+
+def _score_tone(score: int) -> str:
+    """Reserved status scale: a score always ships with its word, never a hue alone."""
+    if score >= 75:
+        return "ok"
+    return "warn" if score >= 45 else "bad"
+
+
 def _story_result_context(
     request: Request,
     story: str,
@@ -340,9 +381,12 @@ def _story_result_context(
     provider_name: str,
 ) -> dict:
     rows, passes = _invest_rows(result)
+    clarity = max(0, 100 - result.ambiguity_score)
     return {
         "result": result,
-        "clarity_score": max(0, 100 - result.ambiguity_score),
+        "clarity_score": clarity,
+        "score_tone": _score_tone(clarity),
+        "is_example": provider_name == SAVED_EXAMPLE,
         "invest_rows": rows,
         "invest_passes": passes,
         "highlighted_story": _highlight_story(
@@ -1825,6 +1869,10 @@ LEVEL_PILLS = {"high": "bad", "medium": "warn", "low": "ok"}
 COVERAGE_TONES = {"verified": "ok", "covered": "ok", "weak": "warn", "none": "bad"}
 # A cell of the heat map, coloured by severity x likelihood.
 HEAT_BAD, HEAT_WARN = 15, 8
+# The heat map encodes one magnitude - severity x likelihood, 1..25 - so it
+# takes one sequential ramp, light to dark, not a traffic-light mix. Every
+# cell that holds a risk also prints its id, so colour is never the only cue.
+HEAT_STEPS = ((2, "s1"), (5, "s2"), (9, "s3"), (14, "s4"), (19, "s5"))
 
 
 class RiskBody(BaseModel):
@@ -1881,11 +1929,11 @@ def _heat_rows(report: RiskReport) -> list[dict]:
         cells = []
         for likelihood in range(1, 6):
             product = severity * likelihood
-            tone = "ok"
-            if product >= HEAT_BAD:
-                tone = "bad"
-            elif product >= HEAT_WARN:
-                tone = "warn"
+            tone = "s6"
+            for ceiling, step in HEAT_STEPS:
+                if product <= ceiling:
+                    tone = step
+                    break
             cells.append(
                 {
                     "severity": severity,
@@ -1954,7 +2002,20 @@ def _risk_result(request: Request, **context) -> HTMLResponse:
 @app.get("/risks", response_class=HTMLResponse)
 def risks_page(request: Request) -> HTMLResponse:
     """The page is empty; the browser fills it from sessionStorage."""
-    return templates.TemplateResponse(request, "risk_radar.html", {"active": "risks"})
+    return templates.TemplateResponse(
+        request,
+        "risk_radar.html",
+        {
+            "active": "risks",
+            "page_title": "Where this feature is most likely to break",
+            "page_lede": (
+                "Risk radar reads your story, criteria and test cases and names the "
+                "failure modes they imply. Each one is scored by severity, likelihood "
+                "and detectability, and matched against the tests you already have."
+            ),
+            "eyebrow": "Risk radar",
+        },
+    )
 
 
 @app.post("/risks/run", response_class=HTMLResponse)

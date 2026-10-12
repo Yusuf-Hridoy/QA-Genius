@@ -1,12 +1,14 @@
-<div class="card">
-  <h2>Could not check the story</h2>
-  <p><span class="pill bad">Error</span></p>
-  <p>{{ message }}</p>
-  {% if notes %}
-  <ul>
-    {% for note in notes %}
-    <li class="muted">{{ note }}</li>
-    {% endfor %}
-  </ul>
-  {% endif %}
+<div class="card error-card">
+  <div class="empty-state">
+    <span class="empty-mark empty-mark-bad"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.3 3.9 1.9 18a2 2 0 0 0 1.7 3h16.8a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/></svg></span>
+    <h2>Could not check the story</h2>
+    <p>{{ message }}</p>
+    {% if notes %}
+    <ul class="checklist muted small">
+      {% for note in notes %}
+      <li>{{ note }}</li>
+      {% endfor %}
+    </ul>
+    {% endif %}
+  </div>
 </div>

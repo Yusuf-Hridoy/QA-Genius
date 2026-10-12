@@ -1,19 +1,30 @@
-<div class="card" id="bug-report-card">
-  <div id="bug-shot-shown"></div>
-  <h2>{{ report.title }}</h2>
-  <p class="row">
-    <span class="pill {{ severity_pill }}">{{ report.severity }}</span>
-    <span class="pill neutral">{{ reproducibility }}</span>
-    {% if report.root_cause_category %}<span class="pill neutral">{{ report.root_cause_category }}</span>{% endif %}
-  </p>
-</div>
-<div class="card">
-  <h2>Report checks</h2>
-  <p class="muted small">Checked by code.</p>
-  <div class="meter" role="img" aria-label="Report quality {{ score }} percent">
-    <div class="meter-fill {{ 'ok' if score >= 75 else ('warn' if score >= 50 else 'bad') }}" style="width:{{ score }}%"></div>
+{% if is_example %}
+{% with caption = "Add a key and press Write bug report to run this on your own notes." %}
+{% include "_example_flag.html" %}
+{% endwith %}
+{% endif %}
+{# The title and the quality score are the two things a reporter checks first,
+   so they lead instead of sitting in two separate cards of equal weight. #}
+<div class="verdict" id="bug-report-card" style="--pct:{{ score }};--ring-color:var(--{{ 'ok' if score >= 75 else ('warn' if score >= 50 else 'bad') }}-line)">
+  <div class="score-ring" role="img" aria-label="Report quality {{ score }} percent">
+    <span class="score-num">{{ score }}<span style="font-size:16px">%</span></span>
+    <span class="score-of">quality</span>
   </div>
-  <p>Report quality {{ score }}% — {{ ok_count }} of {{ checks | length }}</p>
+  <div>
+    <p class="row" style="margin-bottom:6px">
+      <span class="pill {{ severity_pill }}">{{ report.severity }}</span>
+      <span class="pill neutral">{{ reproducibility }}</span>
+      {% if report.root_cause_category %}<span class="pill neutral">{{ report.root_cause_category }}</span>{% endif %}
+    </p>
+    <h2>{{ report.title }}</h2>
+    <p>{{ ok_count }} of {{ checks | length }} report checks pass.
+      {% if ok_count < checks | length %}Fill the gaps below before you file it.{% else %}This one is ready to file.{% endif %}</p>
+    <div id="bug-shot-shown"></div>
+  </div>
+</div>
+<div class="card card-section">
+  <h2>Report checks</h2>
+  <p class="muted small">Checked by code, not by the AI.</p>
   <ul class="check-rows">
     {% for check in checks %}
     <li>
@@ -24,7 +35,7 @@
     {% endfor %}
   </ul>
 </div>
-<div class="card">
+<div class="card card-section">
   <h2>Environment</h2>
   <p class="mono small">{{ environment }}</p>
   <h2>Steps to reproduce</h2>
@@ -47,7 +58,7 @@
   or report.related_areas or report.jira_labels or report.investigation_steps
   or report.related_issues or report.screenshot_annotations %}
 {% if has_extra %}
-<div class="card">
+<div class="card card-section">
   <h2>More detail</h2>
   {% if report.suspected_pattern %}<h3>Suspected pattern</h3><p>{{ report.suspected_pattern }}</p>{% endif %}
   {% if report.suggested_fix %}<h3>Suggested fix</h3><p>{{ report.suggested_fix }}</p>{% endif %}
@@ -92,5 +103,5 @@
   {% if notes %}
   <p class="small {% if image_note %}warn-line{% else %}muted{% endif %}">{{ notes | join(" · ") }}</p>
   {% endif %}
-  <p class="muted small">Answered by {{ provider_name }}.</p>
+  <p class="answered-by">Answered by {{ provider_name }}.</p>
 </div>

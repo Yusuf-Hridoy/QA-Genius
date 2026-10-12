@@ -2,12 +2,12 @@
 {% block title %}Automation — QA-Genius{% endblock %}
 {% block top_title %}Requirements · Automation{% endblock %}
 {% block content %}
-<ol class="steps">
-  <li class="done"><a href="/requirements/story">1 · Story</a></li>
-  <li class="done"><a href="/requirements/criteria">2 · Acceptance criteria</a></li>
-  <li class="done"><a href="/requirements/test-cases">3 · Test cases</a></li>
-  <li class="now">4 · Automation</li>
-</ol>
+{% with step = 4 %}{% include "_steps.html" %}{% endwith %}
+<div class="page-head">
+  <span class="eyebrow">Step 4 of 4</span>
+  <h1>Generate a runnable project</h1>
+  <p class="lede">Pick the cases worth automating and get a Playwright, Cypress or Selenium project you can download and run.</p>
+</div>
 <div id="automation-root"></div>
 <div id="automation-output"></div>
 {% endblock %}

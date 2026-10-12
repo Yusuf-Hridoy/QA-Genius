@@ -1,3 +1,21 @@
+{% if is_example %}
+{% with caption = "Add a key and press Generate test cases to run this on your own criteria." %}
+{% include "_example_flag.html" %}
+{% endwith %}
+{% endif %}
+<div class="verdict" style="--pct:{{ coverage.percent }};--ring-color:var(--{{ coverage_pill }}-line)">
+  <div class="score-ring" role="img" aria-label="Coverage {{ coverage.percent }} percent">
+    <span class="score-num">{{ coverage.percent }}<span style="font-size:16px">%</span></span>
+    <span class="score-of">covered</span>
+  </div>
+  <div>
+    <span class="pill {{ coverage_pill }}">{{ coverage.covered | length }} of {{ criteria | length }} criteria covered</span>
+    <h2>{{ counts.total }} test case{{ "" if counts.total == 1 else "s" }}</h2>
+    <p>{% if depth.thin_ids %}{{ depth.thin_ids | length }} of {{ depth.rows | length }} criteria
+      are thin — they have no negative or boundary case yet.{% else %}Every criterion has a
+      negative and a boundary case.{% endif %}</p>
+  </div>
+</div>
 <div class="stat-row">
   <div class="stat"><div class="num">{{ counts.total }}</div><div class="lbl">Test cases</div></div>
   <div class="stat"><div class="num">{{ coverage.covered | length }} / {{ criteria | length }}</div><div class="lbl">Criteria covered</div></div>
@@ -5,7 +23,7 @@
   <div class="stat"><div class="num">{{ counts.by_category.get("Boundary", 0) }}</div><div class="lbl">Boundary</div></div>
   <div class="stat"><div class="num">{{ counts.by_priority.get("High", 0) }}</div><div class="lbl">High priority</div></div>
 </div>
-<div class="card">
+<div class="card card-section">
   <h2>Coverage</h2>
   <div class="meter" role="img" aria-label="Coverage {{ coverage.percent }} percent">
     <div class="meter-fill {{ coverage_pill }}" style="width:{{ coverage.percent }}%"></div>

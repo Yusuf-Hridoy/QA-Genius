@@ -2,12 +2,12 @@
 {% block title %}Test cases — QA-Genius{% endblock %}
 {% block top_title %}Requirements · Test cases{% endblock %}
 {% block content %}
-<ol class="steps">
-  <li class="done"><a href="/requirements/story">1 · Story</a></li>
-  <li class="done"><a href="/requirements/criteria">2 · Acceptance criteria</a></li>
-  <li class="now">3 · Test cases</li>
-  <li><a href="/requirements/automation">4 · Automation</a></li>
-</ol>
+{% with step = 3 %}{% include "_steps.html" %}{% endwith %}
+<div class="page-head">
+  <span class="eyebrow">Step 3 of 4</span>
+  <h1>Turn criteria into test cases</h1>
+  <p class="lede">Generate functional, negative, boundary and edge cases, see which criteria they cover, then strengthen the thin ones before you automate.</p>
+</div>
 <div id="test-cases-root"></div>
 <div id="test-cases-output"></div>
 {% endblock %}

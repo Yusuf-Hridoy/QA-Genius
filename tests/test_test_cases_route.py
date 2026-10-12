@@ -82,14 +82,14 @@ def _fake_generate(captured: list | None = None, suite: CaseList | None = None):
 def test_criteria_page_renders() -> None:
     response = client.get("/requirements/criteria")
     assert response.status_code == 200
-    assert "2 · Acceptance criteria" in response.text
-    assert "1 · Story" in response.text
+    assert '<span class="step-n">2</span><span class="step-text">Acceptance criteria</span>' in response.text
+    assert '<span class="step-n">1</span><span class="step-text">Story</span>' in response.text
 
 
 def test_test_cases_page_renders() -> None:
     response = client.get("/requirements/test-cases")
     assert response.status_code == 200
-    assert "3 · Test cases" in response.text
+    assert '<span class="step-n">3</span><span class="step-text">Test cases</span>' in response.text
 
 
 def test_run_without_keys_opens_drawer() -> None:
@@ -263,8 +263,13 @@ def test_other_pages_do_not_load_the_flow_script() -> None:
 
 def test_step_bar_links_between_steps() -> None:
     body = client.get("/requirements/criteria").text
-    assert '<a href="/requirements/story">1 \u00b7 Story</a>' in body
-    assert '<a href="/requirements/test-cases">3 \u00b7 Test cases</a>' in body
-    # The current step is marked, and step 4 is a link now that automation exists.
-    assert '<li class="now">2 \u00b7 Acceptance criteria</li>' in body
-    assert '<a href="/requirements/automation">4 \u00b7 Automation</a>' in body
+    for href in (
+        "/requirements/story",
+        "/requirements/test-cases",
+        "/requirements/automation",
+    ):
+        assert f'<a href="{href}">' in body
+    # The step before this one is done, this one is current and is not a link.
+    assert '<li class="done" data-needs="story">' in body
+    assert '<li class="now" data-needs="criteria">' in body
+    assert '<a href="/requirements/criteria">' not in body

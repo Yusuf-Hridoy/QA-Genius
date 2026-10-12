@@ -108,6 +108,7 @@
     var cases = currentCases(run);
 
     var card = el("div", "card");
+    card.setAttribute("data-input-card", "Your run");
     card.appendChild(el("h2", null, "How can this feature fail?"));
     card.appendChild(el("p", "muted", (run.story || "").slice(0, 120)));
     var line = el("p", "muted small");
@@ -149,15 +150,17 @@
 
     var progress = el(
       "p",
-      "htmx-indicator muted",
+      "htmx-indicator working",
       "Thinking about how this can fail…"
     );
+    progress.insertBefore(el("span", "spin"), progress.firstChild);
     progress.id = "risk-progress";
     form.appendChild(progress);
     card.appendChild(form);
     root.appendChild(card);
 
     if (window.htmx) window.htmx.process(root);
+    if (window.QAG && window.QAG.initInputCards) window.QAG.initInputCards(root);
 
     /* Always send what sessionStorage holds right now. */
     form.addEventListener("htmx:configRequest", function (event) {

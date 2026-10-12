@@ -328,6 +328,7 @@
     var criteria = nonEmpty(run);
 
     var card = el("div", "card");
+    card.setAttribute("data-input-card", "Your criteria");
     card.appendChild(el("h2", null, "Test cases"));
     var preview = (run.story || "").slice(0, 120);
     card.appendChild(el("p", "muted", preview));
@@ -392,9 +393,10 @@
 
     var progress = el(
       "p",
-      "htmx-indicator muted",
+      "htmx-indicator working",
       "Writing test cases for " + criteria.length + " criteria…"
     );
+    progress.insertBefore(el("span", "spin"), progress.firstChild);
     progress.id = "tc-progress";
     form.appendChild(progress);
 
@@ -402,6 +404,7 @@
     root.appendChild(card);
 
     if (window.htmx) window.htmx.process(root);
+    if (window.QAG && window.QAG.initInputCards) window.QAG.initInputCards(root);
 
     /* Always send what sessionStorage holds right now. */
     form.addEventListener("htmx:configRequest", function (event) {
@@ -610,6 +613,7 @@
       empty.appendChild(actions);
       root.appendChild(empty);
       if (window.htmx) window.htmx.process(root);
+    if (window.QAG && window.QAG.initInputCards) window.QAG.initInputCards(root);
       return;
     }
 
@@ -641,15 +645,17 @@
 
     var progress = el(
       "p",
-      "htmx-indicator muted",
+      "htmx-indicator working",
       "Writing tests for " + cases.length + " test case" +
         (cases.length === 1 ? "" : "s") + "…"
     );
+    progress.insertBefore(el("span", "spin"), progress.firstChild);
     progress.id = "automation-progress";
     form.appendChild(progress);
 
     root.appendChild(form);
     if (window.htmx) window.htmx.process(root);
+    if (window.QAG && window.QAG.initInputCards) window.QAG.initInputCards(root);
     toggleBrowsers(form);
 
     /* Always send what sessionStorage holds right now. */

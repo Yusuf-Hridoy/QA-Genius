@@ -2,8 +2,8 @@
 {% block title %}Bug desk — QA-Genius{% endblock %}
 {% block top_title %}Bug desk{% endblock %}
 {% block content %}
-<div class="card">
-  <h2>Bug notes</h2>
+<div class="card" data-input-card="Your notes">
+  <h2>What went wrong?</h2>
   <form id="bug-form" hx-post="/bugs/run" hx-target="#bug-output" hx-swap="innerHTML" hx-indicator="#bug-progress">
     <div class="field">
       <label for="bug-notes">What happened?</label>
@@ -71,10 +71,10 @@
     </fieldset>
 
     <div class="row">
-      <button id="bug-run" type="submit" class="btn btn-primary"><span class="btn-label">Write bug report</span></button>
+      <button id="bug-run" type="submit" class="btn btn-primary"><span class="btn-label">Write bug report</span><span class="htmx-indicator"><span class="spin"></span>Writing…</span></button>
       <button id="bug-example" type="button" class="btn" hx-get="/bugs/example" hx-target="#bug-output" hx-swap="innerHTML">Load example</button>
     </div>
-    <p id="bug-progress" class="htmx-indicator muted">Writing the bug report…</p>
+    <p id="bug-progress" class="htmx-indicator working"><span class="spin"></span>Writing the bug report…</p>
   </form>
 </div>
 <div id="bug-output"></div>

@@ -2,12 +2,12 @@
 {% block title %}Acceptance criteria — QA-Genius{% endblock %}
 {% block top_title %}Requirements · Acceptance criteria{% endblock %}
 {% block content %}
-<ol class="steps">
-  <li class="done"><a href="/requirements/story">1 · Story</a></li>
-  <li class="now">2 · Acceptance criteria</li>
-  <li><a href="/requirements/test-cases">3 · Test cases</a></li>
-  <li><a href="/requirements/automation">4 · Automation</a></li>
-</ol>
+{% with step = 2 %}{% include "_steps.html" %}{% endwith %}
+<div class="page-head">
+  <span class="eyebrow">Step 2 of 4</span>
+  <h1>Lock the acceptance criteria</h1>
+  <p class="lede">Edit what the story check drafted. These criteria are what step 3 writes test cases against, so every word here becomes a test.</p>
+</div>
 <div id="criteria-root"></div>
 {% endblock %}
 {% block scripts %}<script src="/requirements_flow.js" defer></script>{% endblock %}

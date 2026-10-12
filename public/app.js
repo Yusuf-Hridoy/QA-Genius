@@ -153,6 +153,7 @@
 
   var drawerOpen = false;
   var closeTimer = null;
+  var lastFocused = null;
   var testingId = null;
   var pendingStorySubmit = false;
 
@@ -166,6 +167,13 @@
       closeTimer = null;
     }
     renderDrawer();
+    lastFocused = document.activeElement;
+    var scrim = document.getElementById("keys-scrim");
+    if (scrim) {
+      scrim.hidden = false;
+      void scrim.offsetWidth;
+      scrim.classList.add("open");
+    }
     drawer.hidden = false;
     drawer.setAttribute("aria-hidden", "false");
     // Force reflow so the slide transition plays.
@@ -188,12 +196,20 @@
     drawerOpen = false;
     drawer.classList.remove("open");
     drawer.setAttribute("aria-hidden", "true");
+    var scrim = document.getElementById("keys-scrim");
+    if (scrim) {
+      scrim.classList.remove("open");
+    }
     closeTimer = setTimeout(function () {
       drawer.hidden = true;
-    }, 240);
-    var chip = document.getElementById("key-chip");
-    if (chip) {
-      chip.focus();
+      if (scrim) {
+        scrim.hidden = true;
+      }
+    }, 260);
+    var back = lastFocused && lastFocused.focus ? lastFocused : document.getElementById("key-chip");
+    lastFocused = null;
+    if (back) {
+      back.focus();
     }
   }
 
@@ -610,8 +626,32 @@
     document.addEventListener("keydown", function (event) {
       if (event.key === "Escape") {
         closeDrawer();
+        return;
+      }
+      if (event.key !== "Tab" || !drawerOpen) {
+        return;
+      }
+      // A modal panel keeps the keyboard inside itself.
+      var focusable = drawer.querySelectorAll(
+        'a[href], button:not([disabled]), input:not([disabled]), select, textarea'
+      );
+      if (!focusable.length) {
+        return;
+      }
+      var first = focusable[0];
+      var last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
       }
     });
+    var scrim = document.getElementById("keys-scrim");
+    if (scrim) {
+      scrim.addEventListener("click", closeDrawer);
+    }
 
     function syncLink() {
       var opt = select.options[select.selectedIndex];
@@ -695,9 +735,209 @@
     }
   }
 
+
+  /* ---------------------------------------------------------------- shell
+   * Theme, back-to-top, step locking and "take me to the answer". None of
+   * this touches a key or the server; it is all local to the page. */
+
+  var THEME_KEY = "qag.theme";
+
+  function initTheme() {
+    var toggle = document.getElementById("theme-toggle");
+    if (!toggle) {
+      return;
+    }
+    toggle.addEventListener("click", function () {
+      var dark = document.documentElement.getAttribute("data-theme") === "dark";
+      var next = dark ? "light" : "dark";
+      document.documentElement.setAttribute("data-theme", next);
+      try {
+        localStorage.setItem(THEME_KEY, next);
+      } catch (err) {
+        /* Private window: the theme just does not survive a reload. */
+      }
+    });
+  }
+
+  function initToTop() {
+    var btn = document.getElementById("to-top");
+    if (!btn) {
+      return;
+    }
+    btn.addEventListener("click", function () {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    });
+    var ticking = false;
+    window.addEventListener(
+      "scroll",
+      function () {
+        if (ticking) {
+          return;
+        }
+        ticking = true;
+        window.requestAnimationFrame(function () {
+          btn.classList.toggle("show", window.scrollY > 640);
+          ticking = false;
+        });
+      },
+      { passive: true }
+    );
+  }
+
+  /* A step link that lands on "No story yet" is a dead end. Only unlock the
+   * steps the run in sessionStorage actually has data for. */
+  function initStepLocks() {
+    var list = document.getElementById("flow-steps");
+    if (!list) {
+      return;
+    }
+    var run = null;
+    try {
+      var raw = sessionStorage.getItem("qag.run");
+      run = raw ? JSON.parse(raw) : null;
+    } catch (err) {
+      run = null;
+    }
+    function has(name) {
+      if (!run) {
+        return false;
+      }
+      if (name === "story") {
+        return !!(run.story && String(run.story).trim());
+      }
+      if (name === "criteria") {
+        return !!(
+          run.criteria &&
+          run.criteria.some(function (c) {
+            return c && String(c.text || "").trim();
+          })
+        );
+      }
+      if (name === "test_cases") {
+        return !!(run.test_cases && run.test_cases.result);
+      }
+      if (name === "automation_cases") {
+        return !!(run.automation_cases && run.automation_cases.length);
+      }
+      return false;
+    }
+    var here = parseInt(list.dataset.step, 10) || 1;
+    Array.prototype.forEach.call(list.children, function (li, idx) {
+      var n = idx + 1;
+      var link = li.querySelector("a");
+      if (!link || n <= here || n === 1) {
+        return;
+      }
+      /* Step n needs whatever the step before it produces. */
+      var needs = li.previousElementSibling
+        ? li.previousElementSibling.dataset.needs
+        : "story";
+      if (has(needs)) {
+        li.classList.add("done");
+        return;
+      }
+      li.classList.add("locked");
+      link.setAttribute("aria-disabled", "true");
+      link.title = "Finish step " + (n - 1) + " first";
+      var lock = link.querySelector(".step-lock");
+      if (lock) {
+        lock.hidden = false;
+      }
+      link.addEventListener("click", function (event) {
+        event.preventDefault();
+      });
+    });
+  }
+
+  /* A form you have already filled in folds into one line once its answer
+   * arrives, so the answer is what you land on. "Edit" opens it again. */
+  function initInputCards(scope) {
+    var cards = (scope || document).querySelectorAll(
+      "[data-input-card]:not([data-folded])"
+    );
+    Array.prototype.forEach.call(cards, function (card) {
+      card.setAttribute("data-folded", "1");
+      card.classList.add("input-card");
+      var body = el("div", "input-body");
+      while (card.firstChild) {
+        body.appendChild(card.firstChild);
+      }
+      var bar = el("div", "input-bar");
+      bar.appendChild(el("span", "what", card.getAttribute("data-input-card")));
+      bar.appendChild(el("span", "said", ""));
+      var edit = el("button", "btn btn-small", "Edit");
+      edit.type = "button";
+      edit.addEventListener("click", function () {
+        card.classList.remove("collapsed");
+        card.scrollIntoView({ behavior: "smooth", block: "start" });
+      });
+      bar.appendChild(edit);
+      card.appendChild(bar);
+      card.appendChild(body);
+    });
+  }
+
+  function foldInputCards() {
+    var cards = document.querySelectorAll(".input-card");
+    Array.prototype.forEach.call(cards, function (card) {
+      var said = card.querySelector(".input-bar .said");
+      var source = card.querySelector("textarea, input[type=text]");
+      if (said) {
+        var text = source && source.value ? source.value.trim() : "";
+        said.textContent = text ? text.slice(0, 140) : "";
+      }
+      card.classList.add("collapsed");
+    });
+  }
+
+  /* After a run, put the answer on screen instead of leaving the reader
+   * below a form they have already filled in. */
+  var ANSWER_TARGETS = [
+    "story-output",
+    "duel-output",
+    "bug-output",
+    "insights-output",
+    "risk-output",
+    "test-cases-output",
+    "automation-output",
+  ];
+
+  function initScrollToAnswer() {
+    document.body.addEventListener("htmx:afterSwap", function (event) {
+      var node = event.target;
+      if (!node || !node.id || ANSWER_TARGETS.indexOf(node.id) === -1) {
+        return;
+      }
+      if (!node.firstElementChild) {
+        return;
+      }
+      /* An error means the input still needs work, so the form stays open. */
+      if (!node.querySelector(".error-card")) {
+        foldInputCards();
+      }
+      var top = node.getBoundingClientRect().top + window.scrollY - 78;
+      window.scrollTo({ top: top > 0 ? top : 0, behavior: "smooth" });
+    });
+  }
+
+  function initHomeKeyButton() {
+    var btn = document.getElementById("home-add-key");
+    if (btn) {
+      btn.addEventListener("click", function () {
+        openDrawer(true);
+      });
+    }
+  }
+
   document.addEventListener("DOMContentLoaded", function () {
     updateChip();
     initDrawer();
+    initTheme();
+    initToTop();
+    initStepLocks();
+    initInputCards();
+    initScrollToAnswer();
+    initHomeKeyButton();
   });
 
   document.body.addEventListener("htmx:configRequest", function (event) {
@@ -747,6 +987,7 @@
   });
 
   window.QAG = {
+    initInputCards: initInputCards,
     loadKeys: loadKeys,
     storeKeys: storeKeys,
     headerKeys: headerKeys,

@@ -1,5 +1,12 @@
-<div class="card" id="duel-card">
+{% if provider_name == "saved example" %}
+{% with caption = "Add a key and press Run ambiguity duel to read your own story twice." %}
+{% include "_example_flag.html" %}
+{% endwith %}
+{% endif %}
+<div class="card card-section" id="duel-card">
   <h2>Ambiguity duel</h2>
+  <p class="muted small">Two readers read the same story independently. Where they disagree,
+    the story is ambiguous.</p>
   <p>
     <span class="pill {{ forks_pill }}">{{ forks | length }} forks</span>
     <span class="pill warn">{{ vague_count }} vague phrases</span>
