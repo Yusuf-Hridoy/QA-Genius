@@ -273,6 +273,20 @@ class Interpretation(BaseModel):
     assumptions: List[str] = []
 
 
+def _severity_text(value: Any) -> str:
+    """A fork severity from whatever the AI wrote. Unreadable text is medium."""
+    text = str(value or "").strip().lower()
+    if text in ("high", "medium", "low"):
+        return text
+    if text == "critical":
+        return "high"
+    if text == "moderate":
+        return "medium"
+    if text == "minor":
+        return "low"
+    return "medium"
+
+
 class Fork(BaseModel):
     topic: str
     reading_a: str
@@ -284,16 +298,26 @@ class Fork(BaseModel):
     @field_validator("severity", mode="before")
     @classmethod
     def _tolerant_severity(cls, value: Any) -> str:
-        text = str(value or "").strip().lower()
-        if text in ("high", "medium", "low"):
-            return text
-        if text == "critical":
-            return "high"
-        if text == "moderate":
-            return "medium"
-        if text == "minor":
-            return "low"
-        return "medium"
+        return _severity_text(value)
+
+
+class DuelFork(BaseModel):
+    """One fork as Ship check needs it: the topic and how bad it is."""
+
+    topic: str = ""
+    severity: Literal["high", "medium", "low"] = "medium"
+
+    @field_validator("severity", mode="before")
+    @classmethod
+    def _tolerant_severity(cls, value: Any) -> str:
+        return _severity_text(value)
+
+
+class DuelSummary(BaseModel):
+    """What the browser keeps from an ambiguity duel, for Ship check."""
+
+    agreement_pct: int = 0
+    forks: List[DuelFork] = []
 
 
 class DuelComparison(BaseModel):

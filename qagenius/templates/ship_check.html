@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block title %}Ship check — QA-Genius{% endblock %}
+{% block top_title %}Ship check{% endblock %}
+{% block content %}
+{# ship_check.js fills #ship-root with the story line or the empty state, then
+   posts the run to /ship/report and drops the server's HTML into #ship-output. #}
+<div id="ship-root"></div>
+<p class="muted small">Computed from your results by code. No AI, no key needed.</p>
+<div id="ship-output"></div>
+{% endblock %}
+{% block scripts %}<script src="/ship_check.js" defer></script>{% endblock %}

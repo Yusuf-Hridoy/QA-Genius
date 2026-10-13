@@ -50,6 +50,8 @@
   <div class="panel-body">
     <pre class="code" id="ac-block">{{ acceptance_criteria }}</pre>
     <script type="application/json" id="story-criteria">{{ criteria_list | tojson }}</script>
+    {# Ship check reads the whole analysis back out of the run. #}
+    <script type="application/json" id="story-analysis-data">{{ result.model_dump() | tojson }}</script>
     <div class="row">
       <button type="button" class="btn btn-primary" id="use-criteria">Use these criteria
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button>

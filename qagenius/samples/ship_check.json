@@ -1,0 +1,555 @@
+{
+  "story": "As an Aurora Storefront shopper, I want my account to lock after too many wrong passwords, so that nobody can guess their way into it. The lock should last a while and the sign-in page should tell me what happened.",
+  "story_analysis": {
+    "ambiguity_score": 18,
+    "clarity_label": "Clear",
+    "invest_overall": "A testable story once the lock duration is written down.",
+    "invest_independent": "Pass",
+    "invest_negotiable": "Pass",
+    "invest_valuable": "Pass",
+    "invest_estimable": "Pass",
+    "invest_small": "Pass",
+    "invest_testable": "Pass",
+    "vague_phrases": [
+      {
+        "phrase": "too many wrong passwords",
+        "severity": "Medium",
+        "suggestion": "Nobody can test 'too many' - give the number of attempts.",
+        "replacement": "5 failed attempts within 10 minutes"
+      },
+      {
+        "phrase": "last a while",
+        "severity": "Medium",
+        "suggestion": "A duration nobody wrote down becomes a guess in the code.",
+        "replacement": "30 minutes"
+      }
+    ],
+    "missing_elements": [
+      "What support can do to unlock an account early"
+    ],
+    "suggested_rewrites": [
+      "As an Aurora Storefront shopper, I want my account locked for 30 minutes after 5 failed sign-in attempts within 10 minutes, so that nobody can guess their way in."
+    ],
+    "generated_acceptance_criteria": [
+      "The account locks after 5 failed sign-in attempts within 10 minutes",
+      "A locked account stays locked for 30 minutes",
+      "The sign-in page tells the shopper the lock lasts 30 minutes",
+      "A successful sign-in resets the failed attempt counter to zero"
+    ],
+    "risks": [
+      "A shared lockout counter is needed once more than one server is live"
+    ],
+    "score_breakdown": "18 = 2 vague phrases (12) + 1 missing element (6)",
+    "recommended_split": null
+  },
+  "duel_summary": {
+    "agreement_pct": 55,
+    "forks": [
+      {
+        "topic": "Does the 10 minute window slide or reset?",
+        "severity": "medium"
+      },
+      {
+        "topic": "Is the lock message shown before or after the fifth attempt?",
+        "severity": "low"
+      }
+    ]
+  },
+  "test_cases": {
+    "result": {
+      "test_cases": [
+        {
+          "id": "TC-001",
+          "title": "Account locks after the fifth wrong password",
+          "category": "Functional",
+          "pre_conditions": "The shopper has an active Aurora Storefront account",
+          "steps": [
+            "Open the Aurora Storefront sign-in page",
+            "Submit the sign-in form"
+          ],
+          "expected_result": "The account is locked and sign-in is refused",
+          "priority": "High",
+          "test_data": "email=dana.reed@example.com",
+          "bdd_scenario": null,
+          "automation_feasibility": "High",
+          "automation_effort": "Low",
+          "tags": [
+            "login"
+          ],
+          "traceability": "AC-1"
+        },
+        {
+          "id": "TC-002",
+          "title": "Four wrong passwords leave the account open",
+          "category": "Negative",
+          "pre_conditions": "The shopper has an active Aurora Storefront account",
+          "steps": [
+            "Open the Aurora Storefront sign-in page",
+            "Submit the sign-in form"
+          ],
+          "expected_result": "The shopper can still sign in with the right password",
+          "priority": "High",
+          "test_data": "email=dana.reed@example.com",
+          "bdd_scenario": null,
+          "automation_feasibility": "High",
+          "automation_effort": "Low",
+          "tags": [
+            "login"
+          ],
+          "traceability": "AC-1"
+        },
+        {
+          "id": "TC-003",
+          "title": "The sixth attempt within 10 minutes is refused",
+          "category": "Boundary",
+          "pre_conditions": "The shopper has an active Aurora Storefront account",
+          "steps": [
+            "Open the Aurora Storefront sign-in page",
+            "Submit the sign-in form"
+          ],
+          "expected_result": "The account stays locked on the sixth attempt",
+          "priority": "High",
+          "test_data": "email=dana.reed@example.com",
+          "bdd_scenario": null,
+          "automation_feasibility": "High",
+          "automation_effort": "Low",
+          "tags": [
+            "login",
+            "risk:R2"
+          ],
+          "traceability": "AC-1"
+        },
+        {
+          "id": "TC-004",
+          "title": "A locked account is still locked after 10 minutes",
+          "category": "Functional",
+          "pre_conditions": "The shopper has an active Aurora Storefront account",
+          "steps": [
+            "Open the Aurora Storefront sign-in page",
+            "Submit the sign-in form"
+          ],
+          "expected_result": "Sign-in is refused even with the correct password",
+          "priority": "High",
+          "test_data": "email=dana.reed@example.com",
+          "bdd_scenario": null,
+          "automation_feasibility": "High",
+          "automation_effort": "Low",
+          "tags": [
+            "login"
+          ],
+          "traceability": "AC-2"
+        },
+        {
+          "id": "TC-005",
+          "title": "The correct password does not unlock early",
+          "category": "Negative",
+          "pre_conditions": "The shopper has an active Aurora Storefront account",
+          "steps": [
+            "Open the Aurora Storefront sign-in page",
+            "Submit the sign-in form"
+          ],
+          "expected_result": "Sign-in is refused while the lock is live",
+          "priority": "High",
+          "test_data": "email=dana.reed@example.com",
+          "bdd_scenario": null,
+          "automation_feasibility": "High",
+          "automation_effort": "Low",
+          "tags": [
+            "login"
+          ],
+          "traceability": "AC-2"
+        },
+        {
+          "id": "TC-006",
+          "title": "The account opens again 30 minutes after the lock",
+          "category": "Boundary",
+          "pre_conditions": "The shopper has an active Aurora Storefront account",
+          "steps": [
+            "Open the Aurora Storefront sign-in page",
+            "Submit the sign-in form"
+          ],
+          "expected_result": "The shopper signs in with the correct password",
+          "priority": "High",
+          "test_data": "email=dana.reed@example.com",
+          "bdd_scenario": null,
+          "automation_feasibility": "High",
+          "automation_effort": "Low",
+          "tags": [
+            "login"
+          ],
+          "traceability": "AC-2"
+        },
+        {
+          "id": "TC-007",
+          "title": "The lock message names the 30 minute wait",
+          "category": "Functional",
+          "pre_conditions": "The shopper has an active Aurora Storefront account",
+          "steps": [
+            "Open the Aurora Storefront sign-in page",
+            "Submit the sign-in form"
+          ],
+          "expected_result": "The sign-in page shows a message naming 30 minutes",
+          "priority": "High",
+          "test_data": "email=dana.reed@example.com",
+          "bdd_scenario": null,
+          "automation_feasibility": "High",
+          "automation_effort": "Low",
+          "tags": [
+            "login",
+            "risk:R3"
+          ],
+          "traceability": "AC-3"
+        },
+        {
+          "id": "TC-008",
+          "title": "A successful sign-in clears the counter",
+          "category": "Functional",
+          "pre_conditions": "The shopper has an active Aurora Storefront account",
+          "steps": [
+            "Open the Aurora Storefront sign-in page",
+            "Submit the sign-in form"
+          ],
+          "expected_result": "The failed attempt counter returns to zero",
+          "priority": "High",
+          "test_data": "email=dana.reed@example.com",
+          "bdd_scenario": null,
+          "automation_feasibility": "High",
+          "automation_effort": "Low",
+          "tags": [
+            "login"
+          ],
+          "traceability": "AC-4"
+        }
+      ],
+      "summary": {
+        "total_generated": 8,
+        "category_breakdown": [
+          {
+            "category": "Functional",
+            "count": 4
+          },
+          {
+            "category": "Negative",
+            "count": 2
+          },
+          {
+            "category": "Boundary",
+            "count": 2
+          }
+        ],
+        "priority_breakdown": [
+          {
+            "priority": "High",
+            "count": 8
+          }
+        ],
+        "automation_coverage_potential": "High",
+        "coverage_gaps": [],
+        "recommendations": [
+          "Add a negative and a boundary case for AC-3 and AC-4"
+        ]
+      }
+    },
+    "criteria": [
+      "The account locks after 5 failed sign-in attempts within 10 minutes",
+      "A locked account stays locked for 30 minutes",
+      "The sign-in page tells the shopper the lock lasts 30 minutes",
+      "A successful sign-in resets the failed attempt counter to zero"
+    ]
+  },
+  "risk_analysis": {
+    "analysis": {
+      "failure_modes": [
+        {
+          "id": "R1",
+          "title": "Two web servers count failed attempts separately",
+          "category": "security",
+          "effect": "An attacker keeps guessing past the fifth attempt, so the lock never protects the account",
+          "cause": "Each web server counts failed attempts in its own memory instead of one shared store",
+          "severity": 5,
+          "likelihood": 4,
+          "detectability": 4,
+          "severity_reason": "The account can be taken over although the lock looks like it works",
+          "likelihood_reason": "Aurora Storefront already runs more than one web server behind a load balancer",
+          "detectability_reason": "A one-server test environment never shows it",
+          "related_criteria": [
+            "AC-1"
+          ],
+          "covered_by": [],
+          "test_idea": "Send the five failed sign-ins through two different servers and check the account still locks"
+        },
+        {
+          "id": "R2",
+          "title": "The 10 minute window is measured from the first attempt, not the last",
+          "category": "functional",
+          "effect": "A patient attacker never trips the lock",
+          "cause": "The window resets on a timer instead of sliding with each attempt",
+          "severity": 4,
+          "likelihood": 3,
+          "detectability": 2,
+          "severity_reason": "The lock can be walked around, but only slowly",
+          "likelihood_reason": "The story does not say which window the team should build",
+          "detectability_reason": "TC-003 exercises the boundary directly",
+          "related_criteria": [
+            "AC-1"
+          ],
+          "covered_by": [
+            "TC-003"
+          ],
+          "test_idea": "Fail four times, wait nine minutes, fail twice more"
+        },
+        {
+          "id": "R3",
+          "title": "The lock message tells an attacker the account exists",
+          "category": "security",
+          "effect": "Account enumeration becomes easy",
+          "cause": "The message is only shown for accounts that really exist",
+          "severity": 3,
+          "likelihood": 2,
+          "detectability": 2,
+          "severity_reason": "No account is taken over by itself",
+          "likelihood_reason": "The wording is already generic elsewhere on the site",
+          "detectability_reason": "TC-007 reads the message",
+          "related_criteria": [
+            "AC-3"
+          ],
+          "covered_by": [
+            "TC-007"
+          ],
+          "test_idea": "Trigger the lock on a real and an unknown email and compare the messages"
+        }
+      ]
+    },
+    "cases": [
+      {
+        "id": "TC-001",
+        "title": "Account locks after the fifth wrong password",
+        "category": "Functional",
+        "pre_conditions": "The shopper has an active Aurora Storefront account",
+        "steps": [
+          "Open the Aurora Storefront sign-in page",
+          "Submit the sign-in form"
+        ],
+        "expected_result": "The account is locked and sign-in is refused",
+        "priority": "High",
+        "test_data": "email=dana.reed@example.com",
+        "bdd_scenario": null,
+        "automation_feasibility": "High",
+        "automation_effort": "Low",
+        "tags": [
+          "login"
+        ],
+        "traceability": "AC-1"
+      },
+      {
+        "id": "TC-002",
+        "title": "Four wrong passwords leave the account open",
+        "category": "Negative",
+        "pre_conditions": "The shopper has an active Aurora Storefront account",
+        "steps": [
+          "Open the Aurora Storefront sign-in page",
+          "Submit the sign-in form"
+        ],
+        "expected_result": "The shopper can still sign in with the right password",
+        "priority": "High",
+        "test_data": "email=dana.reed@example.com",
+        "bdd_scenario": null,
+        "automation_feasibility": "High",
+        "automation_effort": "Low",
+        "tags": [
+          "login"
+        ],
+        "traceability": "AC-1"
+      },
+      {
+        "id": "TC-003",
+        "title": "The sixth attempt within 10 minutes is refused",
+        "category": "Boundary",
+        "pre_conditions": "The shopper has an active Aurora Storefront account",
+        "steps": [
+          "Open the Aurora Storefront sign-in page",
+          "Submit the sign-in form"
+        ],
+        "expected_result": "The account stays locked on the sixth attempt",
+        "priority": "High",
+        "test_data": "email=dana.reed@example.com",
+        "bdd_scenario": null,
+        "automation_feasibility": "High",
+        "automation_effort": "Low",
+        "tags": [
+          "login",
+          "risk:R2"
+        ],
+        "traceability": "AC-1"
+      },
+      {
+        "id": "TC-004",
+        "title": "A locked account is still locked after 10 minutes",
+        "category": "Functional",
+        "pre_conditions": "The shopper has an active Aurora Storefront account",
+        "steps": [
+          "Open the Aurora Storefront sign-in page",
+          "Submit the sign-in form"
+        ],
+        "expected_result": "Sign-in is refused even with the correct password",
+        "priority": "High",
+        "test_data": "email=dana.reed@example.com",
+        "bdd_scenario": null,
+        "automation_feasibility": "High",
+        "automation_effort": "Low",
+        "tags": [
+          "login"
+        ],
+        "traceability": "AC-2"
+      },
+      {
+        "id": "TC-005",
+        "title": "The correct password does not unlock early",
+        "category": "Negative",
+        "pre_conditions": "The shopper has an active Aurora Storefront account",
+        "steps": [
+          "Open the Aurora Storefront sign-in page",
+          "Submit the sign-in form"
+        ],
+        "expected_result": "Sign-in is refused while the lock is live",
+        "priority": "High",
+        "test_data": "email=dana.reed@example.com",
+        "bdd_scenario": null,
+        "automation_feasibility": "High",
+        "automation_effort": "Low",
+        "tags": [
+          "login"
+        ],
+        "traceability": "AC-2"
+      },
+      {
+        "id": "TC-006",
+        "title": "The account opens again 30 minutes after the lock",
+        "category": "Boundary",
+        "pre_conditions": "The shopper has an active Aurora Storefront account",
+        "steps": [
+          "Open the Aurora Storefront sign-in page",
+          "Submit the sign-in form"
+        ],
+        "expected_result": "The shopper signs in with the correct password",
+        "priority": "High",
+        "test_data": "email=dana.reed@example.com",
+        "bdd_scenario": null,
+        "automation_feasibility": "High",
+        "automation_effort": "Low",
+        "tags": [
+          "login"
+        ],
+        "traceability": "AC-2"
+      },
+      {
+        "id": "TC-007",
+        "title": "The lock message names the 30 minute wait",
+        "category": "Functional",
+        "pre_conditions": "The shopper has an active Aurora Storefront account",
+        "steps": [
+          "Open the Aurora Storefront sign-in page",
+          "Submit the sign-in form"
+        ],
+        "expected_result": "The sign-in page shows a message naming 30 minutes",
+        "priority": "High",
+        "test_data": "email=dana.reed@example.com",
+        "bdd_scenario": null,
+        "automation_feasibility": "High",
+        "automation_effort": "Low",
+        "tags": [
+          "login",
+          "risk:R3"
+        ],
+        "traceability": "AC-3"
+      },
+      {
+        "id": "TC-008",
+        "title": "A successful sign-in clears the counter",
+        "category": "Functional",
+        "pre_conditions": "The shopper has an active Aurora Storefront account",
+        "steps": [
+          "Open the Aurora Storefront sign-in page",
+          "Submit the sign-in form"
+        ],
+        "expected_result": "The failed attempt counter returns to zero",
+        "priority": "High",
+        "test_data": "email=dana.reed@example.com",
+        "bdd_scenario": null,
+        "automation_feasibility": "High",
+        "automation_effort": "Low",
+        "tags": [
+          "login"
+        ],
+        "traceability": "AC-4"
+      }
+    ],
+    "criteria": [
+      "The account locks after 5 failed sign-in attempts within 10 minutes",
+      "A locked account stays locked for 30 minutes",
+      "The sign-in page tells the shopper the lock lasts 30 minutes",
+      "A successful sign-in resets the failed attempt counter to zero"
+    ]
+  },
+  "insights": {
+    "runs": [
+      {
+        "label": "nightly-chromium",
+        "total": 62,
+        "passed": 60,
+        "failed": 2,
+        "skipped": 0,
+        "flaky": 0,
+        "pass_rate": 97,
+        "duration_s": 184.4
+      },
+      {
+        "label": "nightly-firefox",
+        "total": 62,
+        "passed": 60,
+        "failed": 2,
+        "skipped": 0,
+        "flaky": 0,
+        "pass_rate": 97,
+        "duration_s": 201.9
+      }
+    ],
+    "overall": {
+      "label": "All runs",
+      "total": 124,
+      "passed": 120,
+      "failed": 4,
+      "skipped": 0,
+      "flaky": 0,
+      "pass_rate": 97,
+      "duration_s": 386.3
+    },
+    "groups": [
+      {
+        "id": "G1",
+        "signature": "TimeoutError: locator.click: Timeout 30000ms exceeded",
+        "example_message": "TimeoutError: locator.click: Timeout 30000ms exceeded",
+        "example_details": "waiting for the Sign in button to become enabled",
+        "tests": [
+          "login.spec.ts > locks after five attempts"
+        ],
+        "count": 4,
+        "runs": [
+          "nightly-chromium",
+          "nightly-firefox"
+        ]
+      }
+    ],
+    "flaky": [],
+    "slowest": [
+      [
+        "checkout.spec.ts > pays with a saved card",
+        31.2
+      ],
+      [
+        "login.spec.ts > locks after five attempts",
+        22.8
+      ]
+    ]
+  }
+}

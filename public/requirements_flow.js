@@ -125,6 +125,56 @@
     return fresh;
   }
 
+  /* ---------- what Ship check reads back ---------- */
+
+  function readJsonBlock(id) {
+    var holder = document.getElementById(id);
+    if (!holder) return null;
+    try {
+      return JSON.parse(holder.textContent);
+    } catch (e) {
+      return null;
+    }
+  }
+
+  /* A result only belongs to the run when it was made from the run's story.
+   * Check the example while a real story sits in the run and the two must
+   * not mix. */
+  function sameStory(run) {
+    var shown = fieldValue("user_story").trim();
+    return !!run && !!shown && String(run.story || "").trim() === shown;
+  }
+
+  function saveStoryAnalysis() {
+    var analysis = readJsonBlock("story-analysis-data");
+    if (!analysis) return;
+    var run = readRun();
+    if (!sameStory(run)) return;
+    run.story_analysis = analysis;
+    writeRun(run);
+  }
+
+  function saveDuelSummary() {
+    var duel = readJsonBlock("duel-data");
+    if (!duel) return;
+    var run = readRun();
+    if (!sameStory(run)) return;
+    run.duel_summary = duel;
+    writeRun(run);
+  }
+
+  function saveAutomationToRun() {
+    var data = readJsonBlock("automation-data");
+    if (!data || !data.script) return;
+    var run = readRun();
+    if (!run) return;
+    run.automation = {
+      script: data.script,
+      selected_ids: data.selected_ids || []
+    };
+    writeRun(run);
+  }
+
   function useCriteria() {
     saveStoryResultToRun();
     window.location.href = "/requirements/criteria";
@@ -1133,6 +1183,15 @@
     if (path.indexOf("/requirements/story/run") !== -1 ||
         path.indexOf("/requirements/story/example") !== -1) {
       saveStoryResultToRun();
+      saveStoryAnalysis();
+      /* Load example swaps in a duel result alongside the story one. */
+      saveDuelSummary();
+    }
+    if (path.indexOf("/requirements/story/duel") !== -1) {
+      saveDuelSummary();
+    }
+    if (path.indexOf("/requirements/automation/") !== -1) {
+      saveAutomationToRun();
     }
     if (path.indexOf("/requirements/test-cases/run") !== -1) {
       rememberDisplayed(true);

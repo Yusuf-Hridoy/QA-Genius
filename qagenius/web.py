@@ -14,7 +14,14 @@ from pydantic import BaseModel, ValidationError, field_validator
 import openai
 from markupsafe import Markup
 
-from qagenius import automation, bug_report, duel, llm, risk_register_exports
+from qagenius import (
+    automation,
+    bug_report,
+    duel,
+    llm,
+    risk_register_exports,
+    ship_report_exports,
+)
 from qagenius.automation_checks import CheckReport, check_project
 from qagenius.automation_exports import build_zip
 from qagenius.bug_report import BugInput, environment_text, reproducibility_text
@@ -26,6 +33,7 @@ from qagenius.models import (
     AutomationScript,
     BugReport,
     DuelComparison,
+    DuelSummary,
     FailureMode,
     Interpretation,
     QualityInsightSummary,
@@ -44,6 +52,16 @@ from qagenius.prompts import (
 )
 from qagenius.providers import PROVIDERS, get_provider, pick_default
 from qagenius.report_parsers import ReportError, RunReport, parse_report
+from qagenius.ship_check import (
+    CHECK_IDS,
+    MAX_REASON,
+    MIN_REASON,
+    TOOLS,
+    VERDICT_LABELS,
+    ShipInputs,
+    ShipReport,
+    compute_ship_report,
+)
 from qagenius.risk_radar import (
     MAX_RISKS,
     RiskReport,
@@ -484,6 +502,13 @@ def _duel_result_context(story: str, result: DuelResult) -> dict:
         "vague_count": len(result.highlights),
         "agreement_pct": result.agreement_pct,
         "agreement_pill": _agreement_pill(result.agreement_pct),
+        # What the browser keeps for Ship check: the gap, not the whole duel.
+        "duel_data": {
+            "agreement_pct": result.agreement_pct,
+            "forks": [
+                {"topic": fork.topic, "severity": fork.severity} for fork in forks
+            ],
+        },
         "highlighted_story": _highlight_duel_story(
             story, result.highlights, forks
         ),
@@ -2152,6 +2177,178 @@ def risks_export_xlsx(payload: RiskBody) -> Response:
         },
     )
 
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Ship check: the release verdict. No AI, no key, nothing stored.
+# ──────────────────────────────────────────────────────────────────────────────
+
+SHIP_BODY_LIMIT = 2_000_000
+SHIP_BAD_BODY = "Could not read your results. Open Ship check again."
+SHIP_TOO_BIG = "That run is too large to check. Trim the test cases and try again."
+# Each part of the body is validated on its own: one tool's bad data must not
+# hide the other six.
+SHIP_PART_LABELS = {
+    "story_analysis": "story analysis",
+    "duel_summary": "ambiguity duel",
+    "test_cases": "test cases",
+    "risk_analysis": "risk analysis",
+    "automation": "automation",
+    "insights": "test run",
+    "acceptances": "acceptances",
+}
+SHIP_VERDICT_TONES = {"ship": "ok", "ship_with_risks": "warn", "dont_ship": "bad"}
+SHIP_STATUS_TONES = {
+    "pass": "ok",
+    "warn": "warn",
+    "fail": "bad",
+    "accepted": "warn",
+    "not_checked": "neutral",
+}
+SHIP_STATUS_LABELS = {
+    "pass": "pass",
+    "warn": "warn",
+    "fail": "fail",
+    "accepted": "accepted",
+    "not_checked": "not checked",
+}
+STORY_IN_BANNER = 160
+
+
+def _ship_part(raw: dict, key: str, build, ignored: list[str]):
+    """One part of the body, or None. Bad data is missing data, never an error."""
+    value = raw.get(key)
+    if value is None:
+        return None
+    try:
+        return build(value)
+    except (ValidationError, ValueError, TypeError, KeyError, AttributeError):
+        ignored.append(SHIP_PART_LABELS[key])
+        return None
+
+
+def _ship_acceptances(raw: dict, ignored: list[str]) -> dict[str, str]:
+    """check id -> written reason. Unknown ids and non-text drop out."""
+    value = raw.get("acceptances")
+    if value is None:
+        return {}
+    if not isinstance(value, dict):
+        ignored.append(SHIP_PART_LABELS["acceptances"])
+        return {}
+    return {
+        key: value[key]
+        for key in CHECK_IDS
+        if isinstance(value.get(key), str) and value[key].strip()
+    }
+
+
+def _ship_inputs(raw: dict) -> tuple[ShipInputs, list[str]]:
+    ignored: list[str] = []
+
+    suite = _ship_part(
+        raw, "test_cases", lambda part: _SuiteBody.model_validate(part), ignored
+    )
+    risks = _ship_part(raw, "risk_analysis", RiskBody.model_validate, ignored)
+    auto = _ship_part(raw, "automation", AutomationExportRequest.model_validate, ignored)
+
+    return (
+        ShipInputs(
+            story_analysis=_ship_part(
+                raw, "story_analysis", AmbiguityAnalysis.model_validate, ignored
+            ),
+            duel=_ship_part(raw, "duel_summary", DuelSummary.model_validate, ignored),
+            test_cases=suite.result if suite else None,
+            criteria=list(suite.criteria) if suite else [],
+            risk_analysis=risks.analysis if risks else None,
+            risk_cases=list(risks.cases) if risks else [],
+            automation_script=auto.script if auto else None,
+            automation_selected_ids=list(auto.selected_ids) if auto else [],
+            insights=_ship_part(raw, "insights", insights_from_dict, ignored),
+            acceptances=_ship_acceptances(raw, ignored),
+        ),
+        ignored,
+    )
+
+
+def _ship_story(raw: dict) -> str:
+    story = raw.get("story")
+    return story.strip() if isinstance(story, str) else ""
+
+
+def _ship_result(
+    request: Request, report: ShipReport, story: str, ignored: list[str]
+) -> HTMLResponse:
+    return templates.TemplateResponse(
+        request,
+        "_ship_check_result.html",
+        {
+            "report": report,
+            "story": story,
+            "story_short": story[:STORY_IN_BANNER],
+            "total_checks": len(report.items),
+            "verdict_label": VERDICT_LABELS[report.verdict],
+            "verdict_tone": SHIP_VERDICT_TONES[report.verdict],
+            "status_tones": SHIP_STATUS_TONES,
+            "status_labels": SHIP_STATUS_LABELS,
+            "tools": TOOLS,
+            "ignored": ignored,
+            # Copy as Markdown reads this; the browser never builds it.
+            "markdown": ship_report_exports.to_markdown(report, story),
+            "min_reason": MIN_REASON,
+            "max_reason": MAX_REASON,
+        },
+    )
+
+
+@app.get("/ship", response_class=HTMLResponse)
+def ship_page(request: Request) -> HTMLResponse:
+    """The page is empty; the browser fills it from sessionStorage."""
+    return templates.TemplateResponse(
+        request,
+        "ship_check.html",
+        {
+            "active": "ship",
+            "page_title": "Can we ship this feature?",
+            "page_lede": (
+                "Ship check reads what the other desks already worked out — clarity, "
+                "coverage, depth, risks, automation and your last test run — and turns "
+                "them into one verdict you can defend. Nothing is sent to an AI."
+            ),
+            "eyebrow": "Ship check",
+        },
+    )
+
+
+@app.post("/ship/report", response_class=HTMLResponse)
+async def ship_report_route(request: Request) -> HTMLResponse:
+    """Every status is computed here, from the browser's own results. No AI call."""
+    body = await request.body()
+    if len(body) > SHIP_BODY_LIMIT:
+        return HTMLResponse(
+            templates.get_template("_error.html").render(
+                {"message": SHIP_TOO_BIG, "notes": []}
+            ),
+            status_code=413,
+        )
+    try:
+        raw = json.loads(body or b"{}")
+    except json.JSONDecodeError:
+        return _error_card(request, SHIP_BAD_BODY)
+    if not isinstance(raw, dict):
+        return _error_card(request, SHIP_BAD_BODY)
+
+    inputs, ignored = _ship_inputs(raw)
+    return _ship_result(request, compute_ship_report(inputs), _ship_story(raw), ignored)
+
+
+@app.get("/ship/example", response_class=HTMLResponse)
+def ship_example(request: Request) -> HTMLResponse:
+    """Load example: a saved run that cannot ship. No key needed, no AI call."""
+    with open(SAMPLES_DIR / "ship_check.json", encoding="utf-8") as f:
+        sample = json.load(f)
+    inputs, ignored = _ship_inputs(sample)
+    return _ship_result(
+        request, compute_ship_report(inputs), _ship_story(sample), ignored
+    )
 
 # Served from the site root (e.g. /style.css). On Vercel the CDN serves
 # public/ first; locally this mount serves the same files. It must stay

@@ -31,6 +31,10 @@
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4.5"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3"/></svg>
           <span>Risk radar</span>
         </a>
+        <a href="/ship" class="{% if active == 'ship' %}active{% endif %}">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 7 9.5 17.5 4 12"/></svg>
+          <span>Ship check</span>
+        </a>
         <a href="/bugs" class="{% if active == 'bugs' %}active{% endif %}">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="7.5" y="7" width="9" height="12" rx="4.5"/><path d="M4 11h3.5M16.5 11H20M4.8 16.5h2.9M16.3 16.5h2.9M8.6 7.4 7.2 5M15.4 7.4 16.8 5"/></svg>
           <span>Bug desk</span>
@@ -38,11 +42,6 @@
         <a href="/insights" class="{% if active == 'insights' %}active{% endif %}">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>
           <span>Quality insights</span>
-        </a>
-        <a href="/performance" class="{% if active == 'performance' %}active{% endif %}">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20a8 8 0 1 1 8-8"/><path d="M12 12l4.5-3.5"/></svg>
-          <span>Performance</span>
-          <span class="nav-tag">Soon</span>
         </a>
       </nav>
     </div>

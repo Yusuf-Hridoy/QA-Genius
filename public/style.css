@@ -704,6 +704,48 @@ table.heat{border-collapse:separate;border-spacing:3px;width:100%}
 @media (max-width:980px){.risk-split{grid-template-columns:1fr}
   .risk-heat{position:static}}
 
+/* ------------------------------------------------------------- ship check */
+.ship-story .ship-story-text{margin:6px 0 10px;color:var(--text);max-width:80ch}
+.ship-verdict{display:block;padding:24px 26px}
+.ship-verdict .ship-verdict-label{margin:8px 0 6px;font-size:28px;letter-spacing:-.028em}
+.ship-verdict.ship-ok{border-color:color-mix(in srgb,var(--ok-line) 40%,transparent);
+  background:color-mix(in srgb,var(--ok-bg) 55%,var(--card))}
+.ship-verdict.ship-warn{border-color:color-mix(in srgb,var(--warn-line) 40%,transparent);
+  background:color-mix(in srgb,var(--warn-bg) 55%,var(--card))}
+.ship-verdict.ship-bad{border-color:color-mix(in srgb,var(--bad-line) 40%,transparent);
+  background:color-mix(in srgb,var(--bad-bg) 55%,var(--card))}
+.ship-checks{display:flex;flex-direction:column;gap:10px;margin:16px 0}
+.ship-row{padding:14px 16px}
+.ship-row-head{align-items:center;gap:10px}
+.ship-row-title{font-size:15.5px;letter-spacing:-.012em}
+.ship-row-summary{margin:8px 0 0;color:var(--text-2)}
+.ship-accepted-note{margin:6px 0 0;color:var(--text-2)}
+.ship-details{margin-top:10px}
+.ship-details summary{cursor:pointer;font-size:13px;color:var(--text-2)}
+.ship-details ul{margin:8px 0 0;padding-left:20px;color:var(--text-2);font-size:13.5px}
+.ship-accept-row{margin-top:10px}
+.ship-accept-form{margin-top:10px;padding-top:10px;border-top:1px solid var(--border)}
+.ship-accept-form textarea{width:100%}
+
+/* Print / save as PDF: the verdict and the seven checks, nothing else.
+   ship_check.js opens every <details> and adds .ship-print before printing. */
+@media print{
+  .sidebar,.topbar,.to-top,.scrim,#keys-drawer,.ship-actions,
+  .ship-accept-row,.ship-accept-form,.ship-unaccept,.ship-row-link{display:none!important}
+  :root{--rail-w:0px}
+  .main{margin-left:0}
+  .content{padding:0}
+  body{background:#fff;color:#000}
+  .card,.verdict{break-inside:avoid;box-shadow:none;border-color:#bbb}
+  .ship-details ul{display:block}
+  /* ship_check.js opens each <details> and sets .ship-print on <body>; with
+     them all open the summary row is just noise on paper. */
+  .ship-print .ship-details summary{display:none}
+  .ship-print .ship-details ul{margin-top:0}
+  .ship-details summary{list-style:none}
+  a[href]::after{content:""}
+}
+
 /* ------------------------------------------------------------ responsive */
 @media (max-width:900px){
   :root{--rail-w:0px}

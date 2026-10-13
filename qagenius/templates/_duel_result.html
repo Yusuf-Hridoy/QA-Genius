@@ -105,6 +105,8 @@
     {% endfor %}
   </ul>
   {% endif %}
+  {# Ship check only needs how far apart the readers were. #}
+  <script type="application/json" id="duel-data">{{ duel_data | tojson }}</script>
   <p class="muted small" id="duel-status" aria-live="polite"></p>
   {% if notes %}
   <p class="muted small">{{ notes | join(" · ") }}</p>

@@ -11,6 +11,8 @@ dependencies = [
     "json-repair",
     "python-multipart",
     "httpx",
+    "openpyxl",
+    "defusedxml",
 ]
 
 [project.optional-dependencies]

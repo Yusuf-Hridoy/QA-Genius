@@ -75,6 +75,31 @@ usual Accept / Keep current / Undo view. **Download CSV** and **Download Excel**
 give you the risk register, the Excel one with a Risk register sheet coloured by
 level and a Heat map sheet.
 
+## Ship check
+**Ship check** answers one question — *can we ship this feature?* — and
+answers it without an API key and without an AI call: every status is computed
+by code from results the other desks already produced, using the same
+functions those pages use, so Ship check can never disagree with the page you
+just came from. Seven checks run over whatever your run holds: **story
+clarity** (100 minus the ambiguity score), the **ambiguity duel** (agreement
+and the worst fork), **criteria coverage** (any criterion with no test case
+fails), **test depth** (thin criteria warn, more than half thin fails),
+**risk coverage** (a high risk with no test fails, a medium risk with no test
+or a high risk only weakly matched warns), **automation** (a syntax error
+fails, a missing selected id or a fixed wait warns) and your **latest test
+run** (pass rate and flaky tests). Each check is pass, warn, fail or *not
+checked*, with the exact numbers behind it and a link back to the desk that
+fixes it. The verdict follows in a fixed order: any fail means **Don't ship**;
+otherwise a missing coverage or risk check means **Ship with risks**, because
+there is not enough evidence to ship; otherwise any warning means **Ship with
+risks**; and only a clean sweep is **Ship**. A failed check can be accepted
+with a written reason of 10 to 300 characters — the acceptance is recorded on
+the row, counts as a warning rather than a pass, and is removed again in one
+click. **Copy as Markdown** gives you the whole verdict as a table with a
+details section to paste into a release thread, and **Print / save as PDF**
+prints the banner and all seven checks with their details open, with the
+sidebar, buttons and key chip left off the page.
+
 ## Bug desk
 Paste rough notes — *"checkout button does nothing on the second click, 3 of
 5 tries"* — add the environment and attempt counts if you have them, and

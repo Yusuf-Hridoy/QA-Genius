@@ -1,0 +1,77 @@
+{# The verdict, then one row per check. Every number on this page was computed
+   by qagenius/ship_check.py; no AI text reaches it, so nothing is marked safe. #}
+<div class="ship-report">
+  <div class="verdict ship-verdict ship-{{ verdict_tone }}">
+    <div>
+      <span class="pill {{ verdict_tone }}">Verdict</span>
+      <h2 class="ship-verdict-label">{{ verdict_label }}</h2>
+      <p>{{ report.verdict_reason }}</p>
+      <p class="muted small">{{ report.checked }} of {{ total_checks }} checks ran</p>
+    </div>
+  </div>
+
+  {% if ignored %}
+  <p class="muted small">Ignored invalid data for: {{ ignored | join(", ") }}</p>
+  {% endif %}
+
+  <div class="ship-checks">
+    {% for item in report.items %}
+    <div class="card ship-row" data-check="{{ item.id }}" data-status="{{ item.status }}">
+      <div class="row ship-row-head">
+        <span class="pill {{ status_tones[item.status] }}">{{ status_labels[item.status] }}</span>
+        <strong class="ship-row-title">{{ item.title }}</strong>
+        <span class="spacer"></span>
+        <a class="small ship-row-link" href="{{ item.link }}">Open {{ tools[item.id] }} →</a>
+      </div>
+      <p class="ship-row-summary">{{ item.summary }}</p>
+
+      {% if item.status == "accepted" and item.accepted_note %}
+      <p class="ship-accepted-note"><em>Accepted: {{ item.accepted_note }}</em></p>
+      <div class="row">
+        <button type="button" class="btn btn-small ship-unaccept" data-check="{{ item.id }}">Remove acceptance</button>
+      </div>
+      {% endif %}
+
+      {% if item.details %}
+      <details class="ship-details">
+        <summary>Details</summary>
+        <ul>
+          {% for line in item.details %}<li>{{ line }}</li>{% endfor %}
+        </ul>
+      </details>
+      {% endif %}
+
+      {% if item.status == "fail" %}
+      <div class="row ship-accept-row">
+        <button type="button" class="btn btn-small ship-accept" data-check="{{ item.id }}">Accept with reason</button>
+      </div>
+      <div class="ship-accept-form" data-check="{{ item.id }}" hidden>
+        <div class="field">
+          <label for="ship-reason-{{ item.id }}">Why are you shipping with this?</label>
+          <textarea id="ship-reason-{{ item.id }}" class="ship-reason" rows="3"
+                    minlength="{{ min_reason }}" maxlength="{{ max_reason }}"
+                    placeholder="Behind a feature flag for internal users until the shared counter lands."></textarea>
+          <span class="hint ship-counter" aria-live="polite">0 / {{ max_reason }}</span>
+        </div>
+        <div class="row">
+          <button type="button" class="btn btn-primary btn-small ship-accept-save" data-check="{{ item.id }}">Accept</button>
+          <button type="button" class="btn btn-small ship-accept-cancel" data-check="{{ item.id }}">Cancel</button>
+          <span class="muted small ship-accept-status" aria-live="polite"></span>
+        </div>
+      </div>
+      {% endif %}
+    </div>
+    {% endfor %}
+  </div>
+
+  <script type="application/json" id="ship-md">{{ markdown | tojson }}</script>
+  <div class="card ship-actions">
+    <div class="row">
+      <button type="button" class="btn" id="ship-copy-md">Copy as Markdown</button>
+      <button type="button" class="btn" id="ship-print">Print / save as PDF</button>
+      <span class="muted small" id="ship-copy-status" aria-live="polite"></span>
+    </div>
+    <p class="muted small">Every status here was computed by code from your own results.
+      Nothing was sent to an AI and nothing is stored on the server.</p>
+  </div>
+</div>

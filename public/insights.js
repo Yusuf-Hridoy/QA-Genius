@@ -9,6 +9,7 @@
   var MAX_BYTES = 2 * 1024 * 1024;
   var MAX_TOTAL = 4 * 1024 * 1024;
   var PREFILL_KEY = "qag.bug_prefill";
+  var RUN_KEY = "qag.run";
   var PREFILL_LIMIT = 3000;
 
   function byId(id) {
@@ -129,6 +130,33 @@
     if (field && holder) field.value = holder.textContent;
   }
 
+  /* Ship check asks "how did the last run go?". A test run is not tied to a
+   * story, so whatever was analysed last is the answer, even when the run in
+   * sessionStorage belongs to another feature. */
+  function saveInsightsToRun() {
+    var facts = readJson("insights-facts");
+    if (!facts) return;
+    var run = null;
+    try {
+      var raw = sessionStorage.getItem(RUN_KEY);
+      run = raw ? JSON.parse(raw) : null;
+    } catch (e) {
+      return;
+    }
+    if (!run || typeof run !== "object") run = {};
+    run.insights = facts;
+    try {
+      sessionStorage.setItem(RUN_KEY, JSON.stringify(run));
+    } catch (e) {
+      /* storage blocked: the page still works, Ship check just won't see it */
+    }
+  }
+
+  function onResultSwap() {
+    fillFacts();
+    saveInsightsToRun();
+  }
+
   function copyStatus(text) {
     var line = byId("insights-copy-status");
     if (line) line.textContent = text;
@@ -229,5 +257,5 @@
   });
 
   /* Every result card arrives as a server swap; the facts come with it. */
-  document.body.addEventListener("htmx:afterSwap", fillFacts);
+  document.body.addEventListener("htmx:afterSwap", onResultSwap);
 })();
