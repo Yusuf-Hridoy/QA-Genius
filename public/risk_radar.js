@@ -65,24 +65,120 @@
 
   /* ---------- the page ---------- */
 
+  /* One criterion per blank-line-separated block, the same rule step 2's
+   * paste form uses. That one lives inside requirements_flow.js and is not
+   * shared, so the rule is repeated here rather than reached across for. */
+  function criteriaBlocks(text) {
+    return (text || "").split(/\n\s*\n/).filter(function (block) {
+      return block.trim() !== "";
+    });
+  }
+
+  function labelledBox(id, labelText, rows, placeholder, hint) {
+    var field = el("div", "field");
+    var label = el("label", null, labelText);
+    label.setAttribute("for", id);
+    var box = el("textarea");
+    box.id = id;
+    box.setAttribute("rows", String(rows));
+    box.setAttribute("placeholder", placeholder);
+    field.appendChild(label);
+    field.appendChild(box);
+    if (hint) field.appendChild(el("span", "hint", hint));
+    return { field: field, box: box };
+  }
+
+  /* Risk radar used to dead-end here with two links off the page. It is a
+   * desk of its own now: paste a story and run, no Requirements visit. */
   function emptyState(root) {
     var card = el("div", "card");
-    card.appendChild(el("h2", null, "Start from a story"));
+    card.setAttribute("data-input-card", "Your story");
+    card.appendChild(el("h2", null, "How can this feature fail?"));
     card.appendChild(
       el(
         "p",
         "muted",
-        "Risk radar reads the story, the acceptance criteria and the test " +
-          "cases from your current run."
+        "Paste a story and its acceptance criteria, or start in Requirements."
       )
     );
-    var link = el("a", "btn btn-primary", "Go to Requirements");
-    link.setAttribute("href", "/requirements/story");
+
+    var form = el("form");
+    form.id = "risk-paste-form";
+    form.setAttribute("hx-post", "/risks/run");
+    form.setAttribute("hx-target", "#risk-output");
+    form.setAttribute("hx-swap", "innerHTML");
+    form.setAttribute("hx-indicator", "#risk-paste-progress");
+
+    var story = labelledBox(
+      "risk-paste-story",
+      "User story",
+      4,
+      "As a shopper, I want…",
+      "Up to 3000 characters."
+    );
+    story.box.setAttribute("maxlength", "3000");
+    story.box.required = true;
+    form.appendChild(story.field);
+
+    var criteria = labelledBox(
+      "risk-paste-criteria",
+      "Acceptance criteria (optional)",
+      6,
+      "One criterion per block, separated by a blank line.",
+      "Separate criteria with a blank line. Risk radar runs without them."
+    );
+    form.appendChild(criteria.field);
+
+    ["user_story", "criteria_json", "cases_json"].forEach(function (name) {
+      var input = el("input");
+      input.type = "hidden";
+      input.name = name;
+      form.appendChild(input);
+    });
+
     var actions = el("div", "row");
-    actions.appendChild(link);
+    var find = el("button", "btn btn-primary");
+    find.id = "risk-paste-find";
+    find.type = "submit";
+    find.appendChild(el("span", "btn-label", "Find risks"));
+    actions.appendChild(find);
     actions.appendChild(exampleButton());
-    card.appendChild(actions);
+    var link = el("a", "btn btn-ghost", "Start in Requirements");
+    link.setAttribute("href", "/requirements/story");
+    actions.appendChild(link);
+    form.appendChild(actions);
+
+    var progress = el("p", "htmx-indicator working", "Thinking about how this can fail…");
+    progress.insertBefore(el("span", "spin"), progress.firstChild);
+    progress.id = "risk-paste-progress";
+    form.appendChild(progress);
+
+    card.appendChild(form);
     root.appendChild(card);
+
+    /* What is pasted becomes the run, exactly as a checked story would:
+     * a new story owns the run, so nothing from an older one survives. */
+    form.addEventListener("htmx:configRequest", function (event) {
+      var text = story.box.value.trim();
+      if (!text) {
+        event.preventDefault();
+        story.box.focus();
+        return;
+      }
+      var blocks = criteriaBlocks(criteria.box.value);
+      writeRun({
+        story: text,
+        story_type: "User story",
+        context: "",
+        criteria: blocks.map(function (block, index) {
+          return { id: "AC-" + (index + 1), text: block };
+        }),
+        autorun_test_cases: false
+      });
+      event.detail.parameters.user_story = text;
+      event.detail.parameters.criteria_json = JSON.stringify(blocks);
+      event.detail.parameters.cases_json = "[]";
+    });
   }
 
   function exampleButton() {
@@ -102,6 +198,7 @@
     if (!run || !run.story) {
       emptyState(root);
       if (window.htmx) window.htmx.process(root);
+      if (window.QAG && window.QAG.initInputCards) window.QAG.initInputCards(root);
       return;
     }
     var criteria = criteriaTexts(run);
@@ -171,6 +268,14 @@
       );
       event.detail.parameters.cases_json = JSON.stringify(currentCases(latest));
     });
+
+    /* Arrived from "Find risks" on the story result: run once, then clear the
+     * flag so a refresh does not spend another AI call. */
+    if (run.autorun_risks) {
+      run.autorun_risks = false;
+      writeRun(run);
+      if (window.htmx) window.htmx.trigger(form, "submit");
+    }
   }
 
   /* ---------- the result card ---------- */

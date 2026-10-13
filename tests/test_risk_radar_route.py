@@ -76,6 +76,25 @@ def test_run_without_keys_opens_the_drawer() -> None:
     assert response.headers["HX-Trigger"] == "open-keys"
 
 
+def test_run_works_with_a_story_alone(monkeypatch) -> None:
+    """The standalone input on Risk radar sends no criteria and no cases."""
+    captured: list = []
+    monkeypatch.setattr(llm, "generate_json", _fake_generate(captured))
+    response = client.post(
+        "/risks/run",
+        data={"user_story": STORY, "criteria_json": "[]", "cases_json": "[]"},
+        headers=KEYS_HEADER,
+    )
+
+    assert response.status_code == 200
+    _system, user = captured[0]
+    assert "Acceptance criteria:\n(none yet)" in user
+    assert "Existing test cases:\n(none yet)" in user
+    # The page still renders; clean_analysis drops the ids the AI invented.
+    assert 'class="risk-split"' in response.text
+    assert "error-card" not in response.text
+
+
 def test_run_without_a_story_points_back_to_requirements(monkeypatch) -> None:
     monkeypatch.setattr(llm, "generate_json", _never)
     data = dict(FORM, user_story="  ")

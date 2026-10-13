@@ -80,24 +80,63 @@
     return node ? node.value : "";
   }
 
-  function useCriteria() {
+  /* The criteria the story check drafted, as plain strings. */
+  function storyCriteriaTexts() {
     var holder = document.getElementById("story-criteria");
-    var texts = [];
-    if (holder) {
-      try {
-        texts = JSON.parse(holder.textContent) || [];
-      } catch (e) {
-        texts = [];
-      }
+    if (!holder) return [];
+    try {
+      return JSON.parse(holder.textContent) || [];
+    } catch (e) {
+      return [];
     }
-    writeRun({
+  }
+
+  /* The checked story becomes the run as soon as its result is on screen, so
+   * the other desks - Risk radar above all - can see it without the user
+   * having to press "Use these criteria" first.
+   *
+   * A different story replaces the run outright: the test cases, risks and
+   * automation selection in it belong to the old story. The same story is
+   * left alone, because the criteria may have been edited on step 2 since. */
+  function saveStoryResultToRun() {
+    /* Only a real result counts. "Add an API key" and the error card carry no
+     * #story-criteria block, and clearing a run over a call that never ran
+     * would throw away the test cases the old story earned. */
+    if (!document.getElementById("story-criteria")) return null;
+    var story = fieldValue("user_story").trim();
+    if (!story) return null;
+    var texts = storyCriteriaTexts();
+    var run = readRun();
+    if (run && String(run.story || "").trim() === story) {
+      if (!nonEmpty(run).length && texts.length) {
+        run.criteria = renumber(texts);
+        writeRun(run);
+      }
+      return run;
+    }
+    var fresh = {
       story: fieldValue("user_story"),
       story_type: fieldValue("story_type") || "User story",
       context: fieldValue("context"),
       criteria: renumber(texts),
       autorun_test_cases: false
-    });
+    };
+    writeRun(fresh);
+    return fresh;
+  }
+
+  function useCriteria() {
+    saveStoryResultToRun();
     window.location.href = "/requirements/criteria";
+  }
+
+  /* Straight from the story result to Risk radar, which runs on arrival. */
+  function findRisks() {
+    var run = saveStoryResultToRun();
+    if (!run) return;
+    run.autorun_risks = true;
+    writeRun(run);
+    window.location.href = "/risks";
   }
 
   /* ---------- shared empty state ---------- */
@@ -966,6 +1005,10 @@
       useCriteria();
       return;
     }
+    if (closest(event.target, "#find-risks")) {
+      findRisks();
+      return;
+    }
     var chip = closest(event.target, "#tc-filters .chip");
     if (chip) {
       applyFilter(chip);
@@ -1087,6 +1130,10 @@
     var detail = event.detail;
     var path = detail && detail.pathInfo ? detail.pathInfo.requestPath : "";
     if (!path && detail && detail.xhr) path = detail.xhr.responseURL || "";
+    if (path.indexOf("/requirements/story/run") !== -1 ||
+        path.indexOf("/requirements/story/example") !== -1) {
+      saveStoryResultToRun();
+    }
     if (path.indexOf("/requirements/test-cases/run") !== -1) {
       rememberDisplayed(true);
     } else if (path.indexOf("/requirements/test-cases/example-strengthen") !== -1) {

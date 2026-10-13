@@ -46,6 +46,13 @@ def test_every_page_offers_the_theme_toggle() -> None:
         assert client.get(path).text.count('id="theme-toggle"') == 1, path
 
 
+def test_risks_page_loads_its_script() -> None:
+    """Risk radar builds its own input card, so the script must be on the page."""
+    body = client.get("/risks").text
+    assert "/risk_radar.js" in body
+    assert 'id="risk-root"' in body
+
+
 def test_keys_redirects_to_story_with_flag() -> None:
     response = client.get("/keys", follow_redirects=False)
     assert response.status_code in (301, 302, 303, 307, 308)

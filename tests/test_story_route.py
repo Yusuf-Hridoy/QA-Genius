@@ -187,6 +187,14 @@ def test_story_result_carries_criteria_to_step_two(monkeypatch) -> None:
     assert all(isinstance(text, str) for text in criteria)
 
 
+def test_story_result_offers_both_ways_on() -> None:
+    """Risk radar is reachable from the result, and step 2 still is too."""
+    body = client.get("/requirements/story/example").text
+    assert 'id="find-risks"' in body
+    assert 'id="use-criteria"' in body
+    assert 'id="story-criteria"' in body
+
+
 def test_story_criteria_json_is_escaped_not_safe() -> None:
     """tojson must escape a closing tag so AI text cannot break out of the script."""
     body = client.get("/requirements/story/example").text
