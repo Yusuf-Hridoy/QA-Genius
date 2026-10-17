@@ -312,3 +312,60 @@ test("a blocked or empty storage reads as an empty run", () => {
   const { QAGRun } = load();
   assert.deepEqual(plain(QAGRun.read()), {});
 });
+
+
+// ---------------------------------------------- a sample is not your work
+
+test("a loaded sample reports itself as a sample, not as up to date", () => {
+  const { QAGRun } = load();
+  const run = fullRun();
+  run.risk_analysis = { analysis: { failure_modes: [] } };
+  run.risk_analysis_is_example = true;
+  const saved = QAGRun.write(run);
+  assert.equal(QAGRun.statusOf("risks", saved).state, "example");
+});
+
+test("a sample never records what it was built from", () => {
+  const { QAGRun } = load();
+  const run = fullRun();
+  run.matrix = { runs: 12 };
+  run.matrix_is_example = true;
+  const saved = QAGRun.write(run);
+  assert.equal(saved.matrix_built_from, undefined);
+  assert.equal(saved.matrix_built_at, undefined);
+});
+
+test("a real run clears the sample flag and starts counting again", () => {
+  const { QAGRun } = load();
+  const run = fullRun();
+  run.risk_analysis = { analysis: { failure_modes: [] } };
+  run.risk_analysis_is_example = true;
+  let saved = QAGRun.write(run);
+  assert.equal(QAGRun.statusOf("risks", saved).state, "example");
+
+  // The desk runs for real: the flag goes and the result is yours.
+  delete saved.risk_analysis_is_example;
+  saved.risk_analysis = { analysis: { failure_modes: [{ id: "R1" }] } };
+  saved = QAGRun.write(saved);
+  assert.equal(QAGRun.statusOf("risks", saved).state, "fresh");
+  assert.ok(saved.risk_analysis_built_from.story.hash);
+});
+
+test("a sample never makes ship check think an input is stale", () => {
+  const { QAGRun } = load();
+  const run = fullRun();
+  run.risk_analysis = { analysis: { failure_modes: [] } };
+  run.risk_analysis_is_example = true;
+  const saved = QAGRun.write(run);
+  assert.deepEqual(plain(QAGRun.statusOf("ship", saved).changes), []);
+});
+
+test("editing the story leaves a sample a sample", () => {
+  const { QAGRun } = load();
+  const run = fullRun();
+  run.matrix = { runs: 12 };
+  run.matrix_is_example = true;
+  const saved = QAGRun.write(run);
+  saved.story = "A completely different story.";
+  assert.equal(QAGRun.statusOf("matrix", QAGRun.write(saved)).state, "example");
+});

@@ -915,6 +915,17 @@ table.heat{border-collapse:separate;border-spacing:3px;width:100%}
 }
 @keyframes source-in{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:none}}
 
+/* Once the source card is on screen with a story behind it, the desk's own
+ * summary card says the same thing twice. It stays in the page, hidden, so
+ * the card can still press its Find risks and Load example buttons. */
+body[data-has-story="yes"] #risk-root [data-input-card="Your run"]{display:none}
+
+/* An out-of-date answer is kept, dimmed, and read-only until it is rebuilt. */
+.stale-result{opacity:.6}
+.stale-result button,.stale-result a,.stale-result input,
+.stale-result select,.stale-result summary{pointer-events:none}
+.stale-result-note{margin:0 0 8px;font-style:italic}
+
 /* While the card offers the action, the desk's own copy of it is a secondary
  * button: one primary per screen, and it is the one the card is pointing at. */
 body[data-card-primary="risks"] #risk-find.btn-primary,

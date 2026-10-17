@@ -12,6 +12,8 @@
 
   var RUN_KEY = "qag.run";
   var CHANGED_EVENT = "qag:run-changed";
+  // A desk finished drawing a result the card may need to dim.
+  var RESULT_EVENT = "qag:result-shown";
 
   /* The parts of a run a desk can be built from. */
   var PARTS = ["story", "criteria", "test_cases", "automation_cases", "automation"];
@@ -70,13 +72,21 @@
     return saved;
   }
 
-  function announce() {
+  function fire(name) {
     if (!global.dispatchEvent || !global.CustomEvent) return;
     try {
-      global.dispatchEvent(new global.CustomEvent(CHANGED_EVENT));
+      global.dispatchEvent(new global.CustomEvent(name));
     } catch (e) {
       /* a browser too old for CustomEvent still gets the saved run */
     }
+  }
+
+  function announce() {
+    fire(CHANGED_EVENT);
+  }
+
+  function announceResult() {
+    fire(RESULT_EVENT);
   }
 
   /* ---------- fingerprints ---------- */
@@ -190,7 +200,9 @@
     return found;
   }
 
-  /* A derived result that just changed was built from what the run holds now. */
+  /* A derived result that just changed was built from what the run holds
+   * now - unless it is a loaded sample, which was built from nothing of
+   * yours and must never be counted as your latest work. */
   function recordBuilds(run) {
     if (!run.fp_derived) run.fp_derived = {};
     Object.keys(BUILT_FROM).forEach(function (key) {
@@ -198,6 +210,11 @@
       var current = hash(run[key]);
       if (run.fp_derived[key] === current) return;
       run.fp_derived[key] = current;
+      if (run[key + "_is_example"]) {
+        delete run[key + "_built_from"];
+        delete run[key + "_built_at"];
+        return;
+      }
       run[key + "_built_from"] = sourcesOf(run, BUILT_FROM[key]);
       run[key + "_built_at"] = new Date().toISOString();
     });
@@ -262,6 +279,10 @@
     var spec = DESKS[desk];
     if (!spec) return { state: "none", changes: [], auto: false };
     if (!run[spec.key]) return { state: "none", changes: [], auto: false };
+    // A sample on screen is not an answer about your own story.
+    if (run[spec.key + "_is_example"]) {
+      return { state: "example", changes: [], auto: false, built_at: "" };
+    }
 
     var builtFrom = run[spec.key + "_built_from"] || {};
     var stale = differing(run, builtFrom, spec.stale_on);
@@ -329,6 +350,8 @@
   global.QAGRun = {
     RUN_KEY: RUN_KEY,
     CHANGED_EVENT: CHANGED_EVENT,
+    RESULT_EVENT: RESULT_EVENT,
+    announceResult: announceResult,
     PARTS: PARTS,
     DESKS: DESKS,
     read: read,

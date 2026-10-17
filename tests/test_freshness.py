@@ -145,3 +145,66 @@ def test_the_strip_says_what_it_is_for() -> None:
     body = client.get("/requirements/test-cases/example").text
     assert 'aria-label="Next steps"' in body
     assert "Next:" in body
+
+
+# ---------- the desk does not say the same thing twice ----------
+
+
+def test_the_risk_page_hides_its_old_summary_when_a_story_exists() -> None:
+    """The source card is the summary; the old card repeated it.
+
+    The card is still in the page so the source card can press its buttons,
+    so the rule is a CSS one keyed on the state run_state.js publishes.
+    """
+    css = (ROOT / "public" / "style.css").read_text(encoding="utf-8")
+    assert (
+        'body[data-has-story="yes"] #risk-root [data-input-card="Your run"]{display:none}'
+        in css
+    )
+
+
+def test_the_card_publishes_whether_a_story_exists() -> None:
+    card = (ROOT / "public" / "source_card.js").read_text(encoding="utf-8")
+    assert 'setAttribute(\n      "data-has-story",' in card or '"data-has-story"' in card
+
+
+def test_the_risk_desk_keeps_one_load_example_button() -> None:
+    """The card borrows the desk's button rather than making a second one."""
+    radar = (ROOT / "public" / "risk_radar.js").read_text(encoding="utf-8")
+    card = (ROOT / "public" / "source_card.js").read_text(encoding="utf-8")
+    assert 'example.id = "risk-example"' in radar
+    assert 'risks: "#risk-example"' in card
+
+
+def test_an_out_of_date_answer_stays_on_screen_dimmed() -> None:
+    css = (ROOT / "public" / "style.css").read_text(encoding="utf-8")
+    assert ".stale-result{opacity:.6}" in css
+    assert ".stale-result button" in css  # read-only while it is out of date
+    card = (ROOT / "public" / "source_card.js").read_text(encoding="utf-8")
+    assert "From your previous criteria — update to refresh" in card
+    assert "From your previous story — update to refresh" in card
+
+
+def test_a_loaded_sample_is_marked_in_the_html() -> None:
+    """run_state.js needs to see that what is on screen is a sample."""
+    body = client.get("/risks/example").text
+    assert 'data-is-example="1"' in body
+
+
+def test_the_matrix_page_is_its_own_desk_in_the_breadcrumb() -> None:
+    body = client.get("/requirements/matrix").text
+    assert "— TEST MATRIX" in body or ">Test matrix<" in body
+    assert "Requirements · Test matrix" not in body
+
+
+def test_a_result_that_lands_late_still_gets_dimmed() -> None:
+    """A desk draws its answer after the card has drawn, so it says so."""
+    state = (ROOT / "public" / "run_state.js").read_text(encoding="utf-8")
+    radar = (ROOT / "public" / "risk_radar.js").read_text(encoding="utf-8")
+    matrix = (ROOT / "public" / "test_matrix.js").read_text(encoding="utf-8")
+    card = (ROOT / "public" / "source_card.js").read_text(encoding="utf-8")
+    assert 'RESULT_EVENT = "qag:result-shown"' in state
+    assert "announceResult: announceResult," in state
+    assert "window.QAGRun.announceResult()" in radar
+    assert "window.QAGRun.announceResult()" in matrix
+    assert "window.addEventListener(window.QAGRun.RESULT_EVENT, drawAll)" in card

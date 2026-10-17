@@ -192,6 +192,10 @@
     /* What is pasted becomes the run, exactly as a checked story would:
      * a new story owns the run, so nothing from an older one survives. */
     form.addEventListener("htmx:configRequest", function (event) {
+      /* HTMX events bubble, so Load example - a button that happens to sit
+       * inside this form - used to be cancelled by the empty-story guard
+       * below and silently do nothing. Only the form's own submit is ours. */
+      if (event.detail.elt !== form) return;
       var text = story.box.value.trim();
       if (!text) {
         event.preventDefault();
@@ -216,6 +220,7 @@
 
   function exampleButton() {
     var example = el("button", "btn", "Load example");
+    example.id = "risk-example";
     example.setAttribute("type", "button");
     example.setAttribute("hx-get", "/risks/example");
     example.setAttribute("hx-target", "#risk-output");
@@ -331,9 +336,15 @@
     if (!window.QAGRun) return;
     var run = window.QAGRun.read();
     var status = window.QAGRun.statusOf("risks", run);
-    if (status.state !== "fresh" || !status.auto) return;
     var analysis = savedAnalysis();
     if (!analysis) return;
+    /* Anything but a fresh analysis with new test cases is only redrawn: the
+     * page shows what you had (dimmed, when it is out of date) and leaves the
+     * decision to rebuild to you. */
+    if (status.state !== "fresh" || !status.auto) {
+      rescore(analysis, null, true);
+      return;
+    }
     rescore(analysis, function () {
       var latest = window.QAGRun.read();
       latest.risk_analysis_rechecked = {
@@ -345,11 +356,21 @@
     });
   }
 
+  /* A loaded sample is kept so the page keeps working, but flagged so the
+   * freshness card calls it a sample rather than your latest work. */
+  function markExample(run, key, scope) {
+    var sample = (scope || document).querySelector("[data-is-example]");
+    if (sample) run[key + "_is_example"] = true;
+    else delete run[key + "_is_example"];
+    return run;
+  }
+
   function rememberDisplayed() {
     var shown = displayedData();
     if (!shown) return;
     var run = readRun() || {};
     run.risk_analysis = shown;
+    markExample(run, "risk_analysis", document.getElementById("risk-output"));
     writeRun(run);
   }
 
@@ -367,15 +388,19 @@
     };
   }
 
-  function showResult(html) {
+  /* `remember` is false when the analysis is only being redrawn: writing it
+   * back would re-stamp the fingerprints and call an out-of-date desk current. */
+  function showResult(html, remember) {
     var target = document.getElementById("risk-output");
     if (!target) return;
     target.innerHTML = html;
     if (window.htmx) window.htmx.process(target);
-    rememberDisplayed();
+    if (remember !== false) rememberDisplayed();
+    // The card may need to dim what just landed.
+    if (window.QAGRun) window.QAGRun.announceResult();
   }
 
-  function rescore(analysis, done) {
+  function rescore(analysis, done, quiet) {
     var body = rescoreBody(analysis);
     if (!body.analysis.failure_modes || !body.analysis.failure_modes.length) {
       return;
@@ -390,7 +415,7 @@
         return response.text();
       })
       .then(function (html) {
-        showResult(html);
+        showResult(html, !quiet);
         if (done) done();
       })
       .catch(function () {

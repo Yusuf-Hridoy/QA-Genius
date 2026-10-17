@@ -125,6 +125,7 @@
     if (!output) return;
     output.innerHTML = html;
     rememberMatrix();
+    if (window.QAGRun) window.QAGRun.announceResult();
   }
 
   function rebuild() {
@@ -230,6 +231,12 @@
     var run = readRun();
     if (!run) return;
     run.matrix = data;
+    /* A loaded sample keeps working, but is never your latest work. */
+    if (byId("matrix-root").querySelector("[data-is-example]")) {
+      run.matrix_is_example = true;
+    } else {
+      delete run.matrix_is_example;
+    }
     writeRun(run);
   }
 

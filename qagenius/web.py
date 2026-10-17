@@ -2581,7 +2581,7 @@ def matrix_page(request: Request) -> HTMLResponse:
                 "combinations. Code works out the fewest runs where every pair of "
                 "values still appears together, and proves it."
             ),
-            "eyebrow": "Requirements · Test matrix",
+            "eyebrow": "Test matrix",
         },
     )
 

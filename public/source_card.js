@@ -26,6 +26,11 @@
     test_cases: "Test cases",
     automation: "Automation"
   };
+  /* The desk's own Load example button, which the card borrows. */
+  var EXAMPLES = {
+    risks: "#risk-example",
+    matrix: "#matrix-example"
+  };
   var DESK_LINKS = {
     risks: "/risks",
     matrix: "/requirements/matrix",
@@ -78,8 +83,16 @@
     return parts.join(" · ");
   }
 
-  function freshLine(latest, builtAt) {
+  /* Each desk claims only what it is actually built from: the matrix depends
+   * on the story, so promising it matches your criteria would be a lie. */
+  var DEPENDS_ON_STORY_ONLY = { matrix: true };
+
+  function freshLine(desk, latest, builtAt) {
     var when = window.QAGRun.timeAgo(builtAt);
+    var built = when ? " · built " + when : "";
+    if (DEPENDS_ON_STORY_ONLY[desk]) {
+      return "Up to date with your latest story" + built;
+    }
     return (
       "Up to date with your latest story, " +
       latest.criteriaCount +
@@ -87,7 +100,7 @@
       " and " +
       latest.caseCount +
       (latest.caseCount === 1 ? " test case" : " test cases") +
-      (when ? " · built " + when : "") +
+      built +
       "."
     );
   }
@@ -136,9 +149,51 @@
     }
     body.appendChild(el("p", "source-detail", latestLine(latest)));
     card.appendChild(body);
+    var actions = el("div", "source-actions");
     var action = el("button", "btn btn-primary source-action", ACTIONS[desk].build);
     action.type = "button";
-    card.appendChild(action);
+    actions.appendChild(action);
+    addExampleLink(actions, desk);
+    card.appendChild(actions);
+    return true;
+  }
+
+  /* The desk's own "Load example" button is hidden with its card, so the link
+   * to it moves in here rather than disappearing. */
+  function addExampleLink(actions, desk) {
+    if (!EXAMPLES[desk]) return;
+    var link = el("button", "btn btn-small source-example", "Load example");
+    link.type = "button";
+    actions.appendChild(link);
+  }
+
+  /* A sample is on screen: say so, and offer to do the real thing. */
+  function buildExample(card, desk, latest) {
+    card.className = "source-card none example";
+    card.appendChild(icon(ICONS.none, "source-mark"));
+    var body = el("div", "source-body");
+    body.appendChild(el("p", "source-title", "Showing a sample."));
+    body.appendChild(
+      el(
+        "p",
+        "source-detail",
+        latest.storyTitle
+          ? "Your latest work: " + latestLine(latest)
+          : "Start with a story in Requirements."
+      )
+    );
+    card.appendChild(body);
+    if (!latest.storyTitle) {
+      var go = el("a", "btn", "Go to Requirements");
+      go.setAttribute("href", "/requirements/story");
+      card.appendChild(go);
+      return false;
+    }
+    var actions = el("div", "source-actions");
+    var action = el("button", "btn btn-primary source-action", ACTIONS[desk].build);
+    action.type = "button";
+    actions.appendChild(action);
+    card.appendChild(actions);
     return true;
   }
 
@@ -162,6 +217,7 @@
     var update = el("button", "btn btn-primary source-action", ACTIONS[desk].update);
     update.type = "button";
     actions.appendChild(update);
+    addExampleLink(actions, desk);
     if (desk === "matrix") {
       // The factors may have been hand-edited; keeping them costs no AI call.
       var keep = el("button", "btn source-keep", "Keep my factors");
@@ -175,7 +231,7 @@
     card.className = "source-card fresh";
     card.appendChild(icon(ICONS.fresh, "source-mark"));
     var body = el("div", "source-body");
-    body.appendChild(el("p", "source-title", freshLine(latest, status.built_at)));
+    body.appendChild(el("p", "source-title", freshLine(desk, latest, status.built_at)));
     /* Either the recheck is still pending (auto) or it has just run and left
      * its record; both are worth saying, because neither cost a key. */
     var rechecked = run && run.risk_analysis_rechecked;
@@ -212,11 +268,15 @@
         var link = el("a", null, DESK_NAMES[desk] || desk);
         link.setAttribute("href", DESK_LINKS[desk] || "/");
         warn.appendChild(link);
+        // "Risk radar — your criteria changed just now (6 → 7)", with the
+        // only brackets being the ones the sentence itself needs.
         if (reason) {
-          warn.appendChild(el("span", "muted", " (" + reason.toLowerCase() + ")"));
+          warn.appendChild(
+            el("span", "muted", " — " + reason.charAt(0).toLowerCase() + reason.slice(1))
+          );
         }
         warn.appendChild(
-          document.createTextNode(index === status.changes.length - 1 ? "." : ", ")
+          document.createTextNode(index === status.changes.length - 1 ? "." : "; ")
         );
       });
       body.appendChild(warn);
@@ -316,6 +376,8 @@
     var cardHasPrimary = false;
     if (status.state === "none") {
       cardHasPrimary = buildNotYet(card, desk, latest, run) === true;
+    } else if (status.state === "example") {
+      cardHasPrimary = buildExample(card, desk, latest) === true;
     } else if (status.state === "stale") {
       buildStale(card, desk, latest, status);
       cardHasPrimary = true;
@@ -324,6 +386,37 @@
     }
 
     demoteDeskButton(desk, cardHasPrimary);
+    // The card is the desk's summary now; the old one would just repeat it.
+    document.body.setAttribute("data-source-state", status.state);
+    document.body.setAttribute(
+      "data-has-story",
+      latest.storyTitle ? "yes" : "no"
+    );
+    dimStaleResult(desk, status.state);
+  }
+
+  /* An out-of-date answer is still an answer: it stays on screen, dimmed and
+   * labelled, so nobody loses work while deciding whether to rebuild. */
+  var DIMMED = { risks: "risk-output", matrix: "matrix-output" };
+
+  function dimStaleResult(desk, state) {
+    var target = document.getElementById(DIMMED[desk]);
+    if (!target) return;
+    var old = target.previousElementSibling;
+    if (old && old.classList && old.classList.contains("stale-result-note")) {
+      old.parentNode.removeChild(old);
+    }
+    target.classList.remove("stale-result");
+    if (state !== "stale" || !target.firstElementChild) return;
+    target.classList.add("stale-result");
+    var note = el(
+      "p",
+      "stale-result-note muted small",
+      desk === "matrix"
+        ? "From your previous story — update to refresh"
+        : "From your previous criteria — update to refresh"
+    );
+    target.parentNode.insertBefore(note, target);
   }
 
   /* ---------- wiring ---------- */
@@ -335,6 +428,11 @@
 
     if (event.target.closest(".source-action")) {
       pressDesk(desk);
+      return;
+    }
+    if (event.target.closest(".source-example")) {
+      var example = document.querySelector(EXAMPLES[desk]);
+      if (example) example.click();
       return;
     }
     if (event.target.closest(".source-keep")) {
@@ -354,6 +452,8 @@
     if (!window.QAGRun) return;
     drawAll();
     window.addEventListener(window.QAGRun.CHANGED_EVENT, drawAll);
+    // A desk's result can land after this card has drawn.
+    window.addEventListener(window.QAGRun.RESULT_EVENT, drawAll);
     // Another tab moved the run on.
     window.addEventListener("storage", function (event) {
       if (!event.key || event.key === window.QAGRun.RUN_KEY) drawAll();
