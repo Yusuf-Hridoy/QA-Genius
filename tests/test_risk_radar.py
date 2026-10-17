@@ -1,5 +1,7 @@
 """Risk scoring: the AI proposes, code computes. No network."""
 
+import pytest
+
 from qagenius.models import FailureMode, RiskAnalysis
 from qagenius.prompts import risk_radar_prompt
 from qagenius.risk_radar import (
@@ -347,3 +349,49 @@ def test_at_most_six_matched_words_are_kept() -> None:
     twin = case(case_id="TC-009", title=text, expected_result=text, steps=[])
     _, words = match_score(risk, twin)
     assert len(words) == MAX_MATCHED_WORDS
+
+
+# ---------- filler words are not evidence ----------
+
+
+def test_matched_words_leave_out_the_words_that_join_a_sentence():
+    """A real run offered "matched on: and, duration, lockout, message"."""
+    risk = mode(title="focus and keyboard", cause="", effect="")
+    shared = case(
+        case_id="TC-020",
+        title="keyboard and focus rings",
+        expected_result="",
+        steps=[],
+    )
+    score, words = match_score(risk, shared)
+    assert "and" not in words
+    assert words == ["focus", "keyboard"]
+    assert score > 0
+
+
+@pytest.mark.parametrize(
+    "filler",
+    ["and", "or", "but", "not", "no", "when", "then", "than", "that", "this",
+     "these", "those", "from", "into", "onto", "by", "as", "at", "it", "its",
+     "if", "so", "can", "will", "should", "must", "has", "have", "was", "were",
+     "each", "any", "all"],
+)
+def test_no_filler_word_can_be_a_matched_word(filler):
+    risk = mode(title=f"overlay {filler} focus", cause="", effect="")
+    shared = case(
+        case_id="TC-021",
+        title=f"focus {filler} overlay",
+        expected_result="",
+        steps=[],
+    )
+    _, words = match_score(risk, shared)
+    assert filler not in words
+    assert words == ["focus", "overlay"]
+
+
+def test_filler_words_alone_are_not_a_match():
+    risk = mode(title="it has to be and", cause="", effect="")
+    unrelated = case(
+        case_id="TC-022", title="and it was all", expected_result="", steps=[]
+    )
+    assert match_score(risk, unrelated) == (0.0, [])

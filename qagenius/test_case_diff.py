@@ -20,10 +20,18 @@ TITLE_MATCH = 0.6
 # Compared without regard to letter case.
 _CASELESS_FIELDS = ("category", "priority")
 # Shared with risk scoring in risk_radar.py.
+# Words that two texts share without meaning anything by it. Risk radar prints
+# this set as its evidence ("matched on: and, duration, lockout"), so a filler
+# word in here is a filler word claiming a risk is covered.
 STOPWORDS = frozenset(
     {
         "a", "an", "the", "of", "to", "in", "on", "for", "with",
         "after", "before", "is", "are", "be",
+        "and", "or", "but", "not", "no",
+        "when", "then", "than", "that", "this", "these", "those",
+        "from", "into", "onto", "by", "as", "at", "it", "its", "if", "so",
+        "can", "will", "should", "must", "has", "have", "was", "were",
+        "each", "any", "all",
     }
 )
 

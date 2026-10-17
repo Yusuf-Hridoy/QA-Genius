@@ -8,8 +8,11 @@ from fastapi.testclient import TestClient
 
 import main
 from qagenius import llm
+from qagenius.automation_checks import check_project
 from qagenius.automation_exports import TOP_FOLDER
 from qagenius.prompts import automation_prompt
+from qagenius.web import _automation_result_context
+from qagenius.web import templates as _TEMPLATES
 from tests.factories import case, script
 
 client = TestClient(main.app)
@@ -433,3 +436,22 @@ def test_the_ai_instructions_move_into_notes() -> None:
     body = client.get("/requirements/automation/example").text
     assert "Notes from the AI" in body
     assert body.index('id="run-command"') < body.index("Notes from the AI")
+
+
+def test_the_windows_activate_hint_survives_the_html_page() -> None:
+    """Jinja escapes HTML, not backslashes; the Run it block must show one."""
+    project = script(
+        framework="Playwright (Python)",
+        page_object_file_name="pages/login_page.py",
+        page_object_code="class LoginPage:\n    pass\n",
+        test_file_name="tests/test_login.py",
+        test_code="def test_tc_001_locks():\n    pass\n",
+        config_file_name=None,
+        config_code=None,
+    )
+    report = check_project(project, ["TC-001"])
+    context = _automation_result_context(project, report, ["TC-001"], [], "Example")
+    html = _TEMPLATES.get_template("_automation_result.html").render(**context)
+    block = html[html.index('id="run-command"') : html.index("copy-command")]
+    assert r".venv\Scripts\activate" in block
+    assert "\\\\" not in block

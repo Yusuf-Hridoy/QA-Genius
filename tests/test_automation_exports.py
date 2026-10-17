@@ -4,7 +4,13 @@ import io
 import zipfile
 
 from qagenius.automation_checks import check_project, project_files
-from qagenius.automation_exports import ACTIVATE, TOP_FOLDER, build_zip, run_steps
+from qagenius.automation_exports import (
+    ACTIVATE,
+    TOP_FOLDER,
+    build_readme,
+    build_zip,
+    run_steps,
+)
 from tests.factories import script
 
 
@@ -199,9 +205,6 @@ def test_selenium_python_installs_from_requirements_when_there_is_one() -> None:
     ]
 
 
-def test_the_activate_line_covers_windows_too() -> None:
-    assert "source .venv/bin/activate" in ACTIVATE
-    assert r".venv\Scripts\activate" in ACTIVATE
 
 
 def test_the_readme_runs_the_project_you_downloaded() -> None:
@@ -218,3 +221,19 @@ def test_the_readme_keeps_the_ai_instructions_as_notes() -> None:
     assert "### Notes from the AI" in readme
     assert "1. npm install" in readme
     assert readme.index("## Run it") < readme.index("### Notes from the AI")
+
+
+def test_the_windows_activate_hint_uses_single_backslashes():
+    """A doubled backslash would be a path nobody can paste."""
+    assert ACTIVATE == r"source .venv/bin/activate  # Windows: .venv\Scripts\activate"
+    assert r".venv\Scripts\activate" in ACTIVATE
+    assert "\\\\" not in ACTIVATE
+
+
+def test_the_activate_hint_reaches_the_steps_and_the_readme_unchanged():
+    project = script(**PYTHON_PROJECT)
+    report = check_project(project, ["TC-001"])
+    assert ACTIVATE in run_steps(project, report.files)
+    readme = build_readme(project, report)
+    assert ACTIVATE in readme
+    assert "\\\\" not in readme
