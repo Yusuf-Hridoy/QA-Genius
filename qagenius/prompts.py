@@ -297,3 +297,31 @@ def risk_radar_prompt(
         + (test_case_lines or '(none yet)')
     )
     return RISK_RADAR_SYSTEM, user
+
+
+TEST_MATRIX_SYSTEM = '''You are a senior QA engineer planning cross-environment testing for ONE feature.
+
+Choose the 3 to 6 factors that most change how this feature behaves or looks, and 2 to 5 realistic values for each. Prefer: Browser, Device, Signed in, Role (only if the story mentions different users or permissions), Language (only if text, dates, numbers or right-to-left layout matter), Color scheme (only if visual states matter). Add a feature-specific factor only if the story clearly needs it (for example a payment method, a file type, a network condition).
+
+Use short value names (Chrome, Safari, Phone, Admin, EN, AR). Do not invent factors the story gives no reason for.
+
+Rules: list combinations that are impossible or meaningless in the real world (for example Safari on an Android phone, a Guest who is signed in). Only add a rule when you are sure.
+
+For every factor give one short reason tied to the story.'''
+
+
+def test_matrix_prompt(
+    user_story: str,
+    criteria_lines: str,
+    test_case_lines: str,
+) -> tuple[str, str]:
+    """Prompt for the factors worth varying when testing this one feature."""
+    user = (
+        'User story:\n'
+        + user_story
+        + '\n\nAcceptance criteria:\n'
+        + (criteria_lines or '(none yet)')
+        + '\n\nExisting test cases:\n'
+        + (test_case_lines or '(none yet)')
+    )
+    return TEST_MATRIX_SYSTEM, user

@@ -5,7 +5,7 @@ import logging
 from dataclasses import replace
 from pathlib import Path
 
-from fastapi import FastAPI, Form, Request
+from fastapi import FastAPI, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -36,6 +36,7 @@ from qagenius.models import (
     DuelSummary,
     FailureMode,
     Interpretation,
+    MatrixProposal,
     QualityInsightSummary,
     RiskAnalysis,
     TestCase,
@@ -43,23 +44,39 @@ from qagenius.models import (
 )
 from qagenius.insights_summary import clean_summary, facts_text, insights_prompt
 from qagenius.numbers import match_numbers
-from qagenius.pagespeed import Measurement, PageSpeedError, measure, validate_public_url
-from qagenius.performance_budget import Budget, build_budget, human_value
-from qagenius.performance_check import compare, k6_thresholds, lighthouse_budget_json
+from qagenius.pairwise import (
+    MAX_FACTORS,
+    MAX_RULES,
+    Factor,
+    Rule,
+    build_matrix,
+    validate,
+)
+from qagenius.test_matrix_exports import (
+    manual_only_count,
+    projects,
+    to_playwright_config,
+)
+from qagenius.test_matrix_exports import to_csv as matrix_to_csv
+from qagenius.test_matrix_proposal import (
+    clean_proposal,
+    reasons_for,
+    standard_set,
+)
 from qagenius.prompts import (
     automation_prompt,
     bug_report_prompt,
     risk_radar_prompt,
     story_check_prompt,
     test_cases_prompt,
+    test_matrix_prompt,
 )
 from qagenius.providers import PROVIDERS, get_provider, pick_default
 from qagenius.report_parsers import ReportError, RunReport, parse_report
 from qagenius.ship_check import (
-    MAX_DETAILS,
-    PerformanceLine,
-    PerformanceRun,
     CHECK_IDS,
+    MAX_DETAILS,
+    MatrixRun,
     MAX_REASON,
     MIN_REASON,
     TOOLS,
@@ -2213,7 +2230,7 @@ SHIP_PART_LABELS = {
     "risk_analysis": "risk analysis",
     "automation": "automation",
     "insights": "test run",
-    "performance": "performance budget",
+    "matrix": "test matrix",
     "acceptances": "acceptances",
 }
 SHIP_VERDICT_TONES = {"ship": "ok", "ship_with_risks": "warn", "dont_ship": "bad"}
@@ -2234,50 +2251,36 @@ SHIP_STATUS_LABELS = {
 STORY_IN_BANNER = 160
 
 
-def performance_from_dict(raw) -> PerformanceRun:
-    """The budget the Performance desk left in the run, as Ship check reads it.
+def matrix_from_dict(raw) -> MatrixRun:
+    """The matrix a browser saved, as Ship check reads it.
 
-    Anything misshapen drops out rather than raising: a browser that saved an
-    older run should still get a verdict for everything else.
+    Only the counts matter here; the rows themselves live on the matrix page.
+    Anything misshapen raises, and _ship_part turns that into "not checked".
     """
     if not isinstance(raw, dict):
-        raise ValueError("performance must be an object")
-    rows = raw.get("results")
-    if not isinstance(rows, list):
-        raise ValueError("performance.results must be a list")
-    lines: list[PerformanceLine] = []
-    for row in rows:
-        if not isinstance(row, dict) or not isinstance(row.get("id"), str):
-            continue
-        status = row.get("status")
-        if status not in ("within", "over", "not_measured", "not_measurable"):
-            continue
-        lines.append(
-            PerformanceLine(
-                id=row["id"],
-                label=str(row.get("label") or row["id"]),
-                limit=_number(row.get("limit")),
-                unit=str(row.get("unit") or ""),
-                source=str(row.get("source") or ""),
-                measured=_number(row.get("measured")),
-                measured_from=str(row.get("measured_from") or ""),
-                status=status,
-            )
-        )
-    gaps = [one for one in (raw.get("gaps") or []) if isinstance(one, str)]
-    return PerformanceRun(
-        results=lines,
-        gaps=gaps[:MAX_DETAILS],
-        url=str(raw.get("url") or ""),
-        strategy=str(raw.get("strategy") or ""),
-        fetched_at=str(raw.get("fetched_at") or ""),
+        raise ValueError("matrix must be an object")
+    runs = raw.get("runs")
+    if not isinstance(runs, int) or isinstance(runs, bool) or runs < 0:
+        raise ValueError("matrix.runs must be a whole number")
+
+    def whole(name: str) -> int:
+        value = raw.get(name)
+        if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+            return 0
+        return value
+
+    names = [
+        str(one.get("name") or "")
+        for one in (raw.get("factors") or [])
+        if isinstance(one, dict) and one.get("name")
+    ]
+    return MatrixRun(
+        runs=runs,
+        valid_pairs=whole("valid_pairs"),
+        covered_pairs=whole("covered_pairs"),
+        manual_only=whole("manual_only"),
+        factors=names[:MAX_DETAILS],
     )
-
-
-def _number(value) -> float | None:
-    if isinstance(value, bool) or not isinstance(value, (int, float)):
-        return None
-    return float(value)
 
 
 def _ship_part(raw: dict, key: str, build, ignored: list[str]):
@@ -2332,9 +2335,7 @@ def _ship_inputs(raw: dict) -> tuple[ShipInputs, list[str]]:
             automation_script=auto.script if auto else None,
             automation_selected_ids=list(auto.selected_ids) if auto else [],
             insights=_ship_part(raw, "insights", insights_from_dict, ignored),
-            performance=_ship_part(
-                raw, "performance", performance_from_dict, ignored
-            ),
+            matrix=_ship_part(raw, "matrix", matrix_from_dict, ignored),
             acceptances=_ship_acceptances(raw, ignored),
         ),
         ignored,
@@ -2367,25 +2368,6 @@ def _ship_result(
             "markdown": ship_report_exports.to_markdown(report, story),
             "min_reason": MIN_REASON,
             "max_reason": MAX_REASON,
-        },
-    )
-
-
-@app.get("/performance", response_class=HTMLResponse)
-def performance_page(request: Request) -> HTMLResponse:
-    """The page is empty; the browser fills it from sessionStorage."""
-    return templates.TemplateResponse(
-        request,
-        "performance.html",
-        {
-            "active": "performance",
-            "page_title": "What does this page have to be fast enough for?",
-            "page_lede": (
-                "Code reads the numbers in your own acceptance criteria and risks and "
-                "turns them into a performance budget, fills the rest with the Core Web "
-                "Vitals thresholds, then measures a live page against it. No AI."
-            ),
-            "eyebrow": "Performance",
         },
     )
 
@@ -2442,173 +2424,254 @@ def ship_example(request: Request) -> HTMLResponse:
     )
 
 # ──────────────────────────────────────────────────────────────────────────────
-# Performance: a budget from the team's own numbers, measured by PageSpeed.
-# No AI call anywhere in this desk, and no AI key.
+# Smart test matrix: the AI proposes the factors, code computes the runs.
 # ──────────────────────────────────────────────────────────────────────────────
 
-PSI_KEY_LIMIT = 200
-MEASURE_FAILED = "Could not measure that page"
+MATRIX_NO_KEY_NOTE = (
+    "Using the standard set. Add an AI key to get factors suggested from your story."
+)
+MAX_PINNED = 20
+MATRIX_BAD_INPUT = "That run didn't arrive in one piece. Reload the page and try again."
 
 
-class PerformanceBody(BaseModel):
-    """The run the budget is built from, as the browser hands it back."""
+class MatrixFactorBody(BaseModel):
+    name: str
+    values: list[str] = []
+    reason: str = ""
 
-    criteria: list[str] = []
-    risk_analysis: RiskAnalysis | None = None
-    cases: list[TestCase] = []
 
-    @field_validator("criteria")
+class MatrixRuleBody(BaseModel):
+    if_factor: str
+    if_value: str
+    then_factor: str
+    then_value: str
+    reason: str = ""
+
+
+class MatrixBody(BaseModel):
+    """The factors, rules and pinned runs the editor currently holds."""
+
+    factors: list[MatrixFactorBody] = []
+    rules: list[MatrixRuleBody] = []
+    pinned: list[dict[str, str]] = []
+
+    @field_validator("factors")
     @classmethod
-    def _within_limits(cls, value: list[str]) -> list[str]:
-        if len(value) > CRITERIA_LIMIT:
-            raise ValueError(f"Send at most {CRITERIA_LIMIT} criteria.")
-        if any(len(text) > CRITERION_LIMIT for text in value):
-            raise ValueError(f"Keep each criterion under {CRITERION_LIMIT} characters.")
+    def _not_too_many(cls, value: list[MatrixFactorBody]) -> list[MatrixFactorBody]:
+        if len(value) > MAX_FACTORS:
+            raise ValueError(f"Send at most {MAX_FACTORS} factors.")
         return value
 
-    @field_validator("cases")
+    @field_validator("rules")
     @classmethod
-    def _not_too_many_cases(cls, value: list[TestCase]) -> list[TestCase]:
-        if len(value) > MAX_CASES:
-            raise ValueError(f"Send at most {MAX_CASES} test cases.")
+    def _not_too_many_rules(cls, value: list[MatrixRuleBody]) -> list[MatrixRuleBody]:
+        if len(value) > MAX_RULES:
+            raise ValueError(f"Send at most {MAX_RULES} rules.")
         return value
 
-
-class MeasureBody(PerformanceBody):
-    url: str
-    strategy: str = "mobile"
-    psi_key: str | None = None
-
-    @field_validator("psi_key")
+    @field_validator("pinned")
     @classmethod
-    def _key_is_short(cls, value: str | None) -> str | None:
-        if value and len(value) > PSI_KEY_LIMIT:
-            raise ValueError("That does not look like an API key.")
+    def _not_too_many_pins(cls, value: list[dict[str, str]]) -> list[dict[str, str]]:
+        if len(value) > MAX_PINNED:
+            raise ValueError(f"Pin at most {MAX_PINNED} runs.")
         return value
 
+    def as_engine(self) -> tuple[list[Factor], list[Rule]]:
+        factors = [
+            Factor(name=one.name, values=tuple(one.values)) for one in self.factors
+        ]
+        rules = [
+            Rule(
+                if_factor=one.if_factor,
+                if_value=one.if_value,
+                then_factor=one.then_factor,
+                then_value=one.then_value,
+                reason=one.reason,
+            )
+            for one in self.rules
+        ]
+        return factors, rules
 
-def _budget_of(payload: PerformanceBody) -> Budget:
-    return build_budget(payload.criteria, payload.risk_analysis, payload.cases)
 
-
-def _score_tone(score: int | None) -> str:
-    if score is None:
-        return "neutral"
-    if score >= 90:
-        return "ok"
-    return "warn" if score >= 50 else "bad"
-
-
-def _performance_context(budget: Budget, results: list, m=None) -> dict:
-    statuses = [item.status for item in results]
+def _matrix_context(
+    factors: list[Factor],
+    rules: list[Rule],
+    matrix,
+    notes: list[str],
+    reasons: dict[str, str] | None = None,
+) -> dict:
+    manual = manual_only_count(matrix)
     return {
-        "budget": budget,
-        "results": results,
-        "measurement": m,
-        "score_tone": _score_tone(m.performance_score if m else None),
-        # Formatted here so the table never has to do arithmetic.
-        "target_text": [
-            human_value(item.line.limit, item.line.unit)
-            if item.line.limit is not None
-            else "—"
-            for item in results
+        "factors": factors,
+        "rules": rules,
+        "matrix": matrix,
+        "notes": notes,
+        "reasons": reasons or {},
+        "manual_only": manual,
+        "automated": len(matrix.rows) - manual,
+        "run_ids": [f"M{index:02d}" for index in range(1, len(matrix.rows) + 1)],
+        "row_is_manual": [
+            bool(project.get("manual_only")) for project in projects(matrix)
         ],
-        "measured_text": [
-            human_value(item.measured, item.line.unit)
-            if item.measured is not None
-            else ""
-            for item in results
-        ],
-        "counts": {
-            "lines": len(budget.lines),
-            "within": statuses.count("within"),
-            "over": statuses.count("over"),
-            "gaps": len(budget.gaps),
-        },
-        # What performance.js saves into the run for Ship check.
-        "performance_data": {
-            "results": [
-                {
-                    "id": item.line.id,
-                    "label": item.line.label,
-                    "limit": item.line.limit,
-                    "unit": item.line.unit,
-                    "source": item.line.source,
-                    "measured": item.measured,
-                    "measured_from": item.measured_from,
-                    "status": item.status,
-                }
-                for item in results
+        # What test_matrix.js stores in the run for Ship check.
+        "matrix_data": {
+            "factors": [
+                {"name": one.name, "values": list(one.values)} for one in factors
             ],
-            "gaps": budget.gaps,
-            "url": m.url if m else "",
-            "strategy": m.strategy if m else "",
-            "fetched_at": m.fetched_at if m else "",
+            "rules": [
+                {
+                    "if_factor": one.if_factor,
+                    "if_value": one.if_value,
+                    "then_factor": one.then_factor,
+                    "then_value": one.then_value,
+                    "reason": one.reason,
+                }
+                for one in rules
+            ],
+            "pinned": [
+                dict(zip([factor.name for factor in matrix.factors], row))
+                for row in matrix.rows[: matrix.pinned_rows]
+            ],
+            "runs": len(matrix.rows),
+            "valid_pairs": matrix.valid_pairs,
+            "covered_pairs": matrix.covered_pairs,
+            "manual_only": manual,
         },
     }
 
 
-@app.post("/performance/budget", response_class=HTMLResponse)
-def performance_budget_route(request: Request, payload: PerformanceBody) -> HTMLResponse:
-    """The budget on its own, before anything has been measured. No network."""
-    budget = _budget_of(payload)
+@app.get("/requirements/matrix", response_class=HTMLResponse)
+def matrix_page(request: Request) -> HTMLResponse:
+    """Step 3½: which browsers, devices and users to run the cases on."""
     return templates.TemplateResponse(
         request,
-        "_performance_budget.html",
-        _performance_context(budget, compare(budget, None)),
+        "test_matrix.html",
+        {
+            "active": "requirements",
+            "page_title": "Which runs actually need testing?",
+            "page_lede": (
+                "Browsers times devices times roles times languages is hundreds of "
+                "combinations. Code works out the fewest runs where every pair of "
+                "values still appears together, and proves it."
+            ),
+            "eyebrow": "Requirements · Test matrix",
+        },
     )
 
 
-@app.post("/performance/measure", response_class=HTMLResponse)
-def performance_measure_route(request: Request, payload: MeasureBody) -> HTMLResponse:
-    """Measure one public page against the budget. The only outbound call."""
-    reason = validate_public_url(payload.url)
-    if reason:
-        return _error_card(request, reason, heading=MEASURE_FAILED)
-    budget = _budget_of(payload)
+@app.post("/requirements/matrix/suggest", response_class=HTMLResponse)
+def matrix_suggest(
+    request: Request,
+    user_story: str = Form(default=""),
+    criteria_json: str = Form(default="[]"),
+    cases_json: str = Form(default="[]"),
+) -> HTMLResponse:
+    """Factors worth varying for this story. Without a key, the standard set."""
+    story = user_story.strip()
+    if len(story) > STORY_LIMIT:
+        return _error_card(request, MATRIX_BAD_INPUT)
+    texts = _parse_criteria_json(criteria_json)
+    cases = _parse_cases_json(cases_json)
+    if texts is None or cases is None:
+        return _error_card(request, MATRIX_BAD_INPUT)
+
+    keys = _request_keys(request)
+    reasons: dict[str, str] = {}
+    notes: list[str] = []
+    if not keys or not story:
+        factors, rules = standard_set()
+        notes.append(MATRIX_NO_KEY_NOTE)
+    else:
+        criteria = number_criteria(texts)
+        system, user = test_matrix_prompt(
+            story, criteria_lines(criteria), case_lines(cases)
+        )
+        try:
+            result, _used, call_notes = llm.generate_json(
+                keys, system, user, MatrixProposal
+            )
+        except (llm.NoKeysError, llm.AllKeysBusyError, llm.InvalidKeyError,
+                llm.ModelUnavailableError, llm.ProviderError, llm.BadOutputError):
+            # The matrix is too useful to lose to a key problem.
+            factors, rules = standard_set()
+            notes.append(MATRIX_NO_KEY_NOTE)
+        else:
+            factors, rules, guard_notes = clean_proposal(result)
+            reasons = reasons_for(result)
+            notes = call_notes + guard_notes
+
+    matrix = build_matrix(factors, rules)
+    return templates.TemplateResponse(
+        request,
+        "_test_matrix_editor.html",
+        _matrix_context(factors, rules, matrix, notes, reasons),
+    )
+
+
+@app.post("/requirements/matrix/build", response_class=HTMLResponse)
+def matrix_build(request: Request, payload: MatrixBody) -> HTMLResponse:
+    """Recompute the matrix after an edit. No AI, no key."""
+    factors, rules = payload.as_engine()
+    problems = validate(factors, rules)
+    if problems:
+        return _error_card(request, problems[0], problems[1:])
     try:
-        m = measure(payload.url, payload.strategy, payload.psi_key)
-    except PageSpeedError as error:
-        return _error_card(request, str(error), heading=MEASURE_FAILED)
+        matrix = build_matrix(factors, rules, payload.pinned)
+    except ValueError as error:
+        return _error_card(request, str(error))
     return templates.TemplateResponse(
         request,
-        "_performance_result.html",
-        _performance_context(budget, compare(budget, m), m),
+        "_test_matrix_result.html",
+        _matrix_context(factors, rules, matrix, []),
     )
 
 
-@app.get("/performance/example", response_class=HTMLResponse)
-def performance_example(request: Request) -> HTMLResponse:
-    """Load example: a saved budget and a saved measurement. No network."""
-    with open(SAMPLES_DIR / "performance.json", encoding="utf-8") as f:
+def _matrix_or_422(payload: MatrixBody):
+    factors, rules = payload.as_engine()
+    if validate(factors, rules):
+        raise HTTPException(status_code=422, detail="Those factors do not make a matrix.")
+    try:
+        return build_matrix(factors, rules, payload.pinned)
+    except ValueError as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
+
+
+@app.post("/requirements/matrix/export/playwright")
+def matrix_export_playwright(payload: MatrixBody) -> Response:
+    return Response(
+        content=to_playwright_config(_matrix_or_422(payload)),
+        media_type="text/plain; charset=utf-8",
+        headers={
+            "Content-Disposition": 'attachment; filename="playwright.matrix.config.ts"'
+        },
+    )
+
+
+@app.post("/requirements/matrix/export/csv")
+def matrix_export_csv(payload: MatrixBody) -> Response:
+    return Response(
+        content=matrix_to_csv(_matrix_or_422(payload)),
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": 'attachment; filename="test-matrix.csv"'},
+    )
+
+
+@app.get("/requirements/matrix/example", response_class=HTMLResponse)
+def matrix_example(request: Request) -> HTMLResponse:
+    """Load example: the Aurora Storefront login story. No AI call."""
+    with open(SAMPLES_DIR / "test_matrix.json", encoding="utf-8") as f:
         sample = json.load(f)
-    budget = build_budget(
-        sample["criteria"],
-        RiskAnalysis.model_validate(sample["risk_analysis"]),
-        [TestCase.model_validate(case) for case in sample.get("cases", [])],
+    factors = [
+        Factor(name=one["name"], values=tuple(one["values"]))
+        for one in sample["factors"]
+    ]
+    rules = [Rule(**one) for one in sample.get("rules", [])]
+    matrix = build_matrix(factors, rules)
+    context = _matrix_context(
+        factors, rules, matrix, [], sample.get("reasons", {})
     )
-    m = Measurement(**sample["measurement"])
-    context = _performance_context(budget, compare(budget, m), m)
     context["is_example"] = True
-    return templates.TemplateResponse(request, "_performance_result.html", context)
-
-
-@app.post("/performance/export/lighthouse")
-def performance_export_lighthouse(payload: PerformanceBody) -> Response:
-    return Response(
-        content=lighthouse_budget_json(_budget_of(payload)),
-        media_type="application/json; charset=utf-8",
-        headers={"Content-Disposition": 'attachment; filename="budget.json"'},
-    )
-
-
-@app.post("/performance/export/k6")
-def performance_export_k6(payload: PerformanceBody) -> Response:
-    return Response(
-        content=k6_thresholds(_budget_of(payload)),
-        media_type="text/javascript; charset=utf-8",
-        headers={"Content-Disposition": 'attachment; filename="k6-thresholds.js"'},
-    )
+    return templates.TemplateResponse(request, "_test_matrix_editor.html", context)
 
 
 # Served from the site root (e.g. /style.css). On Vercel the CDN serves

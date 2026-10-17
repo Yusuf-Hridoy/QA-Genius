@@ -11,8 +11,7 @@ from qagenius.models import (
 )
 from qagenius.ship_check import (
     CHECK_IDS,
-    PerformanceLine,
-    PerformanceRun,
+    MatrixRun,
     CORE_CHECKS,
     ShipInputs,
     compute_ship_report,
@@ -278,123 +277,64 @@ def test_broken_syntax_fails():
     assert status_of(result, "automation") == "fail"
 
 
-# ---------- the performance budget ----------
+# ---------- the test matrix ----------
 
 
-def perf_line(line_id, label, limit, unit, source, measured, status, measured_from="lab"):
-    return PerformanceLine(
-        id=line_id,
-        label=label,
-        limit=limit,
-        unit=unit,
-        source=source,
-        measured=measured,
-        measured_from=measured_from,
-        status=status,
+def matrix_run(runs=14, valid=96, covered=96, manual=0, factors=("Browser", "Device")):
+    return MatrixRun(
+        runs=runs,
+        valid_pairs=valid,
+        covered_pairs=covered,
+        manual_only=manual,
+        factors=list(factors),
     )
 
 
-LCP_OVER = perf_line(
-    "lcp", "Largest contentful paint (LCP)", 2500, "ms",
-    "Core Web Vitals 'good' threshold", 3820, "over", "real users (28 days)",
-)
-LCP_WITHIN = perf_line(
-    "lcp", "Largest contentful paint (LCP)", 2500, "ms",
-    "Core Web Vitals 'good' threshold", 2100, "within",
-)
-INP_WITHIN = perf_line("inp", "Interaction to next paint (INP)", 200, "ms", "AC-2", 184, "within")
-TTFB_WITHIN = perf_line("ttfb", "Server response time (TTFB)", 800, "ms", "default", 410, "within")
-WEIGHT_UNMEASURED = perf_line("weight", "Page weight", 1600, "KB", "default", None, "not_measured")
-LAYOUT = perf_line("custom-1", "Layout at 768 px", 768, "px", "AC-4", None, "not_measurable", "")
-
-
-def performance_run(*lines, gaps=()):
-    return PerformanceRun(
-        results=list(lines),
-        gaps=list(gaps),
-        url="https://aurora-storefront.example/dashboard",
-        strategy="mobile",
-        fetched_at="2026-01-14T09:21:44+00:00",
-    )
-
-
-def test_no_measurement_leaves_performance_not_checked():
-    item = item_of(report(), "performance")
+def test_no_matrix_is_not_checked():
+    item = item_of(report(), "matrix")
     assert item.status == "not_checked"
-    assert item.summary == "Not run yet — open Performance to include it."
+    assert item.summary == (
+        "No test matrix yet — build one to know which browsers and devices to run."
+    )
 
 
-def test_an_empty_measurement_is_still_not_checked():
-    assert status_of(report(performance=performance_run()), "performance") == "not_checked"
+def test_an_empty_matrix_is_still_not_checked():
+    assert status_of(report(matrix=MatrixRun()), "matrix") == "not_checked"
 
 
-def test_every_line_within_budget_passes():
-    result = report(performance=performance_run(LCP_WITHIN, INP_WITHIN, TTFB_WITHIN))
-    item = item_of(result, "performance")
+def test_full_coverage_with_nothing_manual_passes():
+    item = item_of(report(matrix=matrix_run()), "matrix")
     assert item.status == "pass"
-    assert item.summary == "Every line within budget (3 lines)"
+    assert item.summary == "14 runs cover every pair of values"
+    assert "14 runs cover 96 of 96 pairs" in item.details
 
 
-def test_a_line_over_budget_fails_and_names_it():
-    item = item_of(
-        report(performance=performance_run(LCP_OVER, INP_WITHIN, TTFB_WITHIN)),
-        "performance",
-    )
-    assert item.status == "fail"
-    assert item.summary == "LCP 3.82 s over the 2.5 s budget · 2 within"
-
-
-def test_two_lines_over_budget_are_counted_not_listed():
-    other = perf_line("ttfb", "Server response time (TTFB)", 800, "ms", "default", 1200, "over")
-    item = item_of(report(performance=performance_run(LCP_OVER, other)), "performance")
-    assert item.status == "fail"
-    assert item.summary == "2 budget lines over"
-
-
-def test_a_gap_warns_without_failing():
-    gap = 'Risk R1 "Race condition on rapid double-clicking" is a performance risk with no target.'
-    item = item_of(
-        report(performance=performance_run(LCP_WITHIN, INP_WITHIN, gaps=[gap])),
-        "performance",
-    )
+def test_manual_only_runs_warn_without_failing():
+    item = item_of(report(matrix=matrix_run(manual=2)), "matrix")
     assert item.status == "warn"
-    assert item.summary == "1 gap · 2 within"
+    assert item.summary == "14 runs cover every pair; 2 of them must be tested by hand"
+    assert "2 cannot be driven by Playwright" in item.details
 
 
-def test_a_line_that_could_not_be_measured_warns():
-    item = item_of(
-        report(performance=performance_run(LCP_WITHIN, WEIGHT_UNMEASURED)), "performance"
-    )
+def test_a_matrix_that_misses_pairs_warns():
+    item = item_of(report(matrix=matrix_run(runs=10, covered=90)), "matrix")
     assert item.status == "warn"
-    assert item.summary == "1 not measured · 1 within"
+    assert item.summary == "10 runs planned, 90 of 96 pairs covered"
 
 
-def test_a_layout_line_is_never_judged():
-    """768 px is not something PageSpeed measures, so it cannot fail the check."""
-    result = report(performance=performance_run(LCP_WITHIN, INP_WITHIN, LAYOUT))
-    item = item_of(result, "performance")
-    assert item.status == "pass"
-    assert all("768" not in line for line in item.details)
+def test_a_matrix_never_fails_a_release():
+    """It tells you where to point the effort; it does not block the ship."""
+    for run in (matrix_run(), matrix_run(manual=5), matrix_run(covered=1)):
+        assert status_of(report(matrix=run), "matrix") != "fail"
 
 
-def test_the_details_name_the_number_the_limit_and_the_source():
-    item = item_of(
-        report(performance=performance_run(LCP_OVER, INP_WITHIN)), "performance"
-    )
-    assert item.details == [
-        "Over · Largest contentful paint (LCP) 3.82 s / 2.5 s "
-        "(Core Web Vitals 'good' threshold)",
-        "Within · Interaction to next paint (INP) 184 ms / 200 ms (AC-2)",
-    ]
+def test_the_factors_are_listed_in_the_details():
+    item = item_of(report(matrix=matrix_run(factors=("Browser", "Language"))), "matrix")
+    assert "Factors: Browser, Language" in item.details
 
 
-def test_performance_is_not_a_core_check():
-    """A release can still ship without a measurement; coverage and risks cannot."""
-    assert "performance" not in CORE_CHECKS
-
-
-def test_the_latest_test_run_check_is_gone():
-    assert "test_run" not in CHECK_IDS
+def test_the_matrix_is_not_a_core_check():
+    assert "matrix" not in CORE_CHECKS
 
 
 # ---------- nothing run at all ----------
@@ -477,7 +417,7 @@ def _everything_passes(**overrides) -> dict:
         "risk_analysis": RiskAnalysis(failure_modes=[]),
         "automation_script": script(),
         "automation_selected_ids": ["TC-001"],
-        "performance": performance_run(LCP_WITHIN, INP_WITHIN, TTFB_WITHIN),
+        "matrix": matrix_run(),
     }
     inputs.update(overrides)
     return inputs

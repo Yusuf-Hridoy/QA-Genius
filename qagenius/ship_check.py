@@ -20,7 +20,6 @@ from qagenius.models import (
 from qagenius.risk_radar import score_risks
 from qagenius.test_case_depth import compute_depth
 from qagenius.test_cases import Criterion, compute_coverage, number_criteria
-from qagenius.performance_budget import human_value
 from qagenius.test_run_metrics import Insights
 
 CHECK_IDS = (
@@ -30,7 +29,7 @@ CHECK_IDS = (
     "depth",
     "risks",
     "automation",
-    "performance",
+    "matrix",
 )
 CORE_CHECKS = ("coverage", "risks")      # Ship is impossible while these are not checked
 
@@ -41,7 +40,7 @@ TITLES = {
     "depth": "Test depth",
     "risks": "Risk coverage",
     "automation": "Automation",
-    "performance": "Performance budget",
+    "matrix": "Test matrix",
 }
 
 LINKS = {
@@ -51,7 +50,7 @@ LINKS = {
     "depth": "/requirements/test-cases",
     "risks": "/risks",
     "automation": "/requirements/automation",
-    "performance": "/performance",
+    "matrix": "/requirements/matrix",
 }
 
 # The name a reader would use for the desk a check came from.
@@ -62,7 +61,7 @@ TOOLS = {
     "depth": "Test cases",
     "risks": "Risk radar",
     "automation": "Automation",
-    "performance": "Performance",
+    "matrix": "Test matrix",
 }
 
 VERDICT_LABELS = {
@@ -101,26 +100,14 @@ class ShipReport:
 
 
 @dataclass(frozen=True)
-class PerformanceLine:
-    """One budget line as the Performance desk left it in the run."""
+class MatrixRun:
+    """The matrix the Requirements desk left in the run, as Ship check reads it."""
 
-    id: str
-    label: str
-    limit: float | None
-    unit: str
-    source: str
-    measured: float | None
-    measured_from: str
-    status: str  # "within" | "over" | "not_measured" | "not_measurable"
-
-
-@dataclass(frozen=True)
-class PerformanceRun:
-    results: list[PerformanceLine] = field(default_factory=list)
-    gaps: list[str] = field(default_factory=list)
-    url: str = ""
-    strategy: str = ""
-    fetched_at: str = ""
+    runs: int = 0
+    valid_pairs: int = 0
+    covered_pairs: int = 0
+    manual_only: int = 0
+    factors: list[str] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -137,7 +124,7 @@ class ShipInputs:
     automation_script: AutomationScript | None = None
     automation_selected_ids: list[str] = field(default_factory=list)
     insights: Insights | None = None
-    performance: "PerformanceRun | None" = None
+    matrix: "MatrixRun | None" = None
     acceptances: dict[str, str] = field(default_factory=dict)   # check id -> reason
 
 
@@ -171,12 +158,19 @@ def _trim(lines: list[str]) -> list[str]:
     return kept
 
 
+NOT_CHECKED_LINES = {
+    "matrix": "No test matrix yet — build one to know which browsers and devices to run.",
+}
+
+
 def _not_checked(check_id: str) -> ShipCheckItem:
     return ShipCheckItem(
         id=check_id,
         title=TITLES[check_id],
         status="not_checked",
-        summary=f"Not run yet — open {TOOLS[check_id]} to include it.",
+        summary=NOT_CHECKED_LINES.get(
+            check_id, f"Not run yet — open {TOOLS[check_id]} to include it."
+        ),
         details=[],
         link=LINKS[check_id],
     )
@@ -431,62 +425,36 @@ def _accepted(item: ShipCheckItem, acceptances: dict[str, str]) -> ShipCheckItem
     )
 
 
-def _short_metric(label: str) -> str:
-    """"Largest contentful paint (LCP)" reads as "LCP" in a one-line summary."""
-    if "(" in label and label.rstrip().endswith(")"):
-        return label[label.index("(") + 1 : label.rindex(")")]
-    return label
+def _matrix(inputs: ShipInputs) -> ShipCheckItem:
+    run = inputs.matrix
+    if run is None or not run.runs:
+        return _not_checked("matrix")
 
-
-def _performance(inputs: ShipInputs) -> ShipCheckItem:
-    run = inputs.performance
-    if run is None or not run.results:
-        return _not_checked("performance")
-
-    judged = [line for line in run.results if line.status != "not_measurable"]
-    over = [line for line in judged if line.status == "over"]
-    within = [line for line in judged if line.status == "within"]
-    unmeasured = [line for line in judged if line.status == "not_measured"]
-
-    if over:
-        status = "fail"
-        if len(over) == 1:
-            line = over[0]
-            summary = (
-                f"{_short_metric(line.label)} "
-                f"{human_value(line.measured or 0, line.unit)} over the "
-                f"{human_value(line.limit or 0, line.unit)} budget"
-            )
-        else:
-            summary = f"{len(over)} budget lines over"
-    elif run.gaps or unmeasured:
-        status = "warn"
-        parts = []
-        if run.gaps:
-            parts.append(_plural(len(run.gaps), "gap"))
-        if unmeasured:
-            parts.append(f"{len(unmeasured)} not measured")
-        summary = " · ".join(parts)
-    else:
-        status = "pass"
-        summary = f"Every line within budget ({_plural(len(within), 'line')})"
-
-    if within and status != "pass":
-        summary += f" · {len(within)} within"
-
-    words = {"within": "Within", "over": "Over", "not_measured": "Not measured"}
+    covered = run.covered_pairs == run.valid_pairs and run.valid_pairs > 0
+    runs = _plural(run.runs, "run")
     details = [
-        f"{words[line.status]} · {line.label} "
-        + (
-            f"{human_value(line.measured, line.unit)} / "
-            if line.measured is not None
-            else ""
-        )
-        + f"{human_value(line.limit, line.unit) if line.limit is not None else '—'}"
-        + f" ({line.source})"
-        for line in judged
+        f"{runs} cover {run.covered_pairs} of {run.valid_pairs} pairs",
     ]
-    return _item("performance", status, summary, details)
+    if run.factors:
+        details.append("Factors: " + ", ".join(run.factors))
+
+    # A matrix never blocks a release: it tells you where to point the effort.
+    if not covered:
+        return _item(
+            "matrix",
+            "warn",
+            f"{runs} planned, {run.covered_pairs} of {run.valid_pairs} pairs covered",
+            details,
+        )
+    if run.manual_only:
+        details.append(f"{run.manual_only} cannot be driven by Playwright")
+        return _item(
+            "matrix",
+            "warn",
+            f"{runs} cover every pair; {run.manual_only} of them must be tested by hand",
+            details,
+        )
+    return _item("matrix", "pass", f"{runs} cover every pair of values", details)
 
 
 def _verdict(items: list[ShipCheckItem]) -> tuple[str, str]:
@@ -524,7 +492,7 @@ def compute_ship_report(inputs: ShipInputs) -> ShipReport:
         "depth": _depth(inputs, criteria),
         "risks": _risks(inputs),
         "automation": _automation(inputs),
-        "performance": _performance(inputs),
+        "matrix": _matrix(inputs),
     }
     items = [_accepted(built[check_id], inputs.acceptances) for check_id in CHECK_IDS]
 

@@ -66,10 +66,8 @@
     }
     if (run.automation && run.automation.script) payload.automation = run.automation;
     if (run.insights) payload.insights = run.insights;
-    /* The Performance desk leaves its budget and verdicts in the run. */
-    if (run.performance && run.performance.results) {
-      payload.performance = run.performance;
-    }
+    /* The test matrix says which browsers and devices the runs cover. */
+    if (run.matrix && run.matrix.runs) payload.matrix = run.matrix;
     payload.acceptances = run.ship_acceptances || {};
     return payload;
   }

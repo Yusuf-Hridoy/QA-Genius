@@ -86,8 +86,8 @@ and the worst fork), **criteria coverage** (any criterion with no test case
 fails), **test depth** (thin criteria warn, more than half thin fails),
 **risk coverage** (a high risk with no test fails, a medium risk with no test
 or a high risk only weakly matched warns), **automation** (a syntax error
-fails, a missing selected id or a fixed wait warns) and the **performance
-budget** (a line over its limit fails, a gap or an unmeasured line warns). Each check is pass, warn, fail or *not
+fails, a missing selected id or a fixed wait warns) and the **test matrix**
+(a matrix that misses pairs or needs manual runs warns; it never fails). Each check is pass, warn, fail or *not
 checked*, with the exact numbers behind it and a link back to the desk that
 fixes it. The verdict follows in a fixed order: any fail means **Don't ship**;
 otherwise a missing coverage or risk check means **Ship with risks**, because
@@ -97,32 +97,24 @@ with a written reason of 10 to 300 characters — the acceptance is recorded on
 the row, counts as a warning rather than a pass, and is removed again in one
 click. **Copy as Markdown** gives you the whole verdict as a table with a
 details section to paste into a release thread, and **Print / save as PDF**
-prints the banner and all seven checks with their details open, with the
+prints the banner and every check with their details open, with the
 sidebar, buttons and key chip left off the page.
 
-## Performance budget
-A chat model can write you a k6 script, but it does not know what your team
-agreed to and it cannot measure your page. This desk reads the numbers already
-in your acceptance criteria and risks — *"routes to the reports view within
-200ms"* becomes *Interaction ≤ 200 ms, from AC-2* — and fills every line it
-found no number for with the published Core Web Vitals threshold, labelled as
-such, so you can always see which limits are yours and which are the defaults.
-Requirements it cannot turn into a speed budget, such as *"below 768 pixels"*,
-become non-measurable lines that name the test cases covering them instead,
-and a performance risk that describes a problem without naming a number is
-listed as a gap rather than quietly given a limit. Paste a **public** URL and
-**Measure live page** and the server asks Google's PageSpeed Insights API for
-real measurements — localhost and private addresses are refused before any
-call, because Google could not reach them and the refusal should be instant.
-Code then compares measured against budgeted, preferring real-user data over
-the lab and saying under each number which one it used; interaction has no lab
-measurement at all, so a lab-only run judges it by total blocking time and
-labels it *lab proxy: TBT* rather than pretending. **Download budget.json**
-gives you a Lighthouse CI budget and **Download k6 thresholds** a k6 options
-block, and the result feeds the Performance row of Ship check. No AI is called
-anywhere in this desk and no AI key is needed; PageSpeed's own key is optional
-in principle but necessary in practice, is stored in your browser only, and
-never enters the run.
+## Test matrix
+Browsers times devices times roles times languages is hundreds of combinations,
+so teams test Chrome on a desktop and hope. *Pairwise* testing is the way out:
+most environment bugs need only two things to coincide, so the smallest set of
+runs where **every pair of values appears together at least once** finds them
+without running everything — 216 combinations become 16 runs, and the page
+proves it with *85 of 85 pairs covered*. QA-Genius proposes the factors that
+matter for your story with a reason each (an AI reads the story; it never
+decides a row), you add or remove factors, values and impossible combinations
+such as *Firefox never on a phone*, and the matrix recalculates instantly in
+code. Pin the runs you always want and they stay. **Download Playwright
+config** gives you one project per automatable run with the right device
+profile, locale, colour scheme and stored session, and **Download CSV** covers
+the rest, including the runs Playwright cannot drive, which are counted rather
+than quietly dropped. The result feeds the Test matrix row of Ship check.
 
 ## Also included (unlisted)
 **Bug desk** (`/bugs`) turns rough notes and a screenshot into a structured

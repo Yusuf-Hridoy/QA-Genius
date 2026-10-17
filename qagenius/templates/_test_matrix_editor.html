@@ -1,0 +1,73 @@
+{# The factors and rules, editable, with the computed matrix under them.
+   Every edit re-posts to /requirements/matrix/build; no AI runs on an edit. #}
+{% if is_example %}
+{% with caption = "The Aurora Storefront login story. Edit anything and the runs recalculate." %}
+{% include "_example_flag.html" %}
+{% endwith %}
+{% endif %}
+
+{% if notes %}
+<p class="muted small matrix-notes">{{ notes | join(" · ") }}</p>
+{% endif %}
+
+<div class="card card-form" id="matrix-factors-card">
+  <div class="row">
+    <h2>Factors</h2>
+    <span class="spacer"></span>
+    <button type="button" class="btn btn-small" id="matrix-suggest">Suggest from my story</button>
+    <button type="button" class="btn btn-small" id="matrix-example">Load example</button>
+  </div>
+  <p class="muted small">What changes how this feature behaves. Values are the
+    options you would actually test.</p>
+  <div id="matrix-factor-list">
+    {% for factor in factors %}
+    <div class="matrix-factor" data-factor="{{ loop.index0 }}">
+      <div class="row matrix-factor-head">
+        <input class="ctl matrix-factor-name" value="{{ factor.name }}"
+               aria-label="Factor name" maxlength="40">
+        <button type="button" class="btn btn-small btn-danger matrix-remove-factor">Remove factor</button>
+      </div>
+      <div class="matrix-values">
+        {% for value in factor.values %}
+        <span class="chip-value">{{ value }}<button type="button"
+          class="btn btn-icon-tiny matrix-remove-value"
+          aria-label="Remove {{ value }}">×</button></span>
+        {% endfor %}
+        <input class="ctl matrix-add-value" placeholder="add value" maxlength="40"
+               aria-label="Add a value to {{ factor.name }}">
+      </div>
+      {% if reasons.get(factor.name | lower) %}
+      <p class="muted small matrix-reason">{{ reasons[factor.name | lower] }}</p>
+      {% endif %}
+    </div>
+    {% endfor %}
+  </div>
+  <div class="form-actions">
+    <button type="button" class="btn" id="matrix-add-factor">+ Add factor</button>
+  </div>
+</div>
+
+<div class="card card-form" id="matrix-rules-card">
+  <h2>Impossible combinations</h2>
+  <p class="muted small">Pairs that cannot happen in the real world. No run will
+    contain one.</p>
+  <ul class="matrix-rule-list" id="matrix-rule-list">
+    {% for rule in rules %}
+    <li class="matrix-rule" data-rule="{{ loop.index0 }}">
+      <span><strong>{{ rule.if_factor }}={{ rule.if_value }}</strong> never with
+        <strong>{{ rule.then_factor }}={{ rule.then_value }}</strong></span>
+      {% if rule.reason %}<span class="muted small">{{ rule.reason }}</span>{% endif %}
+      <span class="spacer"></span>
+      <button type="button" class="btn btn-small btn-danger matrix-remove-rule">Remove</button>
+    </li>
+    {% endfor %}
+  </ul>
+  {% if not rules %}<p class="muted small" id="matrix-no-rules">No rules yet.</p>{% endif %}
+  <div class="form-actions">
+    <button type="button" class="btn" id="matrix-add-rule">+ Add rule</button>
+  </div>
+</div>
+
+<div id="matrix-output">
+{% include "_test_matrix_result.html" %}
+</div>

@@ -11,7 +11,6 @@ PAGES = [
     "/requirements/story",
     "/risks",
     "/bugs",
-    "/performance",
     "/ship",
 ]
 
@@ -35,29 +34,30 @@ def test_home_lists_every_desk_and_does_not_redirect() -> None:
     response = client.get("/", follow_redirects=False)
     assert response.status_code == 200
     body = response.text
-    for href in ("/requirements/story", "/risks", "/performance", "/ship"):
+    for href in ("/requirements/story", "/risks", "/ship"):
         assert f'class="desk" href="{href}"' in body, href
 
 
 def test_home_cards_follow_the_sidebar_order() -> None:
     body = client.get("/").text
-    order = ["/requirements/story", "/risks", "/performance", "/ship"]
+    order = ["/requirements/story", "/risks", "/ship"]
     found = [body.index(f'class="desk" href="{href}"') for href in order]
     assert found == sorted(found)
 
 
-def test_home_lists_four_desks_and_hides_two() -> None:
+def test_home_lists_three_desks_and_hides_two() -> None:
     """Bug desk and Quality insights still work; they are just not listed."""
     body = client.get("/").text
-    assert body.count('class="desk"') == 4
+    assert body.count('class="desk"') == 3
     assert "Bug desk" not in body
     assert "Quality insights" not in body
-    assert "Build a budget" in body
-    assert "Four desks between a vague story" in body
+    assert "Performance" not in body
+    assert "Three desks between a vague story" in body
 
 
-def test_performance_is_a_desk_of_its_own_now() -> None:
-    assert client.get("/performance").status_code == 200
+def test_the_performance_desk_is_gone() -> None:
+    """Phase 9 built it, phase 10 removed it; the route must not linger."""
+    assert client.get("/performance").status_code == 404
 
 
 def test_the_hidden_desks_still_answer() -> None:
@@ -84,12 +84,13 @@ def test_keys_redirects_to_story_with_flag() -> None:
     assert response.headers["location"] == "/requirements/story?keys=open"
 
 
-def test_the_sidebar_lists_the_four_desks_in_order() -> None:
+def test_the_sidebar_lists_the_three_desks_in_order() -> None:
     body = client.get("/risks").text
-    order = ["/requirements/story", "/risks", "/performance", "/ship"]
+    order = ["/requirements/story", "/risks", "/ship"]
     found = [body.index(f'href="{href}"') for href in order]
     assert found == sorted(found)
     assert 'href="/bugs"' not in body
     assert 'href="/insights"' not in body
+    assert 'href="/performance"' not in body
     assert '<a href="/risks" class="active">' in body
     assert "<span>Risk radar</span>" in body

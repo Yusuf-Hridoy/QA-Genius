@@ -1,0 +1,62 @@
+{
+  "story": "As a shopper, I want to sign in to Aurora Storefront on any device so that I can reach my orders wherever I am.",
+  "factors": [
+    {
+      "name": "Browser",
+      "values": ["Chrome", "Firefox", "Safari", "Edge"]
+    },
+    {
+      "name": "Device",
+      "values": ["Desktop", "Tablet", "Phone"]
+    },
+    {
+      "name": "Role",
+      "values": ["Shopper", "Store admin", "Guest"]
+    },
+    {
+      "name": "Language",
+      "values": ["EN", "BN", "AR"]
+    },
+    {
+      "name": "Signed in",
+      "values": ["Yes", "No"]
+    }
+  ],
+  "rules": [
+    {
+      "if_factor": "Browser",
+      "if_value": "Firefox",
+      "then_factor": "Device",
+      "then_value": "Phone",
+      "reason": "Playwright can't emulate Firefox on mobile devices."
+    },
+    {
+      "if_factor": "Browser",
+      "if_value": "Firefox",
+      "then_factor": "Device",
+      "then_value": "Tablet",
+      "reason": "Playwright can't emulate Firefox on mobile devices."
+    },
+    {
+      "if_factor": "Browser",
+      "if_value": "Edge",
+      "then_factor": "Device",
+      "then_value": "Tablet",
+      "reason": "Edge tablet profiles aren't available in Playwright."
+    },
+    {
+      "if_factor": "Role",
+      "if_value": "Guest",
+      "then_factor": "Signed in",
+      "then_value": "Yes",
+      "reason": "A guest has no account to sign in with."
+    }
+  ],
+  "reasons": {
+    "browser": "Sign-in uses a password manager hint that behaves differently per browser.",
+    "device": "The story says any device, and the form reflows below 768 px.",
+    "role": "Store admins land on a different page after signing in.",
+    "language": "Arabic flips the whole layout right to left.",
+    "signed in": "Half the story is about what a signed-out shopper sees."
+  }
+}

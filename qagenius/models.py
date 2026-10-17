@@ -438,3 +438,26 @@ class FailureMode(BaseModel):
 
 class RiskAnalysis(BaseModel):
     failure_modes: List[FailureMode] = []
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# SMART TEST MATRIX MODELS
+# ══════════════════════════════════════════════════════════════════════════════
+
+class ProposedFactor(BaseModel):
+    name: str
+    values: List[str] = []
+    reason: str = ""          # one short sentence: why this matters for this story
+
+
+class ProposedRule(BaseModel):
+    if_factor: str
+    if_value: str
+    then_factor: str
+    then_value: str
+    reason: str = ""
+
+
+class MatrixProposal(BaseModel):
+    factors: List[ProposedFactor] = []
+    rules: List[ProposedRule] = []

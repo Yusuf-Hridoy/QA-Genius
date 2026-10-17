@@ -1,0 +1,68 @@
+{# The matrix itself: how few runs, and the proof they cover everything.
+   Every number here came out of qagenius/pairwise.py, never from an AI. #}
+<div class="stat-row">
+  <div class="stat">
+    <div class="num"><s>{{ matrix.all_combinations }}</s></div>
+    <div class="lbl">All combinations</div>
+  </div>
+  <div class="stat stat-accent">
+    <div class="num">{{ matrix.rows | length }}</div><div class="lbl">Runs needed</div>
+  </div>
+  <div class="stat">
+    <div class="num">{{ matrix.covered_pairs }}<span class="unit"> / {{ matrix.valid_pairs }}</span>
+      {%- if matrix.covered_pairs == matrix.valid_pairs %} ✓{% endif %}</div>
+    <div class="lbl">Pairs covered</div>
+  </div>
+  <div class="stat{% if manual_only %} stat-bad{% endif %}">
+    <div class="num">{{ manual_only }}</div><div class="lbl">Manual only</div>
+  </div>
+</div>
+
+<div class="card">
+  <h2>Runs</h2>
+  <div class="table-scroll">
+  <table class="grid matrix-table">
+    <tr>
+      <th>Run</th>
+      {% for factor in matrix.factors %}<th>{{ factor.name }}</th>{% endfor %}
+      <th>Automated</th>
+      <th class="matrix-pin-col"><span class="visually-hidden">Pin</span></th>
+    </tr>
+    {% for row in matrix.rows %}
+    <tr{% if loop.index0 < matrix.pinned_rows %} class="matrix-pinned"{% endif %}>
+      <td class="mono small">{{ run_ids[loop.index0] }}</td>
+      {% for value in row %}<td>{{ value }}</td>{% endfor %}
+      <td>
+        {% if row_is_manual[loop.index0] %}<span class="pill warn">manual only</span>
+        {% else %}<span class="pill ok plain">yes</span>{% endif %}
+      </td>
+      <td>
+        <button type="button" class="btn btn-small matrix-pin"
+                data-run="{{ loop.index0 }}"
+                aria-pressed="{{ 'true' if loop.index0 < matrix.pinned_rows else 'false' }}">
+          {{ "Pinned" if loop.index0 < matrix.pinned_rows else "Pin" }}
+        </button>
+      </td>
+    </tr>
+    {% endfor %}
+  </table>
+  </div>
+  <p class="muted small">Every pair of values appears in at least one run.
+    {% if matrix.impossible_pairs %}Impossible pairs:
+      {% for one in matrix.impossible_pairs %}{{ one[1] }} · {{ one[3] }} (rule){% if not loop.last %}, {% endif %}{% endfor %}.
+    {% endif %}
+  </p>
+</div>
+
+<script type="application/json" id="matrix-data">{{ matrix_data | tojson }}</script>
+<div class="card">
+  <div class="row">
+    <button type="button" class="btn btn-primary" id="download-matrix-config">Download Playwright config</button>
+    <button type="button" class="btn" id="download-matrix-csv">Download CSV</button>
+    <a class="btn btn-small ship-link" href="/ship">Ship check
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a>
+  </div>
+  <p class="muted small" id="matrix-download-status" aria-live="polite"></p>
+  <p class="form-note">Factors suggested by AI from your story; runs and coverage
+    computed by code.</p>
+</div>

@@ -93,7 +93,7 @@ def test_the_example_has_the_statuses_the_brief_asks_for():
         "depth": "warn",
         "risks": "fail",
         "automation": "not_checked",
-        "performance": "not_checked",
+        "matrix": "not_checked",
     }
 
 

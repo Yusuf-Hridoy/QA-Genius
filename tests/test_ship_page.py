@@ -155,13 +155,13 @@ def test_the_result_repeats_that_nothing_left_the_browser():
 def test_the_sidebar_offers_ship_check_last():
     body = client.get("/ship").text
     assert 'href="/ship"' in body
-    assert body.index('href="/risks"') < body.index('href="/performance"')
-    assert body.index('href="/performance"') < body.index('href="/ship"')
+    assert body.index('href="/risks"') < body.index('href="/ship"')
 
 
-def test_the_sidebar_offers_performance():
+def test_the_sidebar_does_not_offer_performance():
     body = client.get("/").text
-    assert 'href="/performance"' in body
+    assert 'href="/performance"' not in body
+    assert "Performance" not in body
 
 
 def test_the_home_page_sends_you_to_ship_check():
