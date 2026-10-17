@@ -2,6 +2,9 @@
 {% block title %}Risk radar — QA-Genius{% endblock %}
 {% block top_title %}Risk radar{% endblock %}
 {% block content %}
+{# The one component that says what this desk is built from and whether
+   that is still current. run_state.js + source_card.js fill it. #}
+<div id="source-card" class="source-card" data-desk="risks" role="status" aria-live="polite"></div>
 <div id="risk-root"></div>
 <div id="risk-output"></div>
 {% endblock %}

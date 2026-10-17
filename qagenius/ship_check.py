@@ -6,7 +6,7 @@ score_risks, check_project -- so Ship check can never disagree with the page
 a reader just came from.
 """
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
 from qagenius.automation_checks import check_project
 from qagenius.models import (
@@ -88,6 +88,8 @@ class ShipCheckItem:
     details: list[str]          # short lines, max 8
     link: str                   # where to fix it, e.g. "/risks"
     accepted_note: str = ""
+    # Set when the browser says this check's inputs lag the latest work.
+    stale_note: str = ""
 
 
 @dataclass(frozen=True)
@@ -125,7 +127,9 @@ class ShipInputs:
     automation_selected_ids: list[str] = field(default_factory=list)
     insights: Insights | None = None
     matrix: "MatrixRun | None" = None
-    acceptances: dict[str, str] = field(default_factory=dict)   # check id -> reason
+    acceptances: dict[str, str] = field(default_factory=dict)
+    # Check ids the browser believes were built from older work.
+    stale_inputs: list[str] = field(default_factory=list)   # check id -> reason
 
 
 LEVEL_WORDS = {"high": "High", "medium": "Medium", "low": "Low"}
@@ -457,6 +461,33 @@ def _matrix(inputs: ShipInputs) -> ShipCheckItem:
     return _item("matrix", "pass", f"{runs} cover every pair of values", details)
 
 
+# A check whose inputs the browser says are older than the latest work. The
+# status still stands; the reader is told it was computed from stale material.
+STALE_NOTE = "Built from older work — update {desk} for an accurate result."
+STALE_DESKS = {
+    "risks": "Risk radar",
+    "matrix": "Test matrix",
+    "coverage": "Test cases",
+    "depth": "Test cases",
+    "automation": "Automation",
+}
+STALE_SUFFIX = " (some inputs are out of date)"
+
+
+def _with_stale_notes(
+    items: list[ShipCheckItem], stale: list[str]
+) -> list[ShipCheckItem]:
+    wanted = [one for one in stale if one in CHECK_IDS]
+    if not wanted:
+        return items
+    return [
+        replace(item, stale_note=STALE_NOTE.format(desk=STALE_DESKS.get(item.id, item.title)))
+        if item.id in wanted
+        else item
+        for item in items
+    ]
+
+
 def _verdict(items: list[ShipCheckItem]) -> tuple[str, str]:
     failed = [item for item in items if item.status == "fail"]
     if failed:
@@ -495,12 +526,16 @@ def compute_ship_report(inputs: ShipInputs) -> ShipReport:
         "matrix": _matrix(inputs),
     }
     items = [_accepted(built[check_id], inputs.acceptances) for check_id in CHECK_IDS]
+    items = _with_stale_notes(items, inputs.stale_inputs)
 
     counts = {
         name: sum(1 for item in items if item.status == name)
         for name in ("pass", "warn", "fail", "accepted", "not_checked")
     }
     verdict, reason = _verdict(items)
+    # A verdict computed from older material says so in its own line.
+    if any(item.stale_note for item in items):
+        reason += STALE_SUFFIX
     return ShipReport(
         verdict=verdict,
         verdict_reason=reason,

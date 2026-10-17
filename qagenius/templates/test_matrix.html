@@ -1,9 +1,12 @@
 {% extends "base.html" %}
 {% block title %}Test matrix — QA-Genius{% endblock %}
-{% block top_title %}Requirements · Test matrix{% endblock %}
+{% block top_title %}Test matrix{% endblock %}
 {% block content %}
 {# test_matrix.js posts the run to /requirements/matrix/suggest and drops the
    editor plus the computed matrix into #matrix-root. #}
+{# The one component that says what this desk is built from and whether
+   that is still current. run_state.js + source_card.js fill it. #}
+<div id="source-card" class="source-card" data-desk="matrix" role="status" aria-live="polite"></div>
 <div id="matrix-root"></div>
 <p class="form-note">Factors suggested by AI from your story; runs and coverage
   computed by code.</p>

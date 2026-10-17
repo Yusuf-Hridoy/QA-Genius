@@ -18,11 +18,17 @@
     }
   }
 
+  /* One writer for the whole app: run_state.js stamps the fingerprints and
+   * tells every card and the sidebar that the run moved on. */
   function writeRun(run) {
+    if (typeof window !== "undefined" && window.QAGRun) {
+      window.QAGRun.write(run);
+      return;
+    }
     try {
       sessionStorage.setItem(RUN_KEY, JSON.stringify(run));
     } catch (e) {
-      /* Storage blocked: the page still works, the run just does not survive. */
+      /* storage blocked: the page still works, the run just will not survive */
     }
   }
 
@@ -317,6 +323,28 @@
     }
   }
 
+  /* Test cases changing is code's problem, not the model's: coverage is
+   * re-scored here and the analysis is marked current again, with no AI call
+   * and no click. Story or criteria changing is a different matter - that
+   * needs the user to press Update. */
+  function autoRecheck() {
+    if (!window.QAGRun) return;
+    var run = window.QAGRun.read();
+    var status = window.QAGRun.statusOf("risks", run);
+    if (status.state !== "fresh" || !status.auto) return;
+    var analysis = savedAnalysis();
+    if (!analysis) return;
+    rescore(analysis, function () {
+      var latest = window.QAGRun.read();
+      latest.risk_analysis_rechecked = {
+        at: new Date().toISOString(),
+        cases: currentCases(latest).length
+      };
+      window.QAGRun.markBuilt(latest, "risk_analysis");
+      window.QAGRun.write(latest);
+    });
+  }
+
   function rememberDisplayed() {
     var shown = displayedData();
     if (!shown) return;
@@ -347,7 +375,7 @@
     rememberDisplayed();
   }
 
-  function rescore(analysis) {
+  function rescore(analysis, done) {
     var body = rescoreBody(analysis);
     if (!body.analysis.failure_modes || !body.analysis.failure_modes.length) {
       return;
@@ -361,7 +389,10 @@
         if (!response.ok) throw new Error("rescore failed");
         return response.text();
       })
-      .then(showResult)
+      .then(function (html) {
+        showResult(html);
+        if (done) done();
+      })
       .catch(function () {
         /* Leave what is on screen alone; the saved run is still intact. */
       });
@@ -513,7 +544,11 @@
     renderPage();
     /* Coming back from step 3: re-score against the test cases that exist now,
      * so a case tagged risk:R1 shows as verified straight away. */
-    var analysis = savedAnalysis();
-    if (analysis) rescore(analysis);
+    autoRecheck();
   });
+
+  /* Another tab, or step 3 in this one, moved the run on. */
+  if (window.QAGRun) {
+    window.addEventListener(window.QAGRun.CHANGED_EVENT, autoRecheck);
+  }
 })();

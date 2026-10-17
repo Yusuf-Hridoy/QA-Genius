@@ -45,6 +45,7 @@
 {% if depth.rows %}
 <div class="card">
   <h2>Depth by criterion</h2>
+  <div class="table-scroll">
   <table class="grid">
     <tr><th>Criterion</th><th>Cases</th><th>Kinds</th><th class="tc-reasons">Status</th></tr>
     {% for row in depth.rows %}
@@ -61,6 +62,7 @@
     </tr>
     {% endfor %}
   </table>
+  </div>
   <div class="form-actions" id="tc-actions">
     {% if depth.thin_ids %}
     <button type="button" class="btn" id="strengthen-btn"
@@ -109,13 +111,28 @@
   {% endfor %}
 </div>
 <script type="application/json" id="tc-data">{{ tc_data | tojson }}</script>
+{# Where to go next, and whether each of those desks is still current.
+   next_steps.js fills the status words; the links work without it. #}
+<div class="next-strip" id="next-strip" role="navigation" aria-label="Next steps">
+  <span class="next-label">Next:</span>
+  <a class="next-chip" href="/risks" data-desk="risks">
+    <span class="next-name">Risk radar</span>
+    <span class="next-state"></span>
+  </a>
+  <a class="next-chip" href="/requirements/matrix" data-desk="matrix">
+    <span class="next-name">Test matrix</span>
+    <span class="next-state"></span>
+  </a>
+  <a class="next-chip" href="/ship" data-desk="ship">
+    <span class="next-name">Ship check</span>
+    <span class="next-state"></span>
+  </a>
+</div>
 <div class="card">
   <div class="row">
     <button type="button" class="btn" id="download-csv">Download CSV</button>
     <button type="button" class="btn" id="download-xlsx">Download Excel</button>
     <a class="btn" href="/requirements/matrix">Build test matrix →</a>
-    <a class="btn btn-small ship-link" href="/ship">Ship check
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a>
     {% if is_example %}
     <button type="button" class="btn" id="example-strengthen"
       hx-get="/requirements/test-cases/example-strengthen"

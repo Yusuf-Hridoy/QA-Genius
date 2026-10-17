@@ -33,12 +33,17 @@
     }
   }
 
+  /* One writer for the whole app: run_state.js stamps the fingerprints and
+   * tells every card and the sidebar that the run moved on. */
   function writeRun(run) {
+    if (typeof window !== "undefined" && window.QAGRun) {
+      window.QAGRun.write(run);
+      return;
+    }
     try {
       sessionStorage.setItem(RUN_KEY, JSON.stringify(run));
     } catch (e) {
-      /* storage blocked: the verdict still shows, the acceptance just will not
-       * survive the next navigation */
+      /* storage blocked: the page still works, the run just will not survive */
     }
   }
 
@@ -69,7 +74,28 @@
     /* The test matrix says which browsers and devices the runs cover. */
     if (run.matrix && run.matrix.runs) payload.matrix = run.matrix;
     payload.acceptances = run.ship_acceptances || {};
+    /* Which checks were built from work the run has since moved past. */
+    payload.stale_inputs = staleChecks(run);
     return payload;
+  }
+
+  /* Desk -> the checks it feeds. Test cases feed two of them. */
+  var STALE_CHECKS = {
+    risks: ["risks"],
+    matrix: ["matrix"],
+    automation: ["automation"],
+    test_cases: ["coverage", "depth"]
+  };
+
+  function staleChecks(run) {
+    if (!window.QAGRun) return [];
+    var checks = [];
+    window.QAGRun.staleInputs(run).forEach(function (desk) {
+      (STALE_CHECKS[desk] || []).forEach(function (check) {
+        if (checks.indexOf(check) === -1) checks.push(check);
+      });
+    });
+    return checks;
   }
 
   function criteriaTexts(run) {

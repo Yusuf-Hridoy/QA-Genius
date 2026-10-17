@@ -25,6 +25,9 @@
         <a class="small ship-row-link" href="{{ item.link }}">Open {{ tools[item.id] }} →</a>
       </div>
       <p class="ship-row-summary">{{ item.summary }}</p>
+      {% if item.stale_note %}
+      <p class="muted small ship-stale-note">{{ item.stale_note }}</p>
+      {% endif %}
 
       {% if item.status == "accepted" and item.accepted_note %}
       <p class="ship-accepted-note"><em>Accepted: {{ item.accepted_note }}</em></p>

@@ -11,7 +11,9 @@
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700&amp;family=Instrument+Sans:wght@400;500;600&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/style.css">
 <script src="/htmx.min.js" defer></script>
+<script src="/run_state.js" defer></script>
 <script src="/app.js" defer></script>
+<script src="/source_card.js" defer></script>
 </head>
 <body>
 <div class="layout">
@@ -26,14 +28,22 @@
         <a href="/requirements/story" class="{% if active == 'requirements' %}active{% endif %}">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h12l4 4v12H4z"/><path d="M16 4v4h4"/><path d="M8 13h8M8 17h5"/></svg>
           <span>Requirements</span>
+          <span class="nav-status" data-desk="test_cases"></span>
         </a>
         <a href="/risks" class="{% if active == 'risks' %}active{% endif %}">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4.5"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3"/></svg>
           <span>Risk radar</span>
+          <span class="nav-status" data-desk="risks"></span>
+        </a>
+        <a href="/requirements/matrix" class="{% if active == 'matrix' %}active{% endif %}">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
+          <span>Test matrix</span>
+          <span class="nav-status" data-desk="matrix"></span>
         </a>
         <a href="/ship" class="{% if active == 'ship' %}active{% endif %}">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 7 9.5 17.5 4 12"/></svg>
           <span>Ship check</span>
+          <span class="nav-status" data-desk="ship"></span>
         </a>
       </nav>
     </div>

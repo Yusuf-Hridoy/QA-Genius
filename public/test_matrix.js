@@ -33,12 +33,17 @@
     }
   }
 
+  /* One writer for the whole app: run_state.js stamps the fingerprints and
+   * tells every card and the sidebar that the run moved on. */
   function writeRun(run) {
+    if (typeof window !== "undefined" && window.QAGRun) {
+      window.QAGRun.write(run);
+      return;
+    }
     try {
       sessionStorage.setItem(RUN_KEY, JSON.stringify(run));
     } catch (e) {
-      /* storage blocked: the matrix still shows, Ship check just will not
-       * remember it */
+      /* storage blocked: the page still works, the run just will not survive */
     }
   }
 
@@ -171,13 +176,20 @@
     });
   }
 
-  function suggest() {
+  /* `saved` keeps the factors this browser already holds, so reopening the
+   * page costs no AI call and never overwrites hand-edited factors. */
+  function suggest(saved) {
     var run = readRun() || {};
     var form = new FormData();
     form.append("user_story", String(run.story || ""));
     form.append("criteria_json", JSON.stringify(criteriaTexts(run)));
     form.append("cases_json", JSON.stringify(currentCases(run)));
-    pinned = [];
+    if (saved) {
+      form.append("saved_json", JSON.stringify(saved));
+      pinned = saved.pinned || [];
+    } else {
+      pinned = [];
+    }
     fetch("/requirements/matrix/suggest", { method: "POST", body: form })
       .then(function (response) {
         return response.text();
@@ -402,6 +414,7 @@
     if (!target || !target.closest) return;
 
     if (target.closest("#matrix-suggest")) {
+      // An explicit click is the one time the model is asked.
       suggest();
       return;
     }
@@ -478,6 +491,11 @@
   });
 
   document.addEventListener("DOMContentLoaded", function () {
-    if (byId("matrix-root")) suggest();
+    if (!byId("matrix-root")) return;
+    var run = readRun() || {};
+    var saved = run.matrix;
+    // Only ask the model when this browser has nothing to show.
+    if (saved && saved.factors && saved.factors.length >= 2) suggest(saved);
+    else suggest();
   });
 })();

@@ -306,3 +306,58 @@ def test_too_many_criteria_are_ignored_rather_than_an_error():
     )
     assert response.status_code == 200
     assert statuses(response.text)["clarity"] == "fail"
+
+
+# ---------- inputs the browser says are out of date ----------
+# The status still stands; the reader is told what it was computed from.
+
+
+def _stale(body: dict, inputs: list[str]) -> str:
+    body = dict(body, stale_inputs=inputs)
+    return post(body).text
+
+
+def test_a_stale_input_adds_a_note_under_that_check():
+    text = _stale(sample(), ["risks"])
+    assert "Built from older work — update Risk radar for an accurate result." in text
+
+
+def test_the_verdict_says_the_inputs_are_old():
+    text = _stale(sample(), ["risks"])
+    assert "(some inputs are out of date)" in text
+
+
+def test_nothing_is_said_when_no_input_is_stale():
+    text = post(sample()).text
+    assert "Built from older work" not in text
+    assert "(some inputs are out of date)" not in text
+
+
+def test_an_unknown_id_is_ignored_rather_than_shown():
+    text = _stale(sample(), ["nonsense", "../../etc/passwd", "risks"])
+    assert text.count("Built from older work") == 1
+    assert "nonsense" not in text
+
+
+def test_a_body_that_is_not_a_list_is_ignored():
+    body = dict(sample(), stale_inputs="risks")
+    assert "Built from older work" not in post(body).text
+
+
+def test_every_check_can_carry_the_note():
+    for check, desk in [
+        ("coverage", "Test cases"),
+        ("depth", "Test cases"),
+        ("matrix", "Test matrix"),
+        ("automation", "Automation"),
+    ]:
+        text = _stale(sample(), [check])
+        assert f"update {desk} for an accurate result." in text, check
+
+
+def test_the_note_sits_under_its_own_row():
+    text = _stale(sample(), ["risks"])
+    start = text.index('data-check="risks"')
+    nxt = text.find('data-check="', start + 20)
+    row = text[start : nxt if nxt != -1 else len(text)]
+    assert "Built from older work" in row

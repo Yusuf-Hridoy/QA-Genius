@@ -169,14 +169,16 @@ def test_the_home_page_sends_you_to_ship_check():
     assert 'class="desk" href="/ship"' in body
 
 
+def test_the_risk_result_still_links_on_to_ship_check():
+    body = client.get("/risks/example").text
+    assert 'class="btn btn-small ship-link" href="/ship"' in body
+
+
 @pytest.mark.parametrize(
     "url",
-    [
-        "/requirements/test-cases/example",
-        "/risks/example",
-        "/requirements/automation/example",
-    ],
+    ["/requirements/test-cases/example", "/requirements/automation/example"],
 )
-def test_each_result_card_links_on_to_ship_check(url):
+def test_the_requirements_results_link_on_through_the_next_strip(url):
+    """The strip carries Ship check now, with its freshness beside it."""
     body = client.get(url).text
-    assert 'class="btn btn-small ship-link" href="/ship"' in body
+    assert 'class="next-chip" href="/ship"' in body

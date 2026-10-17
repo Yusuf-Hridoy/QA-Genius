@@ -4,6 +4,9 @@
 {% block content %}
 {# ship_check.js fills #ship-root with the story line or the empty state, then
    posts the run to /ship/report and drops the server's HTML into #ship-output. #}
+{# The one component that says what this desk is built from and whether
+   that is still current. run_state.js + source_card.js fill it. #}
+<div id="source-card" class="source-card" data-desk="ship" role="status" aria-live="polite"></div>
 <div id="ship-root"></div>
 <p class="muted small">Computed from your results by code. No AI, no key needed.</p>
 <div id="ship-output"></div>

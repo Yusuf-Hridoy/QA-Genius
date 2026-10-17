@@ -116,6 +116,18 @@ profile, locale, colour scheme and stored session, and **Download CSV** covers
 the rest, including the runs Playwright cannot drive, which are counted rather
 than quietly dropped. The result feeds the Test matrix row of Ship check.
 
+## Always up to date
+Every desk says, at the top, what it was built from and whether that is still
+your latest work: **Not built yet**, **Out of date** or **Up to date**, each
+with an icon and words so the state never rests on colour alone. The card
+names the change in numbers — *"Your criteria changed 3 min ago (4 → 5)"* —
+and its button is the page's one primary action, so there is never a second
+button competing with it. Work that code can redo updates by itself: Risk
+radar re-scores coverage against your newest test cases, and Ship check
+recomputes on every open and marks any input that lags behind. Anything that
+would spend your AI key waits for a click. The sidebar carries the same
+answer as an amber dot or a green tick, so you know before you click.
+
 ## Also included (unlisted)
 **Bug desk** (`/bugs`) turns rough notes and a screenshot into a structured
 report with code-computed quality checks and Markdown/Jira exports, and

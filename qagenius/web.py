@@ -2295,6 +2295,18 @@ def _ship_part(raw: dict, key: str, build, ignored: list[str]):
         return None
 
 
+def _ship_stale(raw: dict) -> list[str]:
+    """Check ids the browser says were built from older work.
+
+    Anything that is not a known check id is dropped without comment:
+    this is a hint from the page, not data worth an error card.
+    """
+    value = raw.get("stale_inputs")
+    if not isinstance(value, list):
+        return []
+    return [one for one in value if isinstance(one, str) and one in CHECK_IDS]
+
+
 def _ship_acceptances(raw: dict, ignored: list[str]) -> dict[str, str]:
     """check id -> written reason. Unknown ids and non-text drop out."""
     value = raw.get("acceptances")
@@ -2337,6 +2349,7 @@ def _ship_inputs(raw: dict) -> tuple[ShipInputs, list[str]]:
             insights=_ship_part(raw, "insights", insights_from_dict, ignored),
             matrix=_ship_part(raw, "matrix", matrix_from_dict, ignored),
             acceptances=_ship_acceptances(raw, ignored),
+            stale_inputs=_ship_stale(raw),
         ),
         ignored,
     )
@@ -2383,7 +2396,7 @@ def ship_page(request: Request) -> HTMLResponse:
             "page_title": "Can we ship this feature?",
             "page_lede": (
                 "Ship check reads what the other desks already worked out — clarity, "
-                "coverage, depth, risks, automation and the performance budget — and "
+                "coverage, depth, risks, automation and the test matrix — and "
                 "turns them into one verdict you can defend. Nothing is sent to an AI."
             ),
             "eyebrow": "Ship check",
@@ -2493,6 +2506,20 @@ class MatrixBody(BaseModel):
         return factors, rules
 
 
+def _saved_matrix(raw: str) -> tuple[list[Factor], list[Rule]] | None:
+    """The factors the browser already has, or None to suggest fresh ones."""
+    if not (raw or '').strip():
+        return None
+    try:
+        body = MatrixBody.model_validate_json(raw)
+    except (ValidationError, ValueError):
+        return None
+    factors, rules = body.as_engine()
+    if validate(factors, rules):
+        return None
+    return factors, rules
+
+
 def _matrix_context(
     factors: list[Factor],
     rules: list[Rule],
@@ -2547,7 +2574,7 @@ def matrix_page(request: Request) -> HTMLResponse:
         request,
         "test_matrix.html",
         {
-            "active": "requirements",
+            "active": "matrix",
             "page_title": "Which runs actually need testing?",
             "page_lede": (
                 "Browsers times devices times roles times languages is hundreds of "
@@ -2565,6 +2592,7 @@ def matrix_suggest(
     user_story: str = Form(default=""),
     criteria_json: str = Form(default="[]"),
     cases_json: str = Form(default="[]"),
+    saved_json: str = Form(default=""),
 ) -> HTMLResponse:
     """Factors worth varying for this story. Without a key, the standard set."""
     story = user_story.strip()
@@ -2574,6 +2602,19 @@ def matrix_suggest(
     cases = _parse_cases_json(cases_json)
     if texts is None or cases is None:
         return _error_card(request, MATRIX_BAD_INPUT)
+
+    # Factors the browser already holds come back as they are. Reopening a
+    # page must never spend the user's key, and must never quietly replace
+    # factors they edited by hand.
+    saved = _saved_matrix(saved_json)
+    if saved is not None:
+        factors, rules = saved
+        matrix = build_matrix(factors, rules)
+        return templates.TemplateResponse(
+            request,
+            "_test_matrix_editor.html",
+            _matrix_context(factors, rules, matrix, []),
+        )
 
     keys = _request_keys(request)
     reasons: dict[str, str] = {}

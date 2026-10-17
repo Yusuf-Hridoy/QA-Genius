@@ -81,11 +81,26 @@
 <details class="card"><summary>Design notes</summary><p class="muted">{{ script.design_notes }}</p></details>
 {% endif %}
 <script type="application/json" id="automation-data">{{ automation_data | tojson }}</script>
+{# Where to go next, and whether each of those desks is still current.
+   next_steps.js fills the status words; the links work without it. #}
+<div class="next-strip" id="next-strip" role="navigation" aria-label="Next steps">
+  <span class="next-label">Next:</span>
+  <a class="next-chip" href="/risks" data-desk="risks">
+    <span class="next-name">Risk radar</span>
+    <span class="next-state"></span>
+  </a>
+  <a class="next-chip" href="/requirements/matrix" data-desk="matrix">
+    <span class="next-name">Test matrix</span>
+    <span class="next-state"></span>
+  </a>
+  <a class="next-chip" href="/ship" data-desk="ship">
+    <span class="next-name">Ship check</span>
+    <span class="next-state"></span>
+  </a>
+</div>
 <div class="card">
   <div class="row">
     <button type="button" class="btn" id="download-zip">Download ZIP</button>
-    <a class="btn btn-small ship-link" href="/ship">Ship check
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a>
   </div>
   <p class="muted small" id="automation-status" aria-live="polite"></p>
   {% if notes %}

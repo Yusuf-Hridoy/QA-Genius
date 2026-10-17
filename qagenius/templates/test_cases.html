@@ -8,6 +8,9 @@
   <h1>Turn criteria into test cases</h1>
   <p class="lede">Generate functional, negative, boundary and edge cases, see which criteria they cover, then strengthen the thin ones before you automate.</p>
 </div>
+{# The one component that says what this desk is built from and whether
+   that is still current. run_state.js + source_card.js fill it. #}
+<div id="source-card" class="source-card" data-desk="test_cases" role="status" aria-live="polite"></div>
 <div id="test-cases-root"></div>
 <div id="test-cases-output"></div>
 {% endblock %}

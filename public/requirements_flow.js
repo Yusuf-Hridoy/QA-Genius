@@ -30,12 +30,17 @@
     }
   }
 
+  /* One writer for the whole app: run_state.js stamps the fingerprints and
+   * tells every card and the sidebar that the run moved on. */
   function writeRun(run) {
+    if (typeof window !== "undefined" && window.QAGRun) {
+      window.QAGRun.write(run);
+      return;
+    }
     try {
       sessionStorage.setItem(RUN_KEY, JSON.stringify(run));
     } catch (e) {
-      /* A private window with storage blocked: the page still works, the
-       * run just does not survive the next navigation. */
+      /* storage blocked: the page still works, the run just will not survive */
     }
   }
 
@@ -168,13 +173,18 @@
       }
       return run;
     }
-    var fresh = {
-      story: fieldValue("user_story"),
-      story_type: fieldValue("story_type") || "User story",
-      context: fieldValue("context"),
-      criteria: renumber(texts),
-      autorun_test_cases: false
-    };
+    /* A new story used to throw the whole run away. It is kept now, and the
+     * freshness cards say which parts were built from the older story -- the
+     * user decides what to rebuild and what still stands. */
+    var fresh = {};
+    Object.keys(run || {}).forEach(function (key) {
+      fresh[key] = run[key];
+    });
+    fresh.story = fieldValue("user_story");
+    fresh.story_type = fieldValue("story_type") || "User story";
+    fresh.context = fieldValue("context");
+    fresh.criteria = renumber(texts);
+    fresh.autorun_test_cases = false;
     writeRun(fresh);
     return fresh;
   }
