@@ -237,3 +237,73 @@ def test_a_clean_run_gets_the_ok_banner():
     text = post(body).text
     assert "ship-verdict ship-ok" in text
     assert "All checks passed." in text
+
+
+# ---------- criteria without a test case list ----------
+# Before step 3 the run has criteria but no suite to carry them, and story
+# clarity is judged against them, so they travel on their own.
+
+VAGUE_STORY = {
+    "ambiguity_score": 58,
+    "clarity_label": "Vague",
+    "invest_overall": "Needs work",
+    "invest_independent": "Pass",
+    "invest_negotiable": "Pass",
+    "invest_valuable": "Pass",
+    "invest_estimable": "Fail",
+    "invest_small": "Pass",
+    "invest_testable": "Fail",
+    "vague_phrases": [],
+    "missing_elements": ["Acceptance criteria (Given/When/Then format)"],
+    "suggested_rewrites": ["As a user, I want a persistent left navigation bar."],
+    "generated_acceptance_criteria": [],
+    "risks": [],
+}
+NAV_CRITERIA = [
+    "The active link is highlighted within 200 ms of the route changing",
+    "Below 768 px the bar collapses into a toggle",
+    "Every link shows a visible focus ring in tab order",
+    "The current page is announced to screen readers",
+]
+
+
+def test_loose_criteria_hold_clarity_at_warn():
+    response = client.post(
+        "/ship/report", json={"story_analysis": VAGUE_STORY, "criteria": NAV_CRITERIA}
+    )
+    assert statuses(response.text)["clarity"] == "warn"
+    assert "4 acceptance criteria pin it down" in response.text
+
+
+def test_the_same_story_without_criteria_still_fails():
+    response = client.post("/ship/report", json={"story_analysis": VAGUE_STORY})
+    assert statuses(response.text)["clarity"] == "fail"
+    assert "pin it down" not in response.text
+
+
+def test_loose_criteria_do_not_make_coverage_look_run():
+    """Only clarity reads them; coverage still needs a test case list."""
+    response = client.post(
+        "/ship/report", json={"story_analysis": VAGUE_STORY, "criteria": NAV_CRITERIA}
+    )
+    rows = statuses(response.text)
+    assert rows["coverage"] == "not_checked"
+    assert rows["depth"] == "not_checked"
+
+
+def test_criteria_that_are_not_a_list_of_text_are_ignored_and_said_so():
+    response = client.post(
+        "/ship/report", json={"story_analysis": VAGUE_STORY, "criteria": {"a": 1}}
+    )
+    assert response.status_code == 200
+    assert statuses(response.text)["clarity"] == "fail"
+    assert "acceptance criteria" in response.text
+
+
+def test_too_many_criteria_are_ignored_rather_than_an_error():
+    response = client.post(
+        "/ship/report",
+        json={"story_analysis": VAGUE_STORY, "criteria": ["a criterion"] * 41},
+    )
+    assert response.status_code == 200
+    assert statuses(response.text)["clarity"] == "fail"

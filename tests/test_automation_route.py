@@ -415,3 +415,21 @@ def test_the_key_never_reaches_the_page_or_the_logs(monkeypatch, caplog) -> None
         )
     assert secret not in response.text
     assert secret not in caplog.text
+
+
+# ---------------------------------------------------------------- run it
+
+
+def test_the_run_it_block_starts_in_the_downloaded_folder() -> None:
+    """The AI's own steps once said "mkdir aurora-automation"; these do not."""
+    body = client.get("/requirements/automation/example").text
+    block = body[body.index('id="run-command"') : body.index("copy-command")]
+    assert "cd qa-genius-automation" in block
+    assert "mkdir" not in block
+    assert "npx playwright test" in block
+
+
+def test_the_ai_instructions_move_into_notes() -> None:
+    body = client.get("/requirements/automation/example").text
+    assert "Notes from the AI" in body
+    assert body.index('id="run-command"') < body.index("Notes from the AI")

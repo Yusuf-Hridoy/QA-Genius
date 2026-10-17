@@ -38,8 +38,16 @@
           <td class="heat-cell {{ cell.tone }}{% if cell.ids %} has-risk{% endif %}"
               data-cell="{{ cell.severity }}-{{ cell.likelihood }}"
               data-ids="{{ cell.ids | join(',') }}"
-              title="Severity {{ cell.severity }} · likelihood {{ cell.likelihood }}">
-            {% for risk_id in cell.ids %}<span class="pill plain">{{ risk_id }}</span>{% endfor %}
+              title="Severity {{ cell.severity }} · likelihood {{ cell.likelihood }}{% if cell.ids | length > 3 %} · {{ cell.ids | join(', ') }}{% endif %}">
+            {# Two ids in one cell used to run together as "R1R6". Each id is
+               its own pill in a wrapping row now, and a crowded cell keeps
+               three and counts the rest. #}
+            {% if cell.ids %}
+            <span class="heat-ids">
+              {% for risk_id in cell.ids[:3] %}<span class="pill plain">{{ risk_id }}</span>{% endfor %}
+              {% if cell.ids | length > 3 %}<span class="pill plain">+{{ cell.ids | length - 3 }}</span>{% endif %}
+            </span>
+            {% endif %}
           </td>
           {% endfor %}
         </tr>
@@ -73,17 +81,25 @@
       </p>
       <p><strong>Effect:</strong> {{ item.risk.effect }}</p>
       <p class="muted"><strong>Cause:</strong> {{ item.risk.cause }}</p>
+      {# "Covered" is the AI's claim, checked only against shared words, so the
+         words are shown and the reader is told to confirm it. A tagged case was
+         written for the risk, so it needs no evidence. #}
       <p class="small coverage {{ coverage_tone[item.coverage] }}">
         {% if item.coverage == "verified" %}
         Verified by {{ item.covered_tests[0][0] }} (tagged risk:{{ item.risk.id }})
         {% elif item.coverage == "covered" %}
-        Covered by {{ item.covered_tests[0][0] }} — {{ item.covered_tests[0][1] }}
+        Likely covered by {{ item.covered_tests[0][0] }} — {{ item.covered_tests[0][1] }}{%
+          if item.covered_tests[0][3] %} · matched on: {{ item.covered_tests[0][3] | join(", ") }}{% endif %}
         {% elif item.coverage == "weak" %}
         AI says {{ item.covered_tests[0][0] }} covers this, but the test doesn't seem to match
         {% else %}
         No test covers this risk
         {% endif %}
       </p>
+      {% if item.coverage == "covered" %}
+      <p class="muted small">Check that this test really exercises the risk, or tag it
+        <span class="mono">risk:{{ item.risk.id }}</span> to mark it verified.</p>
+      {% endif %}
       {% if item.risk.related_criteria %}
       <p class="row">
         {% for ac_id in item.risk.related_criteria %}

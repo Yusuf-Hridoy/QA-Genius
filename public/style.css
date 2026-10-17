@@ -837,7 +837,10 @@ table.heat{border-collapse:separate;border-spacing:3px;width:100%}
 .heat-cell.has-risk:hover{transform:scale(1.07);box-shadow:var(--shadow-2);
   position:relative;z-index:2}
 .heat-cell.picked{border-color:var(--text);box-shadow:var(--shadow-2)}
-.heat-cell .pill{font-size:10.5px;padding:1px 6px;margin:1px;
+/* One row of ids, each its own pill, so two in a cell never read as "R1R6". */
+.heat-ids{display:flex;flex-wrap:wrap;gap:3px;justify-content:center;
+  align-items:center}
+.heat-cell .pill{font-size:10.5px;padding:1px 6px;
   background:rgba(255,255,255,.76);color:#7A2718;font-weight:700}
 .heat-cell .pill::before{display:none}
 .heat-labels{display:flex;justify-content:space-between;margin:5px 0 0;

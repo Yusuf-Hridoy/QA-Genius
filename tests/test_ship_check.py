@@ -188,7 +188,9 @@ def test_a_high_risk_with_no_test_fails():
     item = item_of(report(risk_analysis=RiskAnalysis(failure_modes=[HIGH])), "risks")
     assert item.status == "fail"
     assert item.summary == "1 high risk has no test"
-    assert item.details == ["R1 R1 two servers count tries separately — no test"]
+    assert item.details == [
+        "High · R1 R1 two servers count tries separately — no test"
+    ]
 
 
 def test_a_medium_risk_with_no_test_warns():
@@ -216,7 +218,8 @@ def test_a_high_risk_the_ai_claimed_but_cannot_match_warns():
         "risks",
     )
     assert item.status == "warn"
-    assert "weak match" in item.details[0]
+    assert "AI claim doesn't match its test" in item.details[0]
+    assert item.details[0].startswith("High · ")
 
 
 def test_a_case_tagged_for_the_risk_counts_as_verified():
@@ -425,13 +428,15 @@ def test_a_fail_beats_everything_else():
 
 
 def test_two_fails_are_both_named():
+    # Clarity cannot fail here: _everything_passes carries criteria, and
+    # written criteria hold a low score at warn. The duel can.
     result = report(
         **_everything_passes(
-            story_analysis=analysis(60),
+            duel=duel(30, "high"),
             risk_analysis=RiskAnalysis(failure_modes=[HIGH]),
         )
     )
-    assert result.verdict_reason == "2 checks failed: Story clarity, Risk coverage."
+    assert result.verdict_reason == "2 checks failed: Ambiguity duel, Risk coverage."
 
 
 @pytest.mark.parametrize("core", CORE_CHECKS)
@@ -465,3 +470,156 @@ def test_every_check_has_a_title_and_a_link():
 def test_details_are_capped_at_eight_lines():
     result = report(story_analysis=analysis(50, vague=20))
     assert len(item_of(result, "clarity").details) == 8
+
+
+# ---------- the real run: one high risk, five loose medium ones ----------
+
+
+def _weak_pair(risk_id: str, severity: int, likelihood: int, title: str):
+    """A risk the AI claims is covered by a case about something else."""
+    case_id = "TC-9" + risk_id[1:].zfill(2)
+    claimed = case(case_id=case_id, title="Shopper updates a delivery address")
+    claimed = claimed.model_copy(
+        update={
+            "expected_result": "The address book shows the new street",
+            "steps": ["Open the address book", "Edit the street"],
+        }
+    )
+    risk = failure_mode(risk_id, severity, likelihood, covered_by=[case_id])
+    return risk.model_copy(update={"title": title}), claimed
+
+
+def test_the_summary_counts_medium_risks_that_are_weak_as_well_as_untested():
+    uncaught = failure_mode("R5", 5, 4).model_copy(
+        update={"title": "Uncaught exception in the navigation reducer"}
+    )
+    r8, r8_case = _weak_pair("R8", 3, 2, "Unauthorized module access")
+    mediums = [
+        failure_mode(f"R{n}", 3, 2).model_copy(update={"title": f"Medium risk {n}"})
+        for n in (2, 3, 4, 6)
+    ]
+    item = item_of(
+        report(
+            risk_analysis=RiskAnalysis(failure_modes=[uncaught, r8, *mediums]),
+            test_cases=suite(r8_case),
+            criteria=CRITERIA,
+        ),
+        "risks",
+    )
+    assert item.status == "fail"
+    assert item.summary == "1 high risk has no test · 5 medium risks untested or weak"
+
+
+def test_every_risk_detail_carries_its_level_worst_first():
+    uncaught = failure_mode("R5", 5, 4).model_copy(
+        update={"title": "Uncaught exception in the navigation reducer"}
+    )
+    high_weak, high_case = _weak_pair("R1", 5, 4, "Focus trap in the overlay")
+    medium_none = failure_mode("R2", 3, 2).model_copy(
+        update={"title": "Slow first paint"}
+    )
+    medium_weak, medium_case = _weak_pair("R8", 3, 2, "Unauthorized module access")
+    item = item_of(
+        report(
+            risk_analysis=RiskAnalysis(
+                failure_modes=[uncaught, high_weak, medium_none, medium_weak]
+            ),
+            test_cases=suite(high_case, medium_case),
+            criteria=CRITERIA,
+        ),
+        "risks",
+    )
+    assert item.details == [
+        "High · R5 Uncaught exception in the navigation reducer — no test",
+        "High · R1 Focus trap in the overlay — AI claim doesn't match its test",
+        "Medium · R2 Slow first paint — no test",
+        "Medium · R8 Unauthorized module access — AI claim doesn't match its test",
+    ]
+
+
+def test_a_weak_medium_risk_is_listed_even_though_the_rules_are_unchanged():
+    """A weak medium on its own still passes; it is just no longer invisible."""
+    medium_weak, medium_case = _weak_pair("R8", 3, 2, "Unauthorized module access")
+    item = item_of(
+        report(
+            risk_analysis=RiskAnalysis(failure_modes=[medium_weak]),
+            test_cases=suite(medium_case),
+            criteria=CRITERIA,
+        ),
+        "risks",
+    )
+    assert item.status == "pass"
+    assert item.details == [
+        "Medium · R8 Unauthorized module access — AI claim doesn't match its test"
+    ]
+
+
+# ---------- the real run: a vague story with concrete criteria ----------
+
+# Clarity 42 sent a story to "Don't ship" while four criteria already named
+# 200 ms, 768 px and focus rings. Written criteria outrank the score.
+
+REAL_RUN_CRITERIA = [
+    "The active link is highlighted within 200 ms of the route changing",
+    "Below 768 px the bar collapses into a toggle",
+    "Every link shows a visible focus ring in tab order",
+    "The current page is announced to screen readers",
+]
+
+
+def test_criteria_hold_a_failing_clarity_score_at_warn():
+    item = item_of(
+        report(story_analysis=analysis(58), criteria=REAL_RUN_CRITERIA), "clarity"
+    )
+    assert item.status == "warn"
+    assert item.summary == "Clarity 42 — vague story, but 4 acceptance criteria pin it down"
+
+
+def test_without_criteria_a_failing_clarity_score_still_fails():
+    item = item_of(report(story_analysis=analysis(58)), "clarity")
+    assert item.status == "fail"
+    assert item.summary == "Clarity 42"
+
+
+def test_one_criterion_reads_as_one():
+    item = item_of(
+        report(story_analysis=analysis(58), criteria=REAL_RUN_CRITERIA[:1]), "clarity"
+    )
+    assert item.summary == "Clarity 42 — vague story, but 1 acceptance criterion pins it down"
+
+
+def test_criteria_do_not_lift_a_warn_to_a_pass():
+    """They cap the damage; they never make a vague story a clear one."""
+    item = item_of(
+        report(story_analysis=analysis(40), criteria=REAL_RUN_CRITERIA), "clarity"
+    )
+    assert item.status == "warn"
+    assert item.summary == "Clarity 60"
+
+
+def test_criteria_leave_a_passing_score_alone():
+    item = item_of(
+        report(story_analysis=analysis(10), criteria=REAL_RUN_CRITERIA), "clarity"
+    )
+    assert item.status == "pass"
+    assert item.summary == "Clarity 90"
+
+
+def test_the_missing_acceptance_criteria_line_goes_when_there_are_criteria():
+    missing = ["Acceptance criteria (Given/When/Then format)", "A measurable budget"]
+    story = analysis(58).model_copy(update={"missing_elements": missing})
+    with_criteria = item_of(
+        report(story_analysis=story, criteria=REAL_RUN_CRITERIA), "clarity"
+    )
+    assert "Missing: A measurable budget" in with_criteria.details
+    assert not any("cceptance criteria" in line for line in with_criteria.details)
+
+    without = item_of(report(story_analysis=story), "clarity")
+    assert "Missing: Acceptance criteria (Given/When/Then format)" in without.details
+
+
+@pytest.mark.parametrize(
+    "clarity,expected", [(70, "pass"), (69, "warn"), (50, "warn"), (49, "fail")]
+)
+def test_the_clarity_boundaries_still_hold_without_criteria(clarity, expected):
+    assert status_of(report(story_analysis=analysis(100 - clarity)), "clarity") == expected

@@ -109,6 +109,11 @@ class ShipInputs:
     acceptances: dict[str, str] = field(default_factory=dict)   # check id -> reason
 
 
+LEVEL_WORDS = {"high": "High", "medium": "Medium", "low": "Low"}
+# Why a claimed test does not count: the AI named it, the words do not match.
+RISK_WEAK_NOTE = "AI claim doesn't match its test"
+
+
 def _plural(count: int, word: str) -> str:
     return f"{count} {word}" if count == 1 else f"{count} {word}s"
 
@@ -161,7 +166,7 @@ def _item(check_id: str, status: str, summary: str, details: list[str]) -> ShipC
 # ──────────────────────────────────────────────────────────────────────────────
 
 
-def _clarity(inputs: ShipInputs) -> ShipCheckItem:
+def _clarity(inputs: ShipInputs, criteria: list[Criterion]) -> ShipCheckItem:
     analysis = inputs.story_analysis
     if analysis is None:
         return _not_checked("clarity")
@@ -179,7 +184,28 @@ def _clarity(inputs: ShipInputs) -> ShipCheckItem:
     if vague:
         summary += f", {_plural(len(vague), 'vague phrase')}"
     details = [f"{phrase.phrase} — {phrase.severity}" for phrase in vague]
-    details += [f"Missing: {item}" for item in analysis.missing_elements]
+    missing = analysis.missing_elements
+
+    # A real run scored a story 42 and refused to ship it, while four concrete
+    # criteria (200 ms, 768 px, focus rings) already pinned the behaviour down.
+    # Written criteria are the stronger evidence, so they cap the damage - but
+    # they never turn a vague story into a clear one, so warn is as far as the
+    # score can climb.
+    if criteria:
+        if status == "fail":
+            status = "warn"
+            count = len(criteria)
+            pinned = (
+                "1 acceptance criterion pins it down"
+                if count == 1
+                else f"{count} acceptance criteria pin it down"
+            )
+            summary = f"Clarity {clarity} — vague story, but {pinned}"
+        missing = [
+            item for item in missing if "acceptance criteria" not in str(item).lower()
+        ]
+
+    details += [f"Missing: {item}" for item in missing]
     return _item("clarity", status, summary, details)
 
 
@@ -273,24 +299,35 @@ def _risks(inputs: ShipInputs) -> ShipCheckItem:
         cases = list(inputs.risk_cases)
     report = score_risks(analysis, cases)
 
-    high_none = [one for one in report.risks if one.level == "high" and one.coverage == "none"]
-    high_weak = [one for one in report.risks if one.level == "high" and one.coverage == "weak"]
-    medium_none = [
-        one for one in report.risks if one.level == "medium" and one.coverage == "none"
-    ]
+    def pick(level: str, coverage: str) -> list:
+        return [
+            one for one in report.risks if one.level == level and one.coverage == coverage
+        ]
+
+    high_none, high_weak = pick("high", "none"), pick("high", "weak")
+    medium_none, medium_weak = pick("medium", "none"), pick("medium", "weak")
+    # A real run said "1 high risk has no test" while five medium ones were
+    # untested or only weakly claimed. Both halves are counted now.
+    medium_loose = len(medium_none) + len(medium_weak)
+    medium_part = (
+        f"{_plural(medium_loose, 'medium risk')} untested or weak" if medium_loose else ""
+    )
+
     if high_none:
         status = "fail"
         summary = f"{_plural(len(high_none), 'high risk')} ha" + (
             "s no test" if len(high_none) == 1 else "ve no test"
         )
+        if medium_part:
+            summary += f" · {medium_part}"
     elif medium_none or high_weak:
         status = "warn"
         parts = []
         if high_weak:
             parts.append(f"{_plural(len(high_weak), 'high risk')} only weakly covered")
-        if medium_none:
-            parts.append(f"{_plural(len(medium_none), 'medium risk')} with no test")
-        summary = ", ".join(parts)
+        if medium_part:
+            parts.append(medium_part)
+        summary = " · ".join(parts)
     else:
         status = "pass"
         summary = (
@@ -298,10 +335,12 @@ def _risks(inputs: ShipInputs) -> ShipCheckItem:
             f"({_plural(report.counts['total'], 'risk')} scored)"
         )
 
+    # Worst first, and each line says which level it belongs to: the old list
+    # was five unlabelled rows under a summary that mentioned one risk.
     details = [
-        f"{one.risk.id} {one.risk.title} — "
-        + ("no test" if one.coverage == "none" else "weak match")
-        for one in high_none + high_weak + medium_none
+        f"{LEVEL_WORDS[one.level]} · {one.risk.id} {one.risk.title} — "
+        + ("no test" if one.coverage == "none" else RISK_WEAK_NOTE)
+        for one in high_none + high_weak + medium_none + medium_weak
     ]
     return _item("risks", status, summary, details)
 
@@ -420,7 +459,7 @@ def compute_ship_report(inputs: ShipInputs) -> ShipReport:
     """The whole verdict, in CHECK_IDS order, from code alone."""
     criteria = _criteria(inputs)
     built = {
-        "clarity": _clarity(inputs),
+        "clarity": _clarity(inputs, criteria),
         "duel": _duel(inputs),
         "coverage": _coverage(inputs, criteria),
         "depth": _depth(inputs, criteria),

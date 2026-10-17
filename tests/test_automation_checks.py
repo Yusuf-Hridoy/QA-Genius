@@ -69,10 +69,42 @@ def test_empty_code_is_not_a_file() -> None:
     assert [file.name for file in files] == ["tests/login.spec.ts"]
 
 
-def test_requirements_txt_is_added_last() -> None:
-    files = project_files(script(requirements_txt="pytest\n"))
+def test_a_python_project_keeps_requirements_txt_and_adds_it_last() -> None:
+    files = project_files(
+        script(framework="Playwright (Python)", requirements_txt="pytest\n")
+    )
     assert files[-1].name == "requirements.txt"
     assert files[-1].code == "pytest\n"
+
+
+def test_a_javascript_project_calls_its_dependency_file_package_json() -> None:
+    """A real run shipped a TypeScript project with a package.json inside a
+    file called requirements.txt. The name follows the framework now."""
+    deps = '{"devDependencies": {"@playwright/test": "^1.40.0"}}\n'
+    files = project_files(script(requirements_txt=deps))
+    assert files[-1].name == "package.json"
+    assert files[-1].code == deps
+
+
+def test_json_content_wins_over_a_python_framework() -> None:
+    deps = '{"devDependencies": {"@playwright/test": "^1.40.0"}}\n'
+    project = script(framework="Playwright (Python)", requirements_txt=deps)
+    files = project_files(project)
+    assert files[-1].name == "package.json"
+    report = check_project(project, [])
+    warnings = [f for f in report.findings if f.level == "warning"]
+    assert [f.message for f in warnings] == [
+        "Dependency file looks like package.json for a Python project."
+    ]
+
+
+def test_package_json_gets_the_json_syntax_check() -> None:
+    report = check_project(
+        script(requirements_txt='{"name": "suite"}\n'), []
+    )
+    assert report.syntax["package.json"] == "valid"
+    broken = check_project(script(requirements_txt='{"name": }'), [])
+    assert broken.syntax["package.json"] == "error"
 
 
 def test_an_id_in_the_test_code_is_traced() -> None:
@@ -330,7 +362,13 @@ def test_waiting_for_a_named_request_is_not_a_warning() -> None:
 
 def test_a_text_file_is_not_checked() -> None:
     report = check_project(
-        script(page_object_code=None, config_code=None, requirements_txt="pytest\n"), []
+        script(
+            framework="Playwright (Python)",
+            page_object_code=None,
+            config_code=None,
+            requirements_txt="pytest\n",
+        ),
+        [],
     )
     assert report.syntax["requirements.txt"] == "not checked"
 

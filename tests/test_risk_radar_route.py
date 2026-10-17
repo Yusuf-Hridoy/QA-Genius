@@ -227,7 +227,9 @@ def test_the_page_data_round_trips_through_rescore(monkeypatch) -> None:
 def test_the_example_shows_every_coverage_state() -> None:
     body = client.get("/risks/example").text
     assert "Verified by TC-010 (tagged risk:R1)" in body
-    assert "Covered by TC-005" in body
+    assert "Likely covered by TC-005" in body
+    assert "matched on:" in body
+    assert "to mark it verified" in body
     assert "but the test doesn't seem to match" in body
     assert "No test covers this risk" in body
 
@@ -303,3 +305,40 @@ def test_export_xlsx_returns_a_workbook() -> None:
 def test_export_refuses_a_broken_payload() -> None:
     assert client.post("/risks/export.csv", json={"cases": []}).status_code == 422
     assert client.post("/risks/export.xlsx", json={"cases": []}).status_code == 422
+
+
+def _cell(body: str, severity: int, likelihood: int) -> str:
+    marker = f'data-cell="{severity}-{likelihood}"'
+    start = body.index(marker)
+    return body[start : body.index("</td>", start)]
+
+
+def test_two_risks_in_one_cell_are_two_separate_pills(monkeypatch) -> None:
+    """A real run rendered a cell holding R1 and R6 as "R1R6"."""
+    monkeypatch.setattr(llm, "generate_json", _never)
+    together = _analysis(
+        mode("R1", severity=5, likelihood=4),
+        mode("R6", severity=5, likelihood=4),
+    )
+    body = client.post("/risks/rescore", json=_body(together)).text
+    cell = _cell(body, 5, 4)
+    assert cell.count('class="pill plain"') == 2
+    assert ">R1<" in cell and ">R6<" in cell
+    assert "R1R6" not in cell
+    assert 'class="heat-ids"' in cell
+
+
+def test_a_crowded_cell_keeps_three_ids_and_counts_the_rest(monkeypatch) -> None:
+    monkeypatch.setattr(llm, "generate_json", _never)
+    crowd = _analysis(
+        *[mode(f"R{n}", severity=5, likelihood=4) for n in range(1, 6)]
+    )
+    body = client.post("/risks/rescore", json=_body(crowd)).text
+    cell = _cell(body, 5, 4)
+    assert cell.count('class="pill plain"') == 4
+    assert ">R3<" in cell
+    assert ">R4<" not in cell
+    assert ">+2<" in cell
+    # Nothing is lost: the full list stays in the title and in data-ids.
+    assert "R1,R2,R3,R4,R5" in cell
+    assert "R4, R5" in cell

@@ -15,8 +15,12 @@ from qagenius.test_cases import Criterion
 HIGH_RPN, MEDIUM_RPN = 40, 18
 # More than this and the page stops being a list a team can work through.
 MAX_RISKS = 15
-# Below this the AI's coverage claim is treated as a guess, not a match.
-MATCH_FLOOR = 0.08
+# Below this the AI's coverage claim is treated as a guess, not a match. A real
+# run called R3 "Focus trap inside expanded mobile overlay" covered by a test
+# that only shared the words "focus" and "keyboard", so the floor went up.
+MATCH_FLOOR = 0.12
+# Enough shared words to judge the claim by, not a word cloud.
+MAX_MATCHED_WORDS = 6
 # A test case carries "risk:R1" once someone has written it for that risk.
 RISK_TAG = "risk:"
 
@@ -30,7 +34,8 @@ class ScoredRisk:
     rpn: int
     level: str  # "high" | "medium" | "low"
     coverage: str  # "verified" | "covered" | "weak" | "none"
-    covered_tests: list[tuple[str, str, float]]  # (tc id, tc title, 0-1 match)
+    # (tc id, tc title, 0-1 match, the words the two texts share)
+    covered_tests: list[tuple[str, str, float, list[str]]]
 
 
 @dataclass(frozen=True)
@@ -56,15 +61,21 @@ def _tokens(text: str) -> set[str]:
     return {part for part in parts if len(part) >= 3 and part not in STOPWORDS}
 
 
-def match_score(risk: FailureMode, case: TestCase) -> float:
-    """How much of the two texts is the same words: 0 is nothing, 1 is all."""
+def match_score(risk: FailureMode, case: TestCase) -> tuple[float, list[str]]:
+    """How much of the two texts is the same words, and which words those are.
+
+    The words are the evidence. "matched on: focus, keyboard" lets a reader see
+    in one glance that the two texts share vocabulary and not behaviour, which
+    is the whole difference between a covered risk and a guess.
+    """
     left = _tokens(" ".join([risk.title, risk.cause, risk.effect]))
     right = _tokens(
         " ".join([case.title, case.expected_result, " ".join(case.steps or [])])
     )
     if not left or not right:
-        return 0.0
-    return len(left & right) / len(left | right)
+        return 0.0, []
+    shared = left & right
+    return len(shared) / len(left | right), sorted(shared)[:MAX_MATCHED_WORDS]
 
 
 def _tagged_for(risk_id: str, cases: list[TestCase]) -> list[TestCase]:
@@ -90,12 +101,13 @@ def _claimed(risk: FailureMode, cases: list[TestCase]) -> list[TestCase]:
 
 def _coverage(
     risk: FailureMode, cases: list[TestCase]
-) -> tuple[str, list[tuple[str, str, float]]]:
+) -> tuple[str, list[tuple[str, str, float, list[str]]]]:
     tagged = _tagged_for(risk.id, cases)
     tagged_ids = {str(case.id or "").strip().lower() for case in tagged}
-    rows = [(case.id, case.title, 1.0) for case in tagged]
+    # A tagged case was written for this risk, so there is nothing to evidence.
+    rows = [(case.id, case.title, 1.0, []) for case in tagged]
     scored = [
-        (case.id, case.title, match_score(risk, case))
+        (case.id, case.title, *match_score(risk, case))
         for case in _claimed(risk, cases)
         if str(case.id or "").strip().lower() not in tagged_ids
     ]
@@ -104,7 +116,7 @@ def _coverage(
         return "verified", rows
     if not scored:
         return "none", rows
-    if any(score >= MATCH_FLOOR for _, _, score in scored):
+    if any(score >= MATCH_FLOOR for _, _, score, _ in scored):
         return "covered", rows
     # The AI claimed a test that talks about something else.
     return "weak", rows

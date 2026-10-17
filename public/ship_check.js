@@ -53,6 +53,13 @@
         result: run.test_cases.result,
         criteria: run.test_cases.criteria || criteriaTexts(run)
       };
+    } else {
+      /* Story clarity is judged against the criteria, so they travel even
+       * before step 3 has turned them into test cases. */
+      var texts = criteriaTexts(run).filter(function (text) {
+        return text.trim() !== "";
+      });
+      if (texts.length) payload.criteria = texts;
     }
     if (run.risk_analysis && run.risk_analysis.analysis) {
       payload.risk_analysis = run.risk_analysis;

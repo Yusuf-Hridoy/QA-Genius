@@ -56,16 +56,26 @@
     </div>
   </div>
 </div>
+{# These steps are computed by automation_exports.run_steps from the files in
+   the ZIP, so they start in the folder you downloaded instead of making a new
+   empty one. The AI's own instructions sit underneath, as notes. #}
 <div class="card">
   <h2>Run it</h2>
-  <ol class="setup-steps">
-    {% for step in script.setup_instructions %}<li>{{ step }}</li>{% endfor %}
-  </ol>
-  <pre class="code"><code id="run-command">{{ script.execution_command }}</code></pre>
+  <pre class="code"><code id="run-command">{% for step in run_it %}{{ step }}{{ "\n" if not loop.last }}{% endfor %}</code></pre>
   <div class="row">
     <button type="button" class="btn btn-small" id="copy-command">Copy</button>
     <span class="muted small" id="command-status" aria-live="polite"></span>
   </div>
+  {% if script.setup_instructions %}
+  <details>
+    <summary>Notes from the AI</summary>
+    <ol class="setup-steps">
+      {% for step in script.setup_instructions %}<li>{{ step }}</li>{% endfor %}
+    </ol>
+    <p class="muted small">QA-Genius does not follow these — the commands above are
+      worked out from the project you downloaded.</p>
+  </details>
+  {% endif %}
 </div>
 {% if script.design_notes %}
 <details class="card"><summary>Design notes</summary><p class="muted">{{ script.design_notes }}</p></details>

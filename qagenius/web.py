@@ -23,7 +23,7 @@ from qagenius import (
     ship_report_exports,
 )
 from qagenius.automation_checks import CheckReport, check_project
-from qagenius.automation_exports import build_zip
+from qagenius.automation_exports import build_zip, run_steps
 from qagenius.bug_report import BugInput, environment_text, reproducibility_text
 from qagenius.bug_report_checks import Check, check_report, quality_score
 from qagenius.bug_report_exports import to_jira, to_markdown
@@ -199,20 +199,6 @@ def insights_page(request: Request) -> HTMLResponse:
                 "sent to an AI unless you ask for an explanation."
             ),
             "eyebrow": "Quality insights",
-        },
-    )
-
-
-@app.get("/performance", response_class=HTMLResponse)
-def performance_page(request: Request) -> HTMLResponse:
-    return templates.TemplateResponse(
-        request,
-        "coming_soon.html",
-        {
-            "active": "performance",
-            "page": "Performance",
-            "page_title": "Performance",
-            "eyebrow": "Not in this phase",
         },
     )
 
@@ -725,6 +711,25 @@ CATEGORY_PILLS = {
     "Edge Case": "neutral",
 }
 PRIORITY_PILLS = {"High": "bad", "Medium": "warn", "Low": "ok"}
+
+
+class _CriteriaBody(BaseModel):
+    """The run's criteria on their own, before step 3 has written any cases.
+
+    Story clarity is judged against them, so they have to reach the server
+    even when there is no test case list to carry them.
+    """
+
+    criteria: list[str] = []
+
+    @field_validator("criteria")
+    @classmethod
+    def _within_limits(cls, value: list[str]) -> list[str]:
+        if len(value) > CRITERIA_LIMIT:
+            raise ValueError(f"Send at most {CRITERIA_LIMIT} criteria.")
+        if any(len(text) > CRITERION_LIMIT for text in value):
+            raise ValueError(f"Keep each criterion under {CRITERION_LIMIT} characters.")
+        return value
 
 
 class _SuiteBody(BaseModel):
@@ -1340,6 +1345,8 @@ def _automation_result_context(
         "notes": notes,
         "provider_name": provider_name,
         "is_example": is_example,
+        # Worked out from the files in the ZIP, not from the AI's instructions.
+        "run_it": run_steps(script, report.files),
         # What the Download ZIP button posts back to the export route.
         "automation_data": {
             "script": script.model_dump(),
@@ -2191,6 +2198,7 @@ SHIP_PART_LABELS = {
     "story_analysis": "story analysis",
     "duel_summary": "ambiguity duel",
     "test_cases": "test cases",
+    "criteria": "acceptance criteria",
     "risk_analysis": "risk analysis",
     "automation": "automation",
     "insights": "test run",
@@ -2249,6 +2257,9 @@ def _ship_inputs(raw: dict) -> tuple[ShipInputs, list[str]]:
     )
     risks = _ship_part(raw, "risk_analysis", RiskBody.model_validate, ignored)
     auto = _ship_part(raw, "automation", AutomationExportRequest.model_validate, ignored)
+    # The suite carries the criteria once step 3 has run; before that they
+    # arrive on their own, and story clarity is judged against them either way.
+    loose = _ship_part(raw, "criteria", lambda part: _CriteriaBody(criteria=part), ignored)
 
     return (
         ShipInputs(
@@ -2257,7 +2268,7 @@ def _ship_inputs(raw: dict) -> tuple[ShipInputs, list[str]]:
             ),
             duel=_ship_part(raw, "duel_summary", DuelSummary.model_validate, ignored),
             test_cases=suite.result if suite else None,
-            criteria=list(suite.criteria) if suite else [],
+            criteria=list(suite.criteria) if suite else (list(loose.criteria) if loose else []),
             risk_analysis=risks.analysis if risks else None,
             risk_cases=list(risks.cases) if risks else [],
             automation_script=auto.script if auto else None,

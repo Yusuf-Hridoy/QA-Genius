@@ -164,8 +164,9 @@ def test_the_sidebar_does_not_offer_performance():
     assert 'href="/performance"' not in body
 
 
-def test_the_performance_route_still_answers():
-    assert client.get("/performance").status_code == 200
+def test_the_home_page_sends_you_to_ship_check():
+    body = client.get("/").text
+    assert 'class="desk" href="/ship"' in body
 
 
 @pytest.mark.parametrize(

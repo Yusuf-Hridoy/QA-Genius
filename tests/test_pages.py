@@ -12,7 +12,7 @@ PAGES = [
     "/risks",
     "/bugs",
     "/insights",
-    "/performance",
+    "/ship",
 ]
 
 
@@ -35,10 +35,28 @@ def test_home_lists_every_desk_and_does_not_redirect() -> None:
     response = client.get("/", follow_redirects=False)
     assert response.status_code == 200
     body = response.text
-    for href in ("/requirements/story", "/risks", "/bugs", "/insights"):
+    for href in ("/requirements/story", "/risks", "/ship", "/bugs", "/insights"):
         assert f'class="desk" href="{href}"' in body, href
-    # Performance has no page worth landing on yet, so it is not a link.
-    assert 'class="desk" href="/performance"' not in body
+
+
+def test_home_cards_follow_the_sidebar_order() -> None:
+    body = client.get("/").text
+    order = ["/requirements/story", "/risks", "/ship", "/bugs", "/insights"]
+    found = [body.index(f'class="desk" href="{href}"') for href in order]
+    assert found == sorted(found)
+
+
+def test_home_no_longer_advertises_performance() -> None:
+    """The fifth card is Ship check now, not a desk that does not exist."""
+    body = client.get("/").text
+    assert "Performance" not in body
+    assert "Soon" not in body
+    assert "One verdict" in body
+    assert "Check a release" in body
+
+
+def test_the_performance_route_is_gone() -> None:
+    assert client.get("/performance").status_code == 404
 
 
 def test_every_page_offers_the_theme_toggle() -> None:

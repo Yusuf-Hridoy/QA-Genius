@@ -3,7 +3,7 @@
 import io
 import zipfile
 
-from qagenius.automation_checks import CheckReport, safe_file_name
+from qagenius.automation_checks import CheckReport, ProjectFile, safe_file_name
 from qagenius.models import AutomationScript
 
 TOP_FOLDER = "qa-genius-automation"
@@ -11,6 +11,62 @@ BASIC_CHECK_NOTE = (
     "Python is parsed; TypeScript/JavaScript get a basic bracket and quote check, "
     "not a full compile."
 )
+
+# One line, because a tester on Windows needs the other half of it.
+ACTIVATE = r"source .venv/bin/activate  # Windows: .venv\Scripts\activate"
+
+
+def _is_typescript(files: list[ProjectFile]) -> bool:
+    """The language the project was written in, read off its own file names.
+
+    AutomationScript has no language field, and the AI's framework string says
+    "Playwright (JavaScript)" even for a TypeScript project.
+    """
+    return any(file.name.endswith((".ts", ".tsx")) for file in files)
+
+
+def run_steps(script: AutomationScript, files: list[ProjectFile]) -> list[str]:
+    """How to run the project that was actually downloaded.
+
+    A real run told the user to `mkdir aurora-automation && npm init -y`, which
+    builds an empty project beside the one they just unzipped. These steps are
+    computed from the framework and the files in the ZIP, never from the AI.
+    """
+    framework = (script.framework or "").lower()
+    names = {file.name for file in files}
+    steps = [f"cd {TOP_FOLDER}"]
+
+    if "python" in framework:
+        steps.append("python -m venv .venv")
+        steps.append(ACTIVATE)
+        if "requirements.txt" in names:
+            steps.append("pip install -r requirements.txt")
+        elif "selenium" in framework:
+            steps.append("pip install pytest selenium")
+        else:
+            steps.append("pip install pytest pytest-playwright")
+        if "selenium" not in framework:
+            steps.append("playwright install")
+        steps.append("pytest")
+        return steps
+
+    if "cypress" in framework:
+        if "package.json" in names:
+            steps.append("npm install")
+        else:
+            steps.append("npm init -y && npm install -D cypress")
+        steps.append("npx cypress run")
+        return steps
+
+    # Playwright on Node, whichever language the tests are written in.
+    if "package.json" in names:
+        steps.append("npm install")
+    else:
+        extra = " typescript" if _is_typescript(files) else ""
+        steps.append(f"npm init -y && npm install -D @playwright/test{extra}")
+    steps.append("npx playwright install")
+    steps.append("npx playwright test")
+    return steps
 
 
 def _traceability_lines(report: CheckReport) -> list[str]:
@@ -57,12 +113,17 @@ def build_readme(script: AutomationScript, report: CheckReport) -> str:
         "",
         f"Framework: {script.framework}",
         "",
-        "## Setup",
+        "## Run it",
         "",
+        "```",
     ]
-    for number, instruction in enumerate(script.setup_instructions, start=1):
-        lines.append(f"{number}. {instruction}")
-    lines += ["", "## Run it", "", "```", script.execution_command, "```", ""]
+    lines += run_steps(script, report.files)
+    lines += ["```", ""]
+    if script.setup_instructions:
+        lines += ["### Notes from the AI", ""]
+        for number, instruction in enumerate(script.setup_instructions, start=1):
+            lines.append(f"{number}. {instruction}")
+        lines.append("")
     if (script.design_notes or "").strip():
         lines += ["## Design notes", "", script.design_notes.strip(), ""]
     lines += ["## Checks", "", "QA-Genius worked these out from the code, without AI.", ""]

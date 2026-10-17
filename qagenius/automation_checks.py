@@ -91,6 +91,33 @@ def _extension(script: AutomationScript, seen: list[str]) -> str:
     return ".js"
 
 
+def is_python_framework(script: AutomationScript) -> bool:
+    return "python" in (script.framework or "").lower()
+
+
+def _is_json_object(code: str) -> bool:
+    try:
+        parsed = json.loads(code)
+    except ValueError:
+        return False
+    return isinstance(parsed, dict)
+
+
+DEPENDENCY_WARNING = "Dependency file looks like package.json for a Python project."
+
+
+def dependency_file_name(script: AutomationScript) -> str:
+    """What the dependency file should be called: pip's name or npm's.
+
+    A real run shipped a Playwright/TypeScript project whose "requirements.txt"
+    held a package.json, so the content has the last word: anything that parses
+    as a JSON object is a package.json whatever the framework claims to be.
+    """
+    if _is_json_object(script.requirements_txt or ""):
+        return "package.json"
+    return "requirements.txt" if is_python_framework(script) else "package.json"
+
+
 def _unique(name: str, used: set[str]) -> str:
     """name, or name_2 / name_3 before the extension when that name is taken."""
     if name not in used:
@@ -107,12 +134,13 @@ def _unique(name: str, used: set[str]) -> str:
 
 def project_files(script: AutomationScript) -> list[ProjectFile]:
     """Every file the AI wrote, under names that are safe to put in a ZIP."""
+    deps_name = dependency_file_name(script)
     parts: list[tuple[str | None, str | None, str]] = [
         (script.page_object_file_name, script.page_object_code, "page_object"),
         (script.test_file_name, script.test_code, "test_cases"),
         (script.conftest_file_name, script.conftest_code, "conftest"),
         (script.config_file_name, script.config_code, "config"),
-        ("requirements.txt", script.requirements_txt, "requirements"),
+        (deps_name, script.requirements_txt, "requirements"),
     ]
     files: list[ProjectFile] = []
     used: set[str] = set()
@@ -124,7 +152,7 @@ def project_files(script: AutomationScript) -> list[ProjectFile]:
             if fallback == "conftest":
                 name = "conftest.py"
             elif fallback == "requirements":
-                name = "requirements.txt"
+                name = deps_name
             else:
                 name = fallback + _extension(script, [file.name for file in files])
         name = _unique(name, used)
@@ -327,6 +355,12 @@ def check_project(script: AutomationScript, selected_ids: list[str]) -> CheckRep
         syntax[file.name] = status
         findings.extend(errors)
         findings.extend(_wait_findings(file))
+
+    # pip cannot read a package.json. Say so rather than shipping it quietly.
+    if is_python_framework(script) and any(file.name == "package.json" for file in files):
+        findings.append(
+            Finding(file="package.json", line=0, message=DEPENDENCY_WARNING, level="warning")
+        )
 
     return CheckReport(
         files=files, traced=traced, missing=missing, syntax=syntax, findings=findings

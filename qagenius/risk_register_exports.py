@@ -79,7 +79,7 @@ def _row(item: ScoredRisk) -> list:
         item.rpn,
         safe_cell(item.level),
         safe_cell(item.coverage),
-        safe_cell(", ".join(case_id for case_id, _, _ in item.covered_tests)),
+        safe_cell(", ".join(row[0] for row in item.covered_tests)),
         safe_cell(", ".join(risk.related_criteria)),
         safe_cell(risk.test_idea),
         safe_cell(risk.severity_reason),

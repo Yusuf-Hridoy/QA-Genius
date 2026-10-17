@@ -3,6 +3,8 @@
 from qagenius.models import FailureMode, RiskAnalysis
 from qagenius.prompts import risk_radar_prompt
 from qagenius.risk_radar import (
+    MATCH_FLOOR,
+    MAX_MATCHED_WORDS,
     case_lines,
     clean_analysis,
     criteria_lines,
@@ -90,7 +92,7 @@ def test_a_tagged_case_verifies_the_risk() -> None:
     report = score_risks(analysis(mode()), [tagged])
     item = report.risks[0]
     assert item.coverage == "verified"
-    assert item.covered_tests == [("TC-012", "Case TC-012", 1.0)]
+    assert item.covered_tests == [("TC-012", "Case TC-012", 1.0, [])]
 
 
 def test_a_claimed_case_about_the_same_thing_covers_the_risk() -> None:
@@ -128,7 +130,7 @@ def test_match_score_is_zero_for_unrelated_text() -> None:
         expected_result="The footer prints 2026",
         steps=["Scroll down"],
     )
-    assert match_score(mode(), unrelated) == 0.0
+    assert match_score(mode(), unrelated) == (0.0, [])
 
 
 # ---------- the report ----------
@@ -283,3 +285,65 @@ def test_clean_analysis_does_not_touch_what_it_was_given() -> None:
     clean_analysis(original, set(), set())
     assert original.failure_modes[0].id == "R9"
     assert original.failure_modes[0].covered_by == ["TC-404"]
+
+
+# ---------- the real run that moved the floor ----------
+
+# R3 and TC-003 from a live run. The two texts share only "focus", "keyboard"
+# and "navigation"; TC-003 never opens the mobile overlay the risk is about.
+R3_TITLE = "Focus trap inside expanded mobile overlay"
+R3_CAUSE = "The overlay does not constrain keyboard focus to its own children"
+R3_EFFECT = "A keyboard user tabs behind the overlay and cannot reach the close control"
+TC3_TITLE = "Keyboard navigation and focus indicator rings"
+TC3_EXPECTED = "Every navigation link shows a visible focus ring in tab order"
+
+
+def test_the_real_run_claim_is_now_below_the_floor() -> None:
+    risk = mode(title=R3_TITLE, cause=R3_CAUSE, effect=R3_EFFECT, covered_by=["TC-003"])
+    shallow = case(
+        case_id="TC-003",
+        title=TC3_TITLE,
+        expected_result=TC3_EXPECTED,
+        steps=["Press Tab through the navigation"],
+    )
+    score, words = match_score(risk, shallow)
+    assert score < MATCH_FLOOR
+    assert "focus" in words and "keyboard" in words
+    report = score_risks(analysis(risk), [shallow])
+    assert report.risks[0].coverage == "weak"
+
+
+def test_a_real_overlap_still_counts_as_covered_at_the_new_floor() -> None:
+    risk = mode(title=R3_TITLE, cause=R3_CAUSE, effect=R3_EFFECT, covered_by=["TC-007"])
+    real = case(
+        case_id="TC-007",
+        title="Focus stays trapped inside the expanded mobile overlay",
+        expected_result="Keyboard focus never leaves the overlay children until it closes",
+        steps=["Open the mobile overlay", "Tab through every child"],
+    )
+    score, _ = match_score(risk, real)
+    assert score >= MATCH_FLOOR
+    assert score_risks(analysis(risk), [real]).risks[0].coverage == "covered"
+
+
+def test_matched_words_skip_stopwords_and_short_tokens() -> None:
+    risk = mode(title="The overlay traps focus", cause="It is a bug", effect="of the app")
+    shared = case(
+        case_id="TC-008",
+        title="The overlay traps focus",
+        expected_result="It is a bug of the app",
+        steps=[],
+    )
+    _, words = match_score(risk, shared)
+    assert "the" not in words
+    assert "of" not in words
+    assert all(len(word) >= 3 for word in words)
+    assert words == sorted(words)
+
+
+def test_at_most_six_matched_words_are_kept() -> None:
+    text = "overlay focus keyboard navigation drawer sidebar header footer banner"
+    risk = mode(title=text, cause=text, effect=text)
+    twin = case(case_id="TC-009", title=text, expected_result=text, steps=[])
+    _, words = match_score(risk, twin)
+    assert len(words) == MAX_MATCHED_WORDS
