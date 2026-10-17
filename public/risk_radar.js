@@ -112,7 +112,7 @@
   /* Risk radar used to dead-end here with two links off the page. It is a
    * desk of its own now: paste a story and run, no Requirements visit. */
   function emptyState(root) {
-    var card = el("div", "card");
+    var card = el("div", "card card-form");
     card.setAttribute("data-input-card", "Your story");
     card.appendChild(el("h2", null, "How can this feature fail?"));
     card.appendChild(

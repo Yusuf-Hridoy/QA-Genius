@@ -79,6 +79,7 @@
 
     var card = el("div", "card ship-story");
     if (!story) {
+      card.className = "card ship-story card-form";
       card.appendChild(el("h2", null, "Start from a story"));
       card.appendChild(
         el(
@@ -88,7 +89,7 @@
             "or look at a finished run."
         )
       );
-      var row = el("div", "row");
+      var row = el("div", "empty-actions");
       var start = el("a", "btn btn-primary", "Go to Requirements");
       start.href = "/requirements/story";
       row.appendChild(start);

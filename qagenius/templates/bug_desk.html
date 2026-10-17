@@ -3,7 +3,7 @@
 {% block top_title %}Bug desk{% endblock %}
 {% block content %}
 {% from "_form_fields.html" import field, group %}
-<div class="card" data-input-card="Your notes">
+<div class="card card-form" data-input-card="Your notes">
   <h2>What went wrong?</h2>
   <form id="bug-form" hx-post="/bugs/run" hx-target="#bug-output" hx-swap="innerHTML" hx-indicator="#bug-progress">
     <div class="form-body">

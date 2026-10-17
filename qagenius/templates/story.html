@@ -11,7 +11,7 @@
     names the vague words that will cost you a bug later, and drafts acceptance criteria
     you can carry into step 2.</p>
 </div>
-<div class="card" id="story-card" data-input-card="Your story">
+<div class="card card-form" id="story-card" data-input-card="Your story">
   <form id="story-form" hx-post="/requirements/story/run" hx-target="#story-output" hx-swap="innerHTML" hx-indicator="#check-btn">
     <div class="form-body">
       {% call field("story-user-story", "User story", counter_max=3000) %}

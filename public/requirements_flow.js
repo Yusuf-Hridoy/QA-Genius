@@ -246,7 +246,7 @@
   /* ---------- shared empty state ---------- */
 
   function emptyState(root, onSaved) {
-    var card = el("div", "card");
+    var card = el("div", "card card-form");
     card.appendChild(el("h2", null, "No story yet"));
     card.appendChild(
       el("p", "muted", "Check a story first, or paste one here to carry on.")
@@ -754,14 +754,14 @@
     var cases = run.automation_cases || [];
 
     if (!cases.length) {
-      var empty = el("div", "card");
+      var empty = el("div", "card card-form");
       empty.appendChild(el("h2", null, "No test cases selected"));
       empty.appendChild(
         el("p", "muted", "Pick the cases you want automated on step 3.")
       );
       var pick = el("a", "btn", "Pick test cases");
       pick.setAttribute("href", "/requirements/test-cases");
-      var actions = el("div", "row");
+      var actions = el("div", "empty-actions");
       actions.appendChild(pick);
       actions.appendChild(exampleButton());
       empty.appendChild(actions);

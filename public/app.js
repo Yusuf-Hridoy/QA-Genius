@@ -664,11 +664,12 @@
       scrim.addEventListener("click", closeDrawer);
     }
 
+    /* The href follows the provider; the words stay the same, so the line
+     * does not grow a provider's whole name every time you switch. */
     function syncLink() {
       var opt = select.options[select.selectedIndex];
       if (link && opt && opt.dataset.keyUrl) {
         link.href = opt.dataset.keyUrl;
-        link.textContent = "Get a free " + opt.textContent + " key →";
       }
     }
     select.addEventListener("change", syncLink);

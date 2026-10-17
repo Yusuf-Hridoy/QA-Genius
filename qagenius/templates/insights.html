@@ -3,7 +3,7 @@
 {% block top_title %}Quality insights{% endblock %}
 {% block content %}
 {% from "_form_fields.html" import group %}
-<div class="card" data-input-card="Your report files">
+<div class="card card-form" data-input-card="Your report files">
   <h2>Your report files</h2>
   <form id="insights-form" hx-post="/insights/analyze" hx-target="#insights-output" hx-swap="innerHTML"
         hx-encoding="multipart/form-data" hx-indicator="#insights-progress">
