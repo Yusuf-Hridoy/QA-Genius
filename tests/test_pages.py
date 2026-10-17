@@ -11,7 +11,7 @@ PAGES = [
     "/requirements/story",
     "/risks",
     "/bugs",
-    "/insights",
+    "/performance",
     "/ship",
 ]
 
@@ -35,28 +35,35 @@ def test_home_lists_every_desk_and_does_not_redirect() -> None:
     response = client.get("/", follow_redirects=False)
     assert response.status_code == 200
     body = response.text
-    for href in ("/requirements/story", "/risks", "/ship", "/bugs", "/insights"):
+    for href in ("/requirements/story", "/risks", "/performance", "/ship"):
         assert f'class="desk" href="{href}"' in body, href
 
 
 def test_home_cards_follow_the_sidebar_order() -> None:
     body = client.get("/").text
-    order = ["/requirements/story", "/risks", "/ship", "/bugs", "/insights"]
+    order = ["/requirements/story", "/risks", "/performance", "/ship"]
     found = [body.index(f'class="desk" href="{href}"') for href in order]
     assert found == sorted(found)
 
 
-def test_home_no_longer_advertises_performance() -> None:
-    """The fifth card is Ship check now, not a desk that does not exist."""
+def test_home_lists_four_desks_and_hides_two() -> None:
+    """Bug desk and Quality insights still work; they are just not listed."""
     body = client.get("/").text
-    assert "Performance" not in body
-    assert "Soon" not in body
-    assert "One verdict" in body
-    assert "Check a release" in body
+    assert body.count('class="desk"') == 4
+    assert "Bug desk" not in body
+    assert "Quality insights" not in body
+    assert "Build a budget" in body
+    assert "Four desks between a vague story" in body
 
 
-def test_the_performance_route_is_gone() -> None:
-    assert client.get("/performance").status_code == 404
+def test_performance_is_a_desk_of_its_own_now() -> None:
+    assert client.get("/performance").status_code == 200
+
+
+def test_the_hidden_desks_still_answer() -> None:
+    """Nothing is deleted - the pages are only unlisted."""
+    for path in ("/bugs", "/insights"):
+        assert client.get(path).status_code == 200, path
 
 
 def test_every_page_offers_the_theme_toggle() -> None:
@@ -77,9 +84,12 @@ def test_keys_redirects_to_story_with_flag() -> None:
     assert response.headers["location"] == "/requirements/story?keys=open"
 
 
-def test_risk_radar_sits_after_requirements_in_the_sidebar() -> None:
+def test_the_sidebar_lists_the_four_desks_in_order() -> None:
     body = client.get("/risks").text
-    assert body.index('href="/requirements/story"') < body.index('href="/risks"')
-    assert body.index('href="/risks"') < body.index('href="/bugs"')
+    order = ["/requirements/story", "/risks", "/performance", "/ship"]
+    found = [body.index(f'href="{href}"') for href in order]
+    assert found == sorted(found)
+    assert 'href="/bugs"' not in body
+    assert 'href="/insights"' not in body
     assert '<a href="/risks" class="active">' in body
     assert "<span>Risk radar</span>" in body

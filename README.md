@@ -86,8 +86,8 @@ and the worst fork), **criteria coverage** (any criterion with no test case
 fails), **test depth** (thin criteria warn, more than half thin fails),
 **risk coverage** (a high risk with no test fails, a medium risk with no test
 or a high risk only weakly matched warns), **automation** (a syntax error
-fails, a missing selected id or a fixed wait warns) and your **latest test
-run** (pass rate and flaky tests). Each check is pass, warn, fail or *not
+fails, a missing selected id or a fixed wait warns) and the **performance
+budget** (a line over its limit fails, a gap or an unmeasured line warns). Each check is pass, warn, fail or *not
 checked*, with the exact numbers behind it and a link back to the desk that
 fixes it. The verdict follows in a fixed order: any fail means **Don't ship**;
 otherwise a missing coverage or risk check means **Ship with risks**, because
@@ -100,40 +100,36 @@ details section to paste into a release thread, and **Print / save as PDF**
 prints the banner and all seven checks with their details open, with the
 sidebar, buttons and key chip left off the page.
 
-## Bug desk
-Paste rough notes — *"checkout button does nothing on the second click, 3 of
-5 tries"* — add the environment and attempt counts if you have them, and
-optionally one screenshot, and the AI writes a structured report: title,
-severity, numbered steps, actual against expected, plus workaround, suspected
-pattern and investigation steps. **Report checks** is computed in code, not by
-the AI: it scores the report out of seven — clear title, three or more steps,
-actual and expected that differ, environment, reproducibility, evidence and a
-real severity — and prints what to ask the reporter for whatever is missing.
-Reproducibility and the environment line are counted from your inputs, so
-*"Intermittent (3 of 5)"* is arithmetic, not a guess. **Copy as Markdown**,
-**Copy for Jira** and **Download .md** give you the report in the form your
-tracker wants, with Jira's markup characters escaped so a title full of
-brackets cannot break the page. The screenshot is resized in your browser,
-sent to your own provider with that one request and never stored; if the model
-cannot read images, QA-Genius retries the same key with text alone and says so
-on the card.
+## Performance budget
+A chat model can write you a k6 script, but it does not know what your team
+agreed to and it cannot measure your page. This desk reads the numbers already
+in your acceptance criteria and risks — *"routes to the reports view within
+200ms"* becomes *Interaction ≤ 200 ms, from AC-2* — and fills every line it
+found no number for with the published Core Web Vitals threshold, labelled as
+such, so you can always see which limits are yours and which are the defaults.
+Requirements it cannot turn into a speed budget, such as *"below 768 pixels"*,
+become non-measurable lines that name the test cases covering them instead,
+and a performance risk that describes a problem without naming a number is
+listed as a gap rather than quietly given a limit. Paste a **public** URL and
+**Measure live page** and the server asks Google's PageSpeed Insights API for
+real measurements — localhost and private addresses are refused before any
+call, because Google could not reach them and the refusal should be instant.
+Code then compares measured against budgeted, preferring real-user data over
+the lab and saying under each number which one it used; interaction has no lab
+measurement at all, so a lab-only run judges it by total blocking time and
+labels it *lab proxy: TBT* rather than pretending. **Download budget.json**
+gives you a Lighthouse CI budget and **Download k6 thresholds** a k6 options
+block, and the result feeds the Performance row of Ship check. No AI is called
+anywhere in this desk and no AI key is needed; PageSpeed's own key is optional
+in principle but necessary in practice, is stored in your browser only, and
+never enters the run.
 
-## Quality insights
-Upload one to five test reports — JUnit XML (Playwright's
-`--reporter=junit`, pytest's `--junitxml=report.xml`, Jest, Cypress or
-Maven/Surefire all write it) or Playwright JSON (`--reporter=json`) — and
-**Analyze**. No API key is needed for this: code reads the files and works out
-the pass rate (skipped tests left out), groups the failures by a normalised
-message so twenty timeouts with different millisecond values land in one
-group, and finds the flaky tests — retried and passed, or passed in one run
-and failed in another. **Explain with AI** is optional and sends only those
-computed numbers and error messages to your provider, never the files
-themselves, and every number on the page stays the one code computed; group
-ids the AI invents are dropped with a note. Uploaded files are parsed in
-memory for that one request with `defusedxml`, so an XML bomb or an external
-entity is refused rather than expanded, and nothing is written to disk or
-stored. **Draft bug report →** carries a failure group over to the Bug desk
-with the notes prefilled.
+## Also included (unlisted)
+**Bug desk** (`/bugs`) turns rough notes and a screenshot into a structured
+report with code-computed quality checks and Markdown/Jira exports, and
+**Quality insights** (`/insights`) reads JUnit or Playwright reports with no
+key at all, grouping failures and naming flaky tests. Both still work and are
+still tested; they are simply not in the sidebar.
 
 ## Troubleshooting
 - `python scripts/check_key.py` checks one provider key with a tiny JSON

@@ -67,7 +67,7 @@ def test_the_banner_tone_matches_the_verdict(tone, label):
 
 
 def test_the_banner_counts_the_checks_that_ran():
-    assert "6 of 7 checks ran" in client.get("/ship/example").text
+    assert "5 of 7 checks ran" in client.get("/ship/example").text
 
 
 # ---------- the rows ----------
@@ -152,16 +152,16 @@ def test_the_result_repeats_that_nothing_left_the_browser():
 # ---------- getting here from the other desks ----------
 
 
-def test_the_sidebar_offers_ship_check_right_after_risk_radar():
+def test_the_sidebar_offers_ship_check_last():
     body = client.get("/ship").text
     assert 'href="/ship"' in body
-    assert body.index('href="/risks"') < body.index('href="/ship"')
-    assert body.index('href="/ship"') < body.index('href="/bugs"')
+    assert body.index('href="/risks"') < body.index('href="/performance"')
+    assert body.index('href="/performance"') < body.index('href="/ship"')
 
 
-def test_the_sidebar_does_not_offer_performance():
+def test_the_sidebar_offers_performance():
     body = client.get("/").text
-    assert 'href="/performance"' not in body
+    assert 'href="/performance"' in body
 
 
 def test_the_home_page_sends_you_to_ship_check():

@@ -4,14 +4,13 @@
 {% block content %}
 <div class="page-head">
   <span class="eyebrow">QA-Genius</span>
-  <h1>Five desks between a vague story and a passing suite.</h1>
+  <h1>Four desks between a vague story and a release you can defend.</h1>
   <p class="lede">Bring your own API key — it stays in this browser and never touches our
     server. Start anywhere; each desk works on its own, and the Requirements flow carries
     one run from story to a runnable project.</p>
   <div class="row">
     <a href="/requirements/story" class="btn btn-primary">Start with a story
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a>
-    <a href="/insights" class="btn">Read a test report <span class="pill accent plain small">No key needed</span></a>
   </div>
 </div>
 
@@ -32,28 +31,20 @@
     <span class="go">Find risks
       <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span>
   </a>
+  <a class="desk" href="/performance">
+    <span class="desk-mark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20a8 8 0 1 1 8-8"/><path d="M12 12l4.5-3.5"/></svg></span>
+    <h3>Performance</h3>
+    <p>Turn the numbers in your requirements into a performance budget, measure the live
+      page, and see what's over — computed by code.</p>
+    <span class="go">Build a budget
+      <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span>
+  </a>
   <a class="desk" href="/ship">
     <span class="desk-mark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 7 9.5 17.5 4 12"/></svg></span>
     <h3>Ship check</h3>
     <p>One verdict — Ship, Ship with risks or Don't ship — computed by code from everything
       the other desks found. No AI, no key.</p>
     <span class="go">Check a release
-      <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span>
-  </a>
-  <a class="desk" href="/bugs">
-    <span class="desk-mark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="7.5" y="7" width="9" height="12" rx="4.5"/><path d="M4 11h3.5M16.5 11H20M4.8 16.5h2.9M16.3 16.5h2.9M8.6 7.4 7.2 5M15.4 7.4 16.8 5"/></svg></span>
-    <h3>Bug desk</h3>
-    <p>Turn rough notes and a screenshot into a report a developer can act on — steps,
-      actual vs expected, severity — then export it as Markdown or Jira.</p>
-    <span class="go">Write a report
-      <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span>
-  </a>
-  <a class="desk" href="/insights">
-    <span class="desk-mark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg></span>
-    <h3>Quality insights</h3>
-    <p>Drop a JUnit or Playwright report in. Code — not an AI — groups the failures, names
-      the flaky tests and ranks the slow ones. Ask for an explanation only if you want one.</p>
-    <span class="go">Read a report
       <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span>
   </a>
 </div>
@@ -66,7 +57,6 @@
     Add more than one and a busy or rejected key falls through to the next.</p>
   <div class="row">
     <button type="button" class="btn" id="home-add-key">Add an API key</button>
-    <span class="hint">Quality insights reads reports with plain code — that desk needs no key at all.</span>
   </div>
 </div>
 {% endblock %}

@@ -43,6 +43,9 @@ from qagenius.models import (
 )
 from qagenius.insights_summary import clean_summary, facts_text, insights_prompt
 from qagenius.numbers import match_numbers
+from qagenius.pagespeed import Measurement, PageSpeedError, measure, validate_public_url
+from qagenius.performance_budget import Budget, build_budget, human_value
+from qagenius.performance_check import compare, k6_thresholds, lighthouse_budget_json
 from qagenius.prompts import (
     automation_prompt,
     bug_report_prompt,
@@ -53,6 +56,9 @@ from qagenius.prompts import (
 from qagenius.providers import PROVIDERS, get_provider, pick_default
 from qagenius.report_parsers import ReportError, RunReport, parse_report
 from qagenius.ship_check import (
+    MAX_DETAILS,
+    PerformanceLine,
+    PerformanceRun,
     CHECK_IDS,
     MAX_REASON,
     MIN_REASON,
@@ -309,10 +315,15 @@ def _request_keys(request: Request) -> list[dict[str, str]]:
 
 
 def _error_card(
-    request: Request, message: str, notes: list[str] | None = None
+    request: Request,
+    message: str,
+    notes: list[str] | None = None,
+    heading: str | None = None,
 ) -> HTMLResponse:
     return templates.TemplateResponse(
-        request, "_error.html", {"message": message, "notes": notes or []}
+        request,
+        "_error.html",
+        {"message": message, "notes": notes or [], "heading": heading},
     )
 
 
@@ -2202,6 +2213,7 @@ SHIP_PART_LABELS = {
     "risk_analysis": "risk analysis",
     "automation": "automation",
     "insights": "test run",
+    "performance": "performance budget",
     "acceptances": "acceptances",
 }
 SHIP_VERDICT_TONES = {"ship": "ok", "ship_with_risks": "warn", "dont_ship": "bad"}
@@ -2220,6 +2232,52 @@ SHIP_STATUS_LABELS = {
     "not_checked": "not checked",
 }
 STORY_IN_BANNER = 160
+
+
+def performance_from_dict(raw) -> PerformanceRun:
+    """The budget the Performance desk left in the run, as Ship check reads it.
+
+    Anything misshapen drops out rather than raising: a browser that saved an
+    older run should still get a verdict for everything else.
+    """
+    if not isinstance(raw, dict):
+        raise ValueError("performance must be an object")
+    rows = raw.get("results")
+    if not isinstance(rows, list):
+        raise ValueError("performance.results must be a list")
+    lines: list[PerformanceLine] = []
+    for row in rows:
+        if not isinstance(row, dict) or not isinstance(row.get("id"), str):
+            continue
+        status = row.get("status")
+        if status not in ("within", "over", "not_measured", "not_measurable"):
+            continue
+        lines.append(
+            PerformanceLine(
+                id=row["id"],
+                label=str(row.get("label") or row["id"]),
+                limit=_number(row.get("limit")),
+                unit=str(row.get("unit") or ""),
+                source=str(row.get("source") or ""),
+                measured=_number(row.get("measured")),
+                measured_from=str(row.get("measured_from") or ""),
+                status=status,
+            )
+        )
+    gaps = [one for one in (raw.get("gaps") or []) if isinstance(one, str)]
+    return PerformanceRun(
+        results=lines,
+        gaps=gaps[:MAX_DETAILS],
+        url=str(raw.get("url") or ""),
+        strategy=str(raw.get("strategy") or ""),
+        fetched_at=str(raw.get("fetched_at") or ""),
+    )
+
+
+def _number(value) -> float | None:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    return float(value)
 
 
 def _ship_part(raw: dict, key: str, build, ignored: list[str]):
@@ -2274,6 +2332,9 @@ def _ship_inputs(raw: dict) -> tuple[ShipInputs, list[str]]:
             automation_script=auto.script if auto else None,
             automation_selected_ids=list(auto.selected_ids) if auto else [],
             insights=_ship_part(raw, "insights", insights_from_dict, ignored),
+            performance=_ship_part(
+                raw, "performance", performance_from_dict, ignored
+            ),
             acceptances=_ship_acceptances(raw, ignored),
         ),
         ignored,
@@ -2310,6 +2371,25 @@ def _ship_result(
     )
 
 
+@app.get("/performance", response_class=HTMLResponse)
+def performance_page(request: Request) -> HTMLResponse:
+    """The page is empty; the browser fills it from sessionStorage."""
+    return templates.TemplateResponse(
+        request,
+        "performance.html",
+        {
+            "active": "performance",
+            "page_title": "What does this page have to be fast enough for?",
+            "page_lede": (
+                "Code reads the numbers in your own acceptance criteria and risks and "
+                "turns them into a performance budget, fills the rest with the Core Web "
+                "Vitals thresholds, then measures a live page against it. No AI."
+            ),
+            "eyebrow": "Performance",
+        },
+    )
+
+
 @app.get("/ship", response_class=HTMLResponse)
 def ship_page(request: Request) -> HTMLResponse:
     """The page is empty; the browser fills it from sessionStorage."""
@@ -2321,8 +2401,8 @@ def ship_page(request: Request) -> HTMLResponse:
             "page_title": "Can we ship this feature?",
             "page_lede": (
                 "Ship check reads what the other desks already worked out — clarity, "
-                "coverage, depth, risks, automation and your last test run — and turns "
-                "them into one verdict you can defend. Nothing is sent to an AI."
+                "coverage, depth, risks, automation and the performance budget — and "
+                "turns them into one verdict you can defend. Nothing is sent to an AI."
             ),
             "eyebrow": "Ship check",
         },
@@ -2360,6 +2440,176 @@ def ship_example(request: Request) -> HTMLResponse:
     return _ship_result(
         request, compute_ship_report(inputs), _ship_story(sample), ignored
     )
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Performance: a budget from the team's own numbers, measured by PageSpeed.
+# No AI call anywhere in this desk, and no AI key.
+# ──────────────────────────────────────────────────────────────────────────────
+
+PSI_KEY_LIMIT = 200
+MEASURE_FAILED = "Could not measure that page"
+
+
+class PerformanceBody(BaseModel):
+    """The run the budget is built from, as the browser hands it back."""
+
+    criteria: list[str] = []
+    risk_analysis: RiskAnalysis | None = None
+    cases: list[TestCase] = []
+
+    @field_validator("criteria")
+    @classmethod
+    def _within_limits(cls, value: list[str]) -> list[str]:
+        if len(value) > CRITERIA_LIMIT:
+            raise ValueError(f"Send at most {CRITERIA_LIMIT} criteria.")
+        if any(len(text) > CRITERION_LIMIT for text in value):
+            raise ValueError(f"Keep each criterion under {CRITERION_LIMIT} characters.")
+        return value
+
+    @field_validator("cases")
+    @classmethod
+    def _not_too_many_cases(cls, value: list[TestCase]) -> list[TestCase]:
+        if len(value) > MAX_CASES:
+            raise ValueError(f"Send at most {MAX_CASES} test cases.")
+        return value
+
+
+class MeasureBody(PerformanceBody):
+    url: str
+    strategy: str = "mobile"
+    psi_key: str | None = None
+
+    @field_validator("psi_key")
+    @classmethod
+    def _key_is_short(cls, value: str | None) -> str | None:
+        if value and len(value) > PSI_KEY_LIMIT:
+            raise ValueError("That does not look like an API key.")
+        return value
+
+
+def _budget_of(payload: PerformanceBody) -> Budget:
+    return build_budget(payload.criteria, payload.risk_analysis, payload.cases)
+
+
+def _score_tone(score: int | None) -> str:
+    if score is None:
+        return "neutral"
+    if score >= 90:
+        return "ok"
+    return "warn" if score >= 50 else "bad"
+
+
+def _performance_context(budget: Budget, results: list, m=None) -> dict:
+    statuses = [item.status for item in results]
+    return {
+        "budget": budget,
+        "results": results,
+        "measurement": m,
+        "score_tone": _score_tone(m.performance_score if m else None),
+        # Formatted here so the table never has to do arithmetic.
+        "target_text": [
+            human_value(item.line.limit, item.line.unit)
+            if item.line.limit is not None
+            else "—"
+            for item in results
+        ],
+        "measured_text": [
+            human_value(item.measured, item.line.unit)
+            if item.measured is not None
+            else ""
+            for item in results
+        ],
+        "counts": {
+            "lines": len(budget.lines),
+            "within": statuses.count("within"),
+            "over": statuses.count("over"),
+            "gaps": len(budget.gaps),
+        },
+        # What performance.js saves into the run for Ship check.
+        "performance_data": {
+            "results": [
+                {
+                    "id": item.line.id,
+                    "label": item.line.label,
+                    "limit": item.line.limit,
+                    "unit": item.line.unit,
+                    "source": item.line.source,
+                    "measured": item.measured,
+                    "measured_from": item.measured_from,
+                    "status": item.status,
+                }
+                for item in results
+            ],
+            "gaps": budget.gaps,
+            "url": m.url if m else "",
+            "strategy": m.strategy if m else "",
+            "fetched_at": m.fetched_at if m else "",
+        },
+    }
+
+
+@app.post("/performance/budget", response_class=HTMLResponse)
+def performance_budget_route(request: Request, payload: PerformanceBody) -> HTMLResponse:
+    """The budget on its own, before anything has been measured. No network."""
+    budget = _budget_of(payload)
+    return templates.TemplateResponse(
+        request,
+        "_performance_budget.html",
+        _performance_context(budget, compare(budget, None)),
+    )
+
+
+@app.post("/performance/measure", response_class=HTMLResponse)
+def performance_measure_route(request: Request, payload: MeasureBody) -> HTMLResponse:
+    """Measure one public page against the budget. The only outbound call."""
+    reason = validate_public_url(payload.url)
+    if reason:
+        return _error_card(request, reason, heading=MEASURE_FAILED)
+    budget = _budget_of(payload)
+    try:
+        m = measure(payload.url, payload.strategy, payload.psi_key)
+    except PageSpeedError as error:
+        return _error_card(request, str(error), heading=MEASURE_FAILED)
+    return templates.TemplateResponse(
+        request,
+        "_performance_result.html",
+        _performance_context(budget, compare(budget, m), m),
+    )
+
+
+@app.get("/performance/example", response_class=HTMLResponse)
+def performance_example(request: Request) -> HTMLResponse:
+    """Load example: a saved budget and a saved measurement. No network."""
+    with open(SAMPLES_DIR / "performance.json", encoding="utf-8") as f:
+        sample = json.load(f)
+    budget = build_budget(
+        sample["criteria"],
+        RiskAnalysis.model_validate(sample["risk_analysis"]),
+        [TestCase.model_validate(case) for case in sample.get("cases", [])],
+    )
+    m = Measurement(**sample["measurement"])
+    context = _performance_context(budget, compare(budget, m), m)
+    context["is_example"] = True
+    return templates.TemplateResponse(request, "_performance_result.html", context)
+
+
+@app.post("/performance/export/lighthouse")
+def performance_export_lighthouse(payload: PerformanceBody) -> Response:
+    return Response(
+        content=lighthouse_budget_json(_budget_of(payload)),
+        media_type="application/json; charset=utf-8",
+        headers={"Content-Disposition": 'attachment; filename="budget.json"'},
+    )
+
+
+@app.post("/performance/export/k6")
+def performance_export_k6(payload: PerformanceBody) -> Response:
+    return Response(
+        content=k6_thresholds(_budget_of(payload)),
+        media_type="text/javascript; charset=utf-8",
+        headers={"Content-Disposition": 'attachment; filename="k6-thresholds.js"'},
+    )
+
 
 # Served from the site root (e.g. /style.css). On Vercel the CDN serves
 # public/ first; locally this mount serves the same files. It must stay

@@ -66,6 +66,10 @@
     }
     if (run.automation && run.automation.script) payload.automation = run.automation;
     if (run.insights) payload.insights = run.insights;
+    /* The Performance desk leaves its budget and verdicts in the run. */
+    if (run.performance && run.performance.results) {
+      payload.performance = run.performance;
+    }
     payload.acceptances = run.ship_acceptances || {};
     return payload;
   }

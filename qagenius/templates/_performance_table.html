@@ -1,0 +1,74 @@
+{# The budget table, shared by the budget-only card and the measured result.
+   Every number here was either read out of a requirement or is the labelled
+   default; nothing on this page came from an AI. #}
+<div class="stat-row">
+  <div class="stat"><div class="num">{{ counts.lines }}</div><div class="lbl">Budget lines</div></div>
+  <div class="stat"><div class="num">{{ counts.within }}</div><div class="lbl">Within</div></div>
+  <div class="stat{% if counts.over %} stat-bad{% endif %}">
+    <div class="num">{{ counts.over }}</div><div class="lbl">Over</div>
+  </div>
+  <div class="stat"><div class="num">{{ counts.gaps }}</div><div class="lbl">Gaps</div></div>
+</div>
+
+{% if budget.gaps %}
+<div class="card gap-box">
+  <h3>Gaps</h3>
+  <ul class="gap-list">
+    {% for gap in budget.gaps %}<li>{{ gap }}</li>{% endfor %}
+  </ul>
+  <p class="muted small">A gap is a requirement or risk that names a problem without
+    naming a number. Nothing is assumed on your behalf.</p>
+</div>
+{% endif %}
+
+<div class="card">
+  <h2>Budget</h2>
+  {% if measurement %}
+  <p class="row">
+    <span class="pill {{ score_tone }}">PageSpeed score {{ measurement.performance_score }}</span>
+    <span class="muted small">{{ measurement.strategy }} · {{ measurement.url }}</span>
+  </p>
+  {% endif %}
+  <table class="grid perf-table">
+    <tr><th>Budget</th><th>Target</th><th>Measured</th><th>Result</th><th>From</th></tr>
+    {% for item in results %}
+    <tr>
+      <td>{{ item.line.label }}</td>
+      <td class="perf-number">{{ target_text[loop.index0] }}</td>
+      <td class="perf-number">
+        {% if item.measured is not none %}{{ measured_text[loop.index0] }}
+        <span class="muted small perf-from">{{ item.measured_from }}</span>
+        {% else %}<span class="muted">—</span>{% endif %}
+      </td>
+      <td>
+        {% if item.status == "within" %}<span class="pill ok">within</span>
+        {% elif item.status == "over" %}<span class="pill bad">over</span>
+        {% elif item.status == "not_measurable" %}<span class="pill neutral plain">not measurable</span>
+          {% if item.line.covered_by %}<span class="muted small">use {{ item.line.covered_by | join(", ") }}</span>{% endif %}
+        {% else %}<span class="pill neutral plain">not measured</span>{% endif %}
+      </td>
+      <td>
+        {% if item.line.source_text %}
+        <span class="pill accent plain">{{ item.line.source }}</span>
+        <span class="muted small">“{{ item.line.source_text }}”</span>
+        {% else %}<span class="muted small">{{ item.line.source }}</span>{% endif %}
+      </td>
+    </tr>
+    {% endfor %}
+  </table>
+  <p class="muted small">Interaction has no lab measurement, so a lab run judges it by
+    total blocking time and says so. Real-user numbers win when Google has them.</p>
+</div>
+
+<script type="application/json" id="performance-data">{{ performance_data | tojson }}</script>
+<div class="card">
+  <div class="row">
+    <button type="button" class="btn" id="download-budget-json">Download budget.json (Lighthouse CI)</button>
+    <button type="button" class="btn" id="download-k6">Download k6 thresholds</button>
+    <a class="btn btn-small ship-link" href="/ship">Ship check
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a>
+  </div>
+  <p class="muted small" id="performance-download-status" aria-live="polite"></p>
+  <p class="form-note">Budget built by code from your criteria and risks.
+    {% if measurement %}Measured by Google PageSpeed Insights.{% endif %} No AI.</p>
+</div>

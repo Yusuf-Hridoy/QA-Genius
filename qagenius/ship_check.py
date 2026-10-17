@@ -20,9 +20,18 @@ from qagenius.models import (
 from qagenius.risk_radar import score_risks
 from qagenius.test_case_depth import compute_depth
 from qagenius.test_cases import Criterion, compute_coverage, number_criteria
+from qagenius.performance_budget import human_value
 from qagenius.test_run_metrics import Insights
 
-CHECK_IDS = ("clarity", "duel", "coverage", "depth", "risks", "automation", "test_run")
+CHECK_IDS = (
+    "clarity",
+    "duel",
+    "coverage",
+    "depth",
+    "risks",
+    "automation",
+    "performance",
+)
 CORE_CHECKS = ("coverage", "risks")      # Ship is impossible while these are not checked
 
 TITLES = {
@@ -32,7 +41,7 @@ TITLES = {
     "depth": "Test depth",
     "risks": "Risk coverage",
     "automation": "Automation",
-    "test_run": "Latest test run",
+    "performance": "Performance budget",
 }
 
 LINKS = {
@@ -42,7 +51,7 @@ LINKS = {
     "depth": "/requirements/test-cases",
     "risks": "/risks",
     "automation": "/requirements/automation",
-    "test_run": "/insights",
+    "performance": "/performance",
 }
 
 # The name a reader would use for the desk a check came from.
@@ -53,7 +62,7 @@ TOOLS = {
     "depth": "Test cases",
     "risks": "Risk radar",
     "automation": "Automation",
-    "test_run": "Quality insights",
+    "performance": "Performance",
 }
 
 VERDICT_LABELS = {
@@ -69,7 +78,6 @@ MIN_REASON, MAX_REASON = 10, 300
 
 CLARITY_PASS, CLARITY_WARN = 70, 50
 AGREEMENT_PASS, AGREEMENT_WARN = 70, 40
-PASS_RATE_PASS, PASS_RATE_WARN = 95, 80
 
 
 @dataclass(frozen=True)
@@ -93,6 +101,29 @@ class ShipReport:
 
 
 @dataclass(frozen=True)
+class PerformanceLine:
+    """One budget line as the Performance desk left it in the run."""
+
+    id: str
+    label: str
+    limit: float | None
+    unit: str
+    source: str
+    measured: float | None
+    measured_from: str
+    status: str  # "within" | "over" | "not_measured" | "not_measurable"
+
+
+@dataclass(frozen=True)
+class PerformanceRun:
+    results: list[PerformanceLine] = field(default_factory=list)
+    gaps: list[str] = field(default_factory=list)
+    url: str = ""
+    strategy: str = ""
+    fetched_at: str = ""
+
+
+@dataclass(frozen=True)
 class ShipInputs:
     story_analysis: AmbiguityAnalysis | None = None
     duel: DuelSummary | None = None
@@ -106,6 +137,7 @@ class ShipInputs:
     automation_script: AutomationScript | None = None
     automation_selected_ids: list[str] = field(default_factory=list)
     insights: Insights | None = None
+    performance: "PerformanceRun | None" = None
     acceptances: dict[str, str] = field(default_factory=dict)   # check id -> reason
 
 
@@ -381,37 +413,6 @@ def _automation(inputs: ShipInputs) -> ShipCheckItem:
     return _item("automation", status, summary, details)
 
 
-def _test_run(inputs: ShipInputs) -> ShipCheckItem:
-    insights = inputs.insights
-    if insights is None:
-        return _not_checked("test_run")
-    rate = insights.overall.pass_rate
-    flaky = insights.flaky
-    if rate < PASS_RATE_WARN:
-        status = "fail"
-    elif rate >= PASS_RATE_PASS and not flaky:
-        status = "pass"
-    else:
-        status = "warn"
-
-    summary = f"Pass rate {rate}%"
-    if flaky:
-        summary += f", {_plural(len(flaky), 'flaky test')}"
-    else:
-        summary += ", no flaky tests"
-    details = [f"{test.name} — {test.reason}" for test in flaky]
-    details += [
-        f"{group.id} — {_plural(group.count, 'failure')}: {group.signature}"
-        for group in insights.groups
-    ]
-    return _item("test_run", status, summary, details)
-
-
-# ──────────────────────────────────────────────────────────────────────────────
-# Acceptance and verdict
-# ──────────────────────────────────────────────────────────────────────────────
-
-
 def _accepted(item: ShipCheckItem, acceptances: dict[str, str]) -> ShipCheckItem:
     """A written reason turns a fail into an accepted risk. Nothing else."""
     if item.status != "fail":
@@ -428,6 +429,64 @@ def _accepted(item: ShipCheckItem, acceptances: dict[str, str]) -> ShipCheckItem
         link=item.link,
         accepted_note=reason,
     )
+
+
+def _short_metric(label: str) -> str:
+    """"Largest contentful paint (LCP)" reads as "LCP" in a one-line summary."""
+    if "(" in label and label.rstrip().endswith(")"):
+        return label[label.index("(") + 1 : label.rindex(")")]
+    return label
+
+
+def _performance(inputs: ShipInputs) -> ShipCheckItem:
+    run = inputs.performance
+    if run is None or not run.results:
+        return _not_checked("performance")
+
+    judged = [line for line in run.results if line.status != "not_measurable"]
+    over = [line for line in judged if line.status == "over"]
+    within = [line for line in judged if line.status == "within"]
+    unmeasured = [line for line in judged if line.status == "not_measured"]
+
+    if over:
+        status = "fail"
+        if len(over) == 1:
+            line = over[0]
+            summary = (
+                f"{_short_metric(line.label)} "
+                f"{human_value(line.measured or 0, line.unit)} over the "
+                f"{human_value(line.limit or 0, line.unit)} budget"
+            )
+        else:
+            summary = f"{len(over)} budget lines over"
+    elif run.gaps or unmeasured:
+        status = "warn"
+        parts = []
+        if run.gaps:
+            parts.append(_plural(len(run.gaps), "gap"))
+        if unmeasured:
+            parts.append(f"{len(unmeasured)} not measured")
+        summary = " · ".join(parts)
+    else:
+        status = "pass"
+        summary = f"Every line within budget ({_plural(len(within), 'line')})"
+
+    if within and status != "pass":
+        summary += f" · {len(within)} within"
+
+    words = {"within": "Within", "over": "Over", "not_measured": "Not measured"}
+    details = [
+        f"{words[line.status]} · {line.label} "
+        + (
+            f"{human_value(line.measured, line.unit)} / "
+            if line.measured is not None
+            else ""
+        )
+        + f"{human_value(line.limit, line.unit) if line.limit is not None else '—'}"
+        + f" ({line.source})"
+        for line in judged
+    ]
+    return _item("performance", status, summary, details)
 
 
 def _verdict(items: list[ShipCheckItem]) -> tuple[str, str]:
@@ -465,7 +524,7 @@ def compute_ship_report(inputs: ShipInputs) -> ShipReport:
         "depth": _depth(inputs, criteria),
         "risks": _risks(inputs),
         "automation": _automation(inputs),
-        "test_run": _test_run(inputs),
+        "performance": _performance(inputs),
     }
     items = [_accepted(built[check_id], inputs.acceptances) for check_id in CHECK_IDS]
 

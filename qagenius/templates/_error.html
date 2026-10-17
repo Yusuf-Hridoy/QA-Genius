@@ -1,7 +1,8 @@
 <div class="card error-card">
   <div class="empty-state">
     <span class="empty-mark empty-mark-bad"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.3 3.9 1.9 18a2 2 0 0 0 1.7 3h16.8a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/></svg></span>
-    <h2>Could not check the story</h2>
+    {# Every desk shares this card, so each one can name its own failure. #}
+    <h2>{{ heading | default("Could not check the story", true) }}</h2>
     <p>{{ message }}</p>
     {% if notes %}
     <ul class="checklist muted small">

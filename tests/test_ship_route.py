@@ -93,12 +93,12 @@ def test_the_example_has_the_statuses_the_brief_asks_for():
         "depth": "warn",
         "risks": "fail",
         "automation": "not_checked",
-        "test_run": "pass",
+        "performance": "not_checked",
     }
 
 
-def test_the_example_says_six_of_seven_checks_ran():
-    assert "6 of 7 checks ran" in client.get("/ship/example").text
+def test_the_example_says_five_of_seven_checks_ran():
+    assert "5 of 7 checks ran" in client.get("/ship/example").text
 
 
 def test_the_example_never_names_a_real_company():
@@ -120,9 +120,9 @@ def test_invalid_automation_is_treated_as_missing_and_said_so():
 
 def test_one_bad_part_does_not_hide_the_others():
     body = sample()
-    body["insights"] = {"runs": "not an insights object"}
+    body["automation"] = {"script": "not an automation script"}
     found = statuses(post(body).text)
-    assert found["test_run"] == "not_checked"
+    assert found["automation"] == "not_checked"
     assert found["clarity"] == "pass"
     assert found["risks"] == "fail"
 
@@ -206,7 +206,6 @@ def test_accept_with_reason_appears_only_on_a_failed_row():
 def test_each_row_links_to_the_desk_that_fixes_it():
     body = client.get("/ship/example").text
     assert 'href="/risks">Open Risk radar' in body
-    assert 'href="/insights">Open Quality insights' in body
     assert 'href="/requirements/test-cases">Open Test cases' in body
 
 

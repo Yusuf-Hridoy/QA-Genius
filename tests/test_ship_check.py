@@ -11,11 +11,12 @@ from qagenius.models import (
 )
 from qagenius.ship_check import (
     CHECK_IDS,
+    PerformanceLine,
+    PerformanceRun,
     CORE_CHECKS,
     ShipInputs,
     compute_ship_report,
 )
-from qagenius.test_run_metrics import FlakyTest, Insights, RunSummary
 from tests.factories import case, script, suite
 
 CRITERIA = [
@@ -277,43 +278,123 @@ def test_broken_syntax_fails():
     assert status_of(result, "automation") == "fail"
 
 
-# ---------- latest test run ----------
+# ---------- the performance budget ----------
 
 
-def run_insights(pass_rate: int, flaky: int = 0) -> Insights:
-    overall = RunSummary(
-        label="All runs",
-        total=100,
-        passed=pass_rate,
-        failed=100 - pass_rate,
-        skipped=0,
-        flaky=flaky,
-        pass_rate=pass_rate,
-        duration_s=12.0,
-    )
-    return Insights(
-        runs=[overall],
-        overall=overall,
-        groups=[],
-        flaky=[
-            FlakyTest(name=f"test_{n}", suite="login", reason="passed on retry", runs=["a"])
-            for n in range(flaky)
-        ],
-        slowest=[],
+def perf_line(line_id, label, limit, unit, source, measured, status, measured_from="lab"):
+    return PerformanceLine(
+        id=line_id,
+        label=label,
+        limit=limit,
+        unit=unit,
+        source=source,
+        measured=measured,
+        measured_from=measured_from,
+        status=status,
     )
 
 
-@pytest.mark.parametrize(
-    "rate,expected", [(100, "pass"), (95, "pass"), (94, "warn"), (80, "warn"), (79, "fail")]
+LCP_OVER = perf_line(
+    "lcp", "Largest contentful paint (LCP)", 2500, "ms",
+    "Core Web Vitals 'good' threshold", 3820, "over", "real users (28 days)",
 )
-def test_pass_rate_boundaries(rate, expected):
-    assert status_of(report(insights=run_insights(rate)), "test_run") == expected
+LCP_WITHIN = perf_line(
+    "lcp", "Largest contentful paint (LCP)", 2500, "ms",
+    "Core Web Vitals 'good' threshold", 2100, "within",
+)
+INP_WITHIN = perf_line("inp", "Interaction to next paint (INP)", 200, "ms", "AC-2", 184, "within")
+TTFB_WITHIN = perf_line("ttfb", "Server response time (TTFB)", 800, "ms", "default", 410, "within")
+WEIGHT_UNMEASURED = perf_line("weight", "Page weight", 1600, "KB", "default", None, "not_measured")
+LAYOUT = perf_line("custom-1", "Layout at 768 px", 768, "px", "AC-4", None, "not_measurable", "")
 
 
-def test_any_flaky_test_warns_even_at_a_perfect_pass_rate():
-    item = item_of(report(insights=run_insights(100, flaky=2)), "test_run")
+def performance_run(*lines, gaps=()):
+    return PerformanceRun(
+        results=list(lines),
+        gaps=list(gaps),
+        url="https://aurora-storefront.example/dashboard",
+        strategy="mobile",
+        fetched_at="2026-01-14T09:21:44+00:00",
+    )
+
+
+def test_no_measurement_leaves_performance_not_checked():
+    item = item_of(report(), "performance")
+    assert item.status == "not_checked"
+    assert item.summary == "Not run yet — open Performance to include it."
+
+
+def test_an_empty_measurement_is_still_not_checked():
+    assert status_of(report(performance=performance_run()), "performance") == "not_checked"
+
+
+def test_every_line_within_budget_passes():
+    result = report(performance=performance_run(LCP_WITHIN, INP_WITHIN, TTFB_WITHIN))
+    item = item_of(result, "performance")
+    assert item.status == "pass"
+    assert item.summary == "Every line within budget (3 lines)"
+
+
+def test_a_line_over_budget_fails_and_names_it():
+    item = item_of(
+        report(performance=performance_run(LCP_OVER, INP_WITHIN, TTFB_WITHIN)),
+        "performance",
+    )
+    assert item.status == "fail"
+    assert item.summary == "LCP 3.82 s over the 2.5 s budget · 2 within"
+
+
+def test_two_lines_over_budget_are_counted_not_listed():
+    other = perf_line("ttfb", "Server response time (TTFB)", 800, "ms", "default", 1200, "over")
+    item = item_of(report(performance=performance_run(LCP_OVER, other)), "performance")
+    assert item.status == "fail"
+    assert item.summary == "2 budget lines over"
+
+
+def test_a_gap_warns_without_failing():
+    gap = 'Risk R1 "Race condition on rapid double-clicking" is a performance risk with no target.'
+    item = item_of(
+        report(performance=performance_run(LCP_WITHIN, INP_WITHIN, gaps=[gap])),
+        "performance",
+    )
     assert item.status == "warn"
-    assert item.summary == "Pass rate 100%, 2 flaky tests"
+    assert item.summary == "1 gap · 2 within"
+
+
+def test_a_line_that_could_not_be_measured_warns():
+    item = item_of(
+        report(performance=performance_run(LCP_WITHIN, WEIGHT_UNMEASURED)), "performance"
+    )
+    assert item.status == "warn"
+    assert item.summary == "1 not measured · 1 within"
+
+
+def test_a_layout_line_is_never_judged():
+    """768 px is not something PageSpeed measures, so it cannot fail the check."""
+    result = report(performance=performance_run(LCP_WITHIN, INP_WITHIN, LAYOUT))
+    item = item_of(result, "performance")
+    assert item.status == "pass"
+    assert all("768" not in line for line in item.details)
+
+
+def test_the_details_name_the_number_the_limit_and_the_source():
+    item = item_of(
+        report(performance=performance_run(LCP_OVER, INP_WITHIN)), "performance"
+    )
+    assert item.details == [
+        "Over · Largest contentful paint (LCP) 3.82 s / 2.5 s "
+        "(Core Web Vitals 'good' threshold)",
+        "Within · Interaction to next paint (INP) 184 ms / 200 ms (AC-2)",
+    ]
+
+
+def test_performance_is_not_a_core_check():
+    """A release can still ship without a measurement; coverage and risks cannot."""
+    assert "performance" not in CORE_CHECKS
+
+
+def test_the_latest_test_run_check_is_gone():
+    assert "test_run" not in CHECK_IDS
 
 
 # ---------- nothing run at all ----------
@@ -321,17 +402,17 @@ def test_any_flaky_test_warns_even_at_a_perfect_pass_rate():
 
 def test_an_empty_run_leaves_every_check_not_checked():
     result = report()
-    assert [item.status for item in result.items] == ["not_checked"] * 7
+    assert [item.status for item in result.items] == ["not_checked"] * len(CHECK_IDS)
     assert result.checked == 0
-    assert result.counts["not_checked"] == 7
+    assert result.counts["not_checked"] == len(CHECK_IDS)
 
 
 def test_the_not_checked_line_names_the_tool_to_open():
     result = report()
     assert item_of(result, "risks").summary == "Not run yet — open Risk radar to include it."
     assert (
-        item_of(result, "test_run").summary
-        == "Not run yet — open Quality insights to include it."
+        item_of(result, "automation").summary
+        == "Not run yet — open Automation to include it."
     )
 
 
@@ -396,7 +477,7 @@ def _everything_passes(**overrides) -> dict:
         "risk_analysis": RiskAnalysis(failure_modes=[]),
         "automation_script": script(),
         "automation_selected_ids": ["TC-001"],
-        "insights": run_insights(99),
+        "performance": performance_run(LCP_WITHIN, INP_WITHIN, TTFB_WITHIN),
     }
     inputs.update(overrides)
     return inputs
@@ -404,10 +485,10 @@ def _everything_passes(**overrides) -> dict:
 
 def test_everything_passing_ships():
     result = report(**_everything_passes())
-    assert [item.status for item in result.items] == ["pass"] * 7
+    assert [item.status for item in result.items] == ["pass"] * len(CHECK_IDS)
     assert result.verdict == "ship"
     assert result.verdict_reason == "All checks passed."
-    assert result.checked == 7
+    assert result.checked == len(CHECK_IDS)
 
 
 def test_one_warn_ships_with_risks():
@@ -417,7 +498,7 @@ def test_one_warn_ships_with_risks():
 
 
 def test_two_warns_read_as_plural():
-    result = report(**_everything_passes(duel=duel(60), insights=run_insights(90)))
+    result = report(**_everything_passes(duel=duel(60), risk_analysis=RiskAnalysis(failure_modes=[MEDIUM])))
     assert result.verdict_reason == "No blockers, but 2 items need attention."
 
 
@@ -452,7 +533,7 @@ def test_a_core_check_not_run_blocks_ship_even_when_all_the_rest_pass(core):
 
 
 def test_a_non_core_check_not_run_does_not_block_ship():
-    result = report(**_everything_passes(automation_script=None, insights=None))
+    result = report(**_everything_passes(automation_script=None))
     assert result.verdict == "ship"
 
 

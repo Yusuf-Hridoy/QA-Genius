@@ -1,0 +1,118 @@
+{
+  "captchaResult": "CAPTCHA_NOT_NEEDED",
+  "kind": "pagespeedonline#result",
+  "id": "https://aurora-storefront.example/",
+  "loadingExperience": {
+    "id": "https://aurora-storefront.example/",
+    "metrics": {
+      "CUMULATIVE_LAYOUT_SHIFT_SCORE": {
+        "percentile": 12,
+        "distributions": [
+          { "min": 0, "max": 10, "proportion": 0.71 },
+          { "min": 10, "max": 25, "proportion": 0.2 },
+          { "min": 25, "proportion": 0.09 }
+        ],
+        "category": "AVERAGE"
+      },
+      "FIRST_CONTENTFUL_PAINT_MS": {
+        "percentile": 1620,
+        "distributions": [
+          { "min": 0, "max": 1800, "proportion": 0.78 },
+          { "min": 1800, "max": 3000, "proportion": 0.16 },
+          { "min": 3000, "proportion": 0.06 }
+        ],
+        "category": "FAST"
+      },
+      "INTERACTION_TO_NEXT_PAINT": {
+        "percentile": 184,
+        "distributions": [
+          { "min": 0, "max": 200, "proportion": 0.82 },
+          { "min": 200, "max": 500, "proportion": 0.14 },
+          { "min": 500, "proportion": 0.04 }
+        ],
+        "category": "FAST"
+      },
+      "LARGEST_CONTENTFUL_PAINT_MS": {
+        "percentile": 3820,
+        "distributions": [
+          { "min": 0, "max": 2500, "proportion": 0.41 },
+          { "min": 2500, "max": 4000, "proportion": 0.4 },
+          { "min": 4000, "proportion": 0.19 }
+        ],
+        "category": "AVERAGE"
+      }
+    },
+    "overall_category": "AVERAGE",
+    "initial_url": "https://aurora-storefront.example/"
+  },
+  "lighthouseResult": {
+    "requestedUrl": "https://aurora-storefront.example/",
+    "finalUrl": "https://aurora-storefront.example/",
+    "lighthouseVersion": "11.0.0",
+    "fetchTime": "2026-01-14T09:21:44.512Z",
+    "categories": {
+      "performance": {
+        "id": "performance",
+        "title": "Performance",
+        "score": 0.62
+      }
+    },
+    "audits": {
+      "largest-contentful-paint": {
+        "id": "largest-contentful-paint",
+        "title": "Largest Contentful Paint",
+        "score": 0.31,
+        "scoreDisplayMode": "numeric",
+        "displayValue": "3.6 s",
+        "numericValue": 3612.5,
+        "numericUnit": "millisecond"
+      },
+      "first-contentful-paint": {
+        "id": "first-contentful-paint",
+        "title": "First Contentful Paint",
+        "score": 0.74,
+        "scoreDisplayMode": "numeric",
+        "displayValue": "1.5 s",
+        "numericValue": 1540,
+        "numericUnit": "millisecond"
+      },
+      "cumulative-layout-shift": {
+        "id": "cumulative-layout-shift",
+        "title": "Cumulative Layout Shift",
+        "score": 0.88,
+        "scoreDisplayMode": "numeric",
+        "displayValue": "0.064",
+        "numericValue": 0.064,
+        "numericUnit": "unitless"
+      },
+      "server-response-time": {
+        "id": "server-response-time",
+        "title": "Initial server response time was short",
+        "score": 1,
+        "scoreDisplayMode": "informative",
+        "displayValue": "Root document took 410 ms",
+        "numericValue": 410,
+        "numericUnit": "millisecond"
+      },
+      "total-blocking-time": {
+        "id": "total-blocking-time",
+        "title": "Total Blocking Time",
+        "score": 0.55,
+        "scoreDisplayMode": "numeric",
+        "displayValue": "340 ms",
+        "numericValue": 340,
+        "numericUnit": "millisecond"
+      },
+      "total-byte-weight": {
+        "id": "total-byte-weight",
+        "title": "Avoids enormous network payloads",
+        "score": 0.63,
+        "scoreDisplayMode": "informative",
+        "displayValue": "Total size was 2,048 KiB",
+        "numericValue": 2097152,
+        "numericUnit": "byte"
+      }
+    }
+  },
+  "analysisUTCTimestamp": "2026-01-14T09:21:44.512Z"
+}
