@@ -119,7 +119,6 @@
     var chip = document.getElementById("key-chip");
     var text = document.getElementById("key-chip-text");
     var dot = chip ? chip.querySelector(".dot") : null;
-    var icon = document.getElementById("key-chip-icon");
     if (!chip || !text) {
       return;
     }
@@ -128,9 +127,6 @@
       chip.classList.remove("empty");
       if (dot) {
         dot.hidden = false;
-      }
-      if (icon) {
-        icon.hidden = true;
       }
       var word = keys.length === 1 ? "1 key" : keys.length + " keys";
       var first = shortModel(keys[0].model);
@@ -144,11 +140,10 @@
       if (dot) {
         dot.hidden = true;
       }
-      if (icon) {
-        icon.hidden = false;
-      }
       text.textContent = "Add API key";
     }
+    /* On a narrow phone the words are hidden, so the chip carries them. */
+    chip.setAttribute("aria-label", text.textContent);
   }
 
   var drawerOpen = false;
@@ -194,6 +189,16 @@
       return;
     }
     drawerOpen = false;
+    // Never leave a key on screen for the next time the panel opens.
+    var keyBox = document.getElementById("drawer-key");
+    var showKey = document.getElementById("drawer-key-show");
+    if (keyBox && keyBox.type === "text") {
+      keyBox.type = "password";
+      if (showKey) {
+        showKey.setAttribute("aria-pressed", "false");
+        showKey.textContent = "Show";
+      }
+    }
     drawer.classList.remove("open");
     drawer.setAttribute("aria-hidden", "true");
     var scrim = document.getElementById("keys-scrim");
@@ -250,6 +255,11 @@
     if (empty) {
       empty.style.display = keys.length ? "none" : "";
     }
+    // Nothing to test with no keys, so the button does not sit there greyed.
+    var testRow = document.getElementById("test-all-row");
+    if (testRow) {
+      testRow.hidden = keys.length === 0;
+    }
     keys.forEach(function (entry, idx) {
       var li = el("li", "key-row");
       li.dataset.id = entry.id;
@@ -274,7 +284,8 @@
       buttons.push(["edit", "Edit"]);
       buttons.push(["delete", "Delete"]);
       buttons.forEach(function (pair) {
-        var btn = el("button", "btn btn-small", pair[1]);
+        var danger = pair[0] === "delete";
+        var btn = el("button", danger ? "btn btn-small btn-danger" : "btn btn-small", pair[1]);
         btn.type = "button";
         btn.dataset.action = pair[0];
         btn.dataset.id = entry.id;
@@ -423,7 +434,7 @@
     form.appendChild(head);
 
     var master = document.getElementById("drawer-provider");
-    var select = el("select", null);
+    var select = el("select", "ctl");
     if (master) {
       select.innerHTML = master.innerHTML;
     }
@@ -431,7 +442,7 @@
     select.setAttribute("aria-label", "Provider");
     form.appendChild(select);
 
-    var labelInput = el("input", null);
+    var labelInput = el("input", "ctl");
     labelInput.type = "text";
     labelInput.value = entry.label || "";
     labelInput.maxLength = 60;
@@ -439,7 +450,7 @@
     labelInput.setAttribute("aria-label", "Label");
     form.appendChild(labelInput);
 
-    var keyInput = el("input", null);
+    var keyInput = el("input", "ctl");
     keyInput.type = "password";
     keyInput.value = "";
     keyInput.placeholder = "Key (empty = keep current key)";
@@ -507,7 +518,7 @@
           el("span", "muted", "Could not list models. Type one below.")
         );
       } else {
-        var select = el("select", null);
+        var select = el("select", "ctl");
         models.forEach(function (name) {
           var opt = document.createElement("option");
           opt.value = name;
@@ -520,7 +531,7 @@
         select.setAttribute("aria-label", "Model");
         form.appendChild(select);
       }
-      var other = el("input", null);
+      var other = el("input", "ctl");
       other.type = "text";
       other.value = "";
       other.maxLength = 100;
@@ -581,7 +592,7 @@
       actions.removeChild(actions.firstChild);
     }
     actions.appendChild(el("span", "muted", "Delete this key?"));
-    var yes = el("button", "btn btn-small", "Yes");
+    var yes = el("button", "btn btn-small btn-danger", "Yes");
     yes.type = "button";
     var no = el("button", "btn btn-small", "No");
     no.type = "button";
@@ -662,6 +673,19 @@
     }
     select.addEventListener("change", syncLink);
     syncLink();
+
+    /* The key field is a password field, so a shoulder or a screen share
+     * cannot read it; Show is there for checking a paste. */
+    var showKey = document.getElementById("drawer-key-show");
+    if (showKey && keyInput) {
+      showKey.addEventListener("click", function () {
+        var shown = keyInput.type === "text";
+        keyInput.type = shown ? "password" : "text";
+        showKey.setAttribute("aria-pressed", shown ? "false" : "true");
+        showKey.textContent = shown ? "Show" : "Hide";
+        keyInput.focus();
+      });
+    }
 
     listNode.addEventListener("click", function (event) {
       var btn = event.target.closest("button[data-action]");
@@ -920,6 +944,133 @@
     });
   }
 
+  /* ---------- shared form behaviour ---------- */
+
+  /* One counter for every field that declares one. The markup comes from
+   * _form_fields.html and the JS-built forms copy it, so no desk counts its
+   * own characters any more and they all read "n / max". */
+  function paintCounter(counter) {
+    var id = counter.getAttribute("data-for");
+    var box = id ? document.getElementById(id) : null;
+    var max = parseInt(counter.getAttribute("data-max"), 10);
+    if (!box || !max) {
+      return;
+    }
+    var used = box.value.length;
+    counter.textContent = used + " / " + max;
+    counter.classList.toggle("near", used >= max * 0.9 && used <= max);
+    counter.classList.toggle("over", used > max);
+  }
+
+  function initCounters(scope) {
+    var counters = (scope || document).querySelectorAll(".counter[data-for]");
+    Array.prototype.forEach.call(counters, paintCounter);
+  }
+
+  /* The hint above a control and the help line under it describe it, so a
+   * screen reader reads them with the control and not as loose text. */
+  function describeFields(scope) {
+    var fields = (scope || document).querySelectorAll(".field");
+    Array.prototype.forEach.call(fields, function (field) {
+      var control = field.querySelector(
+        "input:not([type=hidden]), select, textarea"
+      );
+      if (!control || !control.id || control.getAttribute("aria-describedby")) {
+        return;
+      }
+      var ids = [];
+      [control.id + "-hint", control.id + "-help"].forEach(function (id) {
+        var node = document.getElementById(id);
+        if (node && node.textContent.trim()) {
+          ids.push(id);
+        }
+      });
+      if (ids.length) {
+        control.setAttribute("aria-describedby", ids.join(" "));
+      }
+    });
+  }
+
+  function initFields(scope) {
+    initCounters(scope);
+    describeFields(scope);
+  }
+
+  /* Any HTML the server swaps in brings its own fields with it. */
+  document.body.addEventListener("htmx:afterSwap", function (event) {
+    if (event.target) {
+      initFields(event.target);
+    }
+  });
+
+  document.addEventListener("input", function (event) {
+    var id = event.target ? event.target.id : "";
+    if (!id) {
+      return;
+    }
+    var counter = document.querySelector('.counter[data-for="' + id + '"]');
+    if (counter) {
+      paintCounter(counter);
+    }
+  });
+
+  /* While a request runs, the button that started it says so: the label
+   * becomes the busy label and a spinner joins it. The width is pinned to
+   * what it was first, so the row never jumps as the word changes. */
+  function busyButton(node) {
+    if (!node || !node.tagName) {
+      return null;
+    }
+    if (node.tagName === "BUTTON") {
+      return node;
+    }
+    if (node.tagName === "FORM") {
+      return node.querySelector("button[type=submit]");
+    }
+    return null;
+  }
+
+  document.body.addEventListener("htmx:beforeRequest", function (event) {
+    var btn = busyButton(event.detail.elt);
+    if (!btn || btn.getAttribute("aria-busy") === "true") {
+      return;
+    }
+    btn.style.minWidth = Math.ceil(btn.getBoundingClientRect().width) + "px";
+    btn.setAttribute("aria-busy", "true");
+    var label = btn.querySelector(".btn-label");
+    var busy = btn.getAttribute("data-busy-label");
+    if (label && busy) {
+      btn.setAttribute("data-idle-label", label.textContent);
+      label.textContent = busy;
+    }
+  });
+
+  document.body.addEventListener("htmx:afterRequest", function (event) {
+    var btn = busyButton(event.detail.elt);
+    if (!btn) {
+      return;
+    }
+    btn.removeAttribute("aria-busy");
+    btn.style.minWidth = "";
+    var label = btn.querySelector(".btn-label");
+    var idle = btn.getAttribute("data-idle-label");
+    if (label && idle !== null) {
+      label.textContent = idle;
+      btn.removeAttribute("data-idle-label");
+    }
+  });
+
+  /* On a phone the rail is a scrolling strip. The desk you are on is scrolled
+   * into view, so it is never half a word cut off at the edge. */
+  function initNavScroll() {
+    var rail = document.querySelector(".sidebar");
+    var active = rail ? rail.querySelector(".nav a.active") : null;
+    if (!rail || !active || rail.scrollWidth <= rail.clientWidth + 2) {
+      return;
+    }
+    active.scrollIntoView({ inline: "center", block: "nearest" });
+  }
+
   function initHomeKeyButton() {
     var btn = document.getElementById("home-add-key");
     if (btn) {
@@ -938,6 +1089,8 @@
     initInputCards();
     initScrollToAnswer();
     initHomeKeyButton();
+    initFields();
+    initNavScroll();
   });
 
   document.body.addEventListener("htmx:configRequest", function (event) {
@@ -988,6 +1141,7 @@
 
   window.QAG = {
     initInputCards: initInputCards,
+    initFields: initFields,
     loadKeys: loadKeys,
     storeKeys: storeKeys,
     headerKeys: headerKeys,

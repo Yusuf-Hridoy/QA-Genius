@@ -1,7 +1,8 @@
+{% from "_form_fields.html" import field %}
 <aside id="keys-drawer" class="drawer" role="dialog" aria-modal="true" aria-labelledby="keys-drawer-title" aria-hidden="true" hidden>
   <div class="drawer-head">
     <h2 id="keys-drawer-title">Your API keys</h2>
-    <button id="keys-close" type="button" class="icon-btn" aria-label="Close keys panel">
+    <button id="keys-close" type="button" class="btn btn-icon" aria-label="Close keys panel">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
     </button>
   </div>
@@ -9,27 +10,30 @@
     request and never stores or logs them.</p>
   <ul id="drawer-key-list" class="key-list"></ul>
   <p id="drawer-key-empty" class="muted">No keys yet. Add your first key below.</p>
-  <div class="row"><button id="test-all" type="button" class="btn btn-small">Test all</button></div>
+  {# Nothing to test until there is a key: app.js unhides this with the list. #}
+  <div class="row" id="test-all-row" hidden><button id="test-all" type="button" class="btn btn-small">Test all</button></div>
   <h3>Add a key</h3>
   <form id="drawer-key-form">
-    <div class="field">
-      <label for="drawer-provider">Provider</label>
-      <select id="drawer-provider" name="provider">
-        {% for p in providers %}
-        <option value="{{ p.id }}" data-key-url="{{ p.key_url }}">{{ p.name }}</option>
-        {% endfor %}
-      </select>
-      <span class="hint"><a id="drawer-key-link" href="{{ providers[0].key_url }}" target="_blank" rel="noopener">Get a free key →</a></span>
-    </div>
-    <div class="field">
-      <label for="drawer-label">Label <span class="hint">optional nickname, never sent anywhere</span></label>
-      <input type="text" id="drawer-label" name="label" maxlength="60" placeholder="e.g. My Gemini key" autocomplete="off">
-    </div>
-    <div class="field">
-      <label for="drawer-key">API key</label>
+    {% call field("drawer-provider", "Provider", help="") %}
+    <select id="drawer-provider" name="provider">
+      {% for p in providers %}
+      <option value="{{ p.id }}" data-key-url="{{ p.key_url }}">{{ p.name }}</option>
+      {% endfor %}
+    </select>
+    <p class="field-link"><a id="drawer-key-link" href="{{ providers[0].key_url }}" target="_blank" rel="noopener">Get a free key →</a></p>
+    {% endcall %}
+    {% call field("drawer-label", "Label", optional=true, hint="A nickname for you. It never leaves this browser.") %}
+    <input type="text" id="drawer-label" name="label" maxlength="60" placeholder="e.g. My Gemini key" autocomplete="off">
+    {% endcall %}
+    {% call field("drawer-key", "API key") %}
+    <div class="secret-row">
       <input type="password" id="drawer-key" name="key" placeholder="Paste your key" autocomplete="off" spellcheck="false">
+      <button type="button" class="btn btn-small" id="drawer-key-show" aria-pressed="false" aria-controls="drawer-key">Show</button>
     </div>
-    <button type="submit" id="drawer-save" class="btn btn-primary">Save key</button>
+    {% endcall %}
+    <div class="form-actions">
+      <button type="submit" id="drawer-save" class="btn btn-primary">Save key</button>
+    </div>
   </form>
-  <p class="muted small">If a key is busy or invalid, the next one is used automatically.</p>
+  <p class="form-note">If a key is busy or invalid, the next one is used automatically.</p>
 </aside>

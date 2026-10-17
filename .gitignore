@@ -58,3 +58,6 @@ Thumbs.db
 *.csv
 *.xlsx
 !requirements*.txt
+
+# UI screenshots (scripts/ui_screenshots.py)
+ui-screens/

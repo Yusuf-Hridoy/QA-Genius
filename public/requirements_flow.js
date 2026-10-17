@@ -68,6 +68,60 @@
     return node;
   }
 
+  /* The shape _form_fields.html writes, built with DOM methods so no user
+   * text ever goes near innerHTML: label, hint, control, then the help and
+   * counter line. The server forms and these JS forms must not drift. */
+  function fieldBox(id, labelText, options) {
+    var opts = options || {};
+    var box = el("div", "field");
+    var label = el("label", null, labelText);
+    label.setAttribute("for", id);
+    if (opts.optional) {
+      label.appendChild(document.createTextNode(" "));
+      label.appendChild(el("span", "opt", "(optional)"));
+    }
+    box.appendChild(label);
+    if (opts.hint) {
+      var hint = el("p", "hint", opts.hint);
+      hint.id = id + "-hint";
+      box.appendChild(hint);
+    }
+    return box;
+  }
+
+  function fieldUnder(id, help, max) {
+    var under = el("div", "field-under");
+    var left = el("span", null, help || "");
+    left.id = id + "-help";
+    under.appendChild(left);
+    if (max) {
+      var counter = el("span", "counter", "0 / " + max);
+      counter.setAttribute("data-for", id);
+      counter.setAttribute("data-max", String(max));
+      counter.setAttribute("aria-live", "polite");
+      under.appendChild(counter);
+    }
+    return under;
+  }
+
+  function groupBox(labelText, options) {
+    var opts = options || {};
+    var box = el("fieldset", "field");
+    var legend = el("legend", "label", labelText);
+    if (opts.optional) {
+      legend.appendChild(document.createTextNode(" "));
+      legend.appendChild(el("span", "opt", "(optional)"));
+    }
+    box.appendChild(legend);
+    if (opts.hint) box.appendChild(el("p", "hint", opts.hint));
+    return box;
+  }
+
+  /* Counters and descriptions for a form this file just built. */
+  function fieldsReady(scope) {
+    if (window.QAG && window.QAG.initFields) window.QAG.initFields(scope);
+  }
+
   function closest(target, selector) {
     if (!target || !target.closest) return null;
     return target.closest(selector);
@@ -200,31 +254,26 @@
 
     var link = el("a", "btn", "Check a story first");
     link.setAttribute("href", "/requirements/story");
-    card.appendChild(link);
 
-    var storyField = el("div", "field");
-    var storyLabel = el("label", null, "Story");
-    storyLabel.setAttribute("for", "paste-story");
-    var storyBox = el("textarea");
+    var body = el("div", "form-body");
+
+    var storyField = fieldBox("paste-story", "Story");
+    var storyBox = el("textarea", "short");
     storyBox.id = "paste-story";
     storyBox.setAttribute("rows", "4");
     storyBox.setAttribute("maxlength", "3000");
     storyBox.setAttribute("placeholder", "As a shopper, I want…");
-    storyField.appendChild(storyLabel);
     storyField.appendChild(storyBox);
+    storyField.appendChild(fieldUnder("paste-story", "", 3000));
 
-    var acField = el("div", "field");
-    var acLabel = el("label", null, "Acceptance criteria");
-    acLabel.setAttribute("for", "paste-criteria");
+    var acField = fieldBox("paste-criteria", "Acceptance criteria", {
+      hint: "One criterion per block, separated by a blank line."
+    });
     var acBox = el("textarea");
     acBox.id = "paste-criteria";
     acBox.setAttribute("rows", "6");
     acBox.setAttribute("placeholder", "One criterion per block, separated by a blank line.");
-    acField.appendChild(acLabel);
     acField.appendChild(acBox);
-    acField.appendChild(
-      el("span", "hint", "Separate criteria with a blank line.")
-    );
 
     var save = el("button", "btn btn-primary", "Save and continue");
     save.setAttribute("type", "button");
@@ -248,10 +297,15 @@
     });
 
     card.appendChild(el("h3", null, "Paste a story and criteria"));
-    card.appendChild(storyField);
-    card.appendChild(acField);
-    card.appendChild(save);
+    body.appendChild(storyField);
+    body.appendChild(acField);
+    var pasteActions = el("div", "form-actions");
+    pasteActions.appendChild(save);
+    pasteActions.appendChild(link);
+    body.appendChild(pasteActions);
+    card.appendChild(body);
     root.appendChild(card);
+    fieldsReady(root);
   }
 
   function storyDetails(run) {
@@ -309,6 +363,7 @@
     root.appendChild(card);
 
     var actions = el("div", "card");
+    var actionBar = el("div", "form-actions");
     var generate = el("button", "btn btn-primary", "Generate test cases →");
     generate.setAttribute("type", "button");
     if (nonEmpty(run).length === 0) {
@@ -321,11 +376,16 @@
       writeRun(current);
       window.location.href = "/requirements/test-cases";
     });
-    actions.appendChild(generate);
+    actionBar.appendChild(generate);
+    actions.appendChild(actionBar);
+    /* A disabled button says why, and not only in a title attribute. */
     if (nonEmpty(run).length === 0) {
-      actions.appendChild(el("p", "muted small", "Add at least one criterion"));
+      actions.appendChild(
+        el("p", "form-note", "Add at least one criterion to generate test cases.")
+      );
     }
     root.appendChild(actions);
+    fieldsReady(root);
   }
 
   function criterionRow(run, criterion, index) {
@@ -352,13 +412,13 @@
       moveButton(run, index, 1, "↓", "Move " + criterion.id + " down")
     );
 
-    var remove = el("button", "btn btn-small", "Delete");
+    var remove = el("button", "btn btn-small btn-danger", "Delete");
     remove.setAttribute("type", "button");
     remove.setAttribute("aria-label", "Delete " + criterion.id);
     remove.addEventListener("click", function () {
       buttons.textContent = "";
       buttons.appendChild(el("span", "small", "Remove " + criterion.id + "?"));
-      var yes = el("button", "btn btn-small", "Yes");
+      var yes = el("button", "btn btn-small btn-danger", "Yes");
       yes.setAttribute("type", "button");
       yes.addEventListener("click", function () {
         run.criteria.splice(index, 1);
@@ -449,10 +509,11 @@
     criteriaInput.value = JSON.stringify(criteria);
     form.appendChild(criteriaInput);
 
-    var focus = el("fieldset", "field");
-    focus.appendChild(el("legend", "hint", "Coverage focus"));
+    var focus = groupBox("Coverage focus", {
+      hint: "The kinds of case this run should write."
+    });
     FOCUS_OPTIONS.forEach(function (option, i) {
-      var wrap = el("label", "check");
+      var wrap = el("label", "choice");
       var input = el("input");
       input.type = "checkbox";
       input.name = "coverage_focus";
@@ -465,7 +526,7 @@
     });
     form.appendChild(focus);
 
-    var actions = el("div", "row");
+    var actions = el("div", "form-actions");
     var generate = el("button", "btn btn-primary");
     generate.id = "tc-generate";
     generate.type = "submit";
@@ -491,6 +552,7 @@
 
     card.appendChild(form);
     root.appendChild(card);
+    fieldsReady(root);
 
     if (window.htmx) window.htmx.process(root);
     if (window.QAG && window.QAG.initInputCards) window.QAG.initInputCards(root);
@@ -533,7 +595,9 @@
     var filter = chip.getAttribute("data-filter");
     var chips = document.querySelectorAll("#tc-filters .chip");
     Array.prototype.forEach.call(chips, function (other) {
-      other.classList.toggle("now", other === chip);
+      var on = other === chip;
+      other.classList.toggle("now", on);
+      other.setAttribute("aria-pressed", on ? "true" : "false");
     });
     var cards = document.querySelectorAll("#tc-list .tc-card");
     Array.prototype.forEach.call(cards, function (card) {
@@ -594,11 +658,8 @@
     return box;
   }
 
-  function labelled(text, control) {
-    var field = el("div", "field");
-    var label = el("label", null, text);
-    label.setAttribute("for", control.id);
-    field.appendChild(label);
+  function labelled(text, control, options) {
+    var field = fieldBox(control.id, text, options);
     field.appendChild(control);
     return field;
   }
@@ -646,11 +707,10 @@
       )
     );
 
-    var browsers = el("fieldset", "field");
+    var browsers = groupBox("Browsers");
     browsers.id = "browser-field";
-    browsers.appendChild(el("legend", "hint", "Browsers"));
     BROWSER_CHOICES.forEach(function (name, index) {
-      var wrap = el("label", "check");
+      var wrap = el("label", "choice");
       var input = el("input");
       input.type = "checkbox";
       input.name = "browsers";
@@ -668,7 +728,12 @@
     url.id = "base_url";
     url.maxLength = 200;
     url.placeholder = "https://staging.aurora-shop.dev";
-    card.appendChild(labelled("Base URL (optional)", url));
+    card.appendChild(
+      labelled("Base URL", url, {
+        optional: true,
+        hint: "Where the generated tests should start."
+      })
+    );
     return card;
   }
 
@@ -723,7 +788,7 @@
 
     form.appendChild(settingsCard());
 
-    var actions = el("div", "row");
+    var actions = el("div", "form-actions");
     var generate = el("button", "btn btn-primary");
     generate.id = "automation-generate";
     generate.type = "submit";
@@ -743,6 +808,7 @@
     form.appendChild(progress);
 
     root.appendChild(form);
+    fieldsReady(root);
     if (window.htmx) window.htmx.process(root);
     if (window.QAG && window.QAG.initInputCards) window.QAG.initInputCards(root);
     toggleBrowsers(form);
@@ -863,8 +929,13 @@
     if (count) count.textContent = ids.length + " selected";
     if (button) button.disabled = ids.length === 0 || ids.length > MAX_SELECTED;
     if (hint) {
-      hint.textContent =
-        ids.length > MAX_SELECTED ? "Select up to " + MAX_SELECTED : "";
+      if (ids.length > MAX_SELECTED) {
+        hint.textContent = "Select up to " + MAX_SELECTED + " test cases.";
+      } else if (ids.length === 0) {
+        hint.textContent = "Tick at least one test case to automate it.";
+      } else {
+        hint.textContent = "";
+      }
     }
   }
 
@@ -1132,13 +1203,6 @@
     if (!closest(event.target, "#tc-list .tc-select")) return;
     saveSelection(readSelection());
     updateSelectionUi();
-  });
-
-  document.addEventListener("input", function (event) {
-    var box = closest(event.target, "#refine-instruction");
-    if (!box) return;
-    var counter = document.getElementById("refine-count");
-    if (counter) counter.textContent = String(box.value.length);
   });
 
   /* Strengthen and Refine post the list the browser holds, never the server. */

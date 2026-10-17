@@ -178,7 +178,6 @@
     var box = form.querySelector(".ship-reason");
     if (box) {
       box.focus();
-      updateCounter(box);
     }
   }
 
@@ -190,13 +189,6 @@
     if (box) box.value = "";
     var status = form.querySelector(".ship-accept-status");
     if (status) status.textContent = "";
-  }
-
-  function updateCounter(box) {
-    var form = box.closest(".ship-accept-form");
-    if (!form) return;
-    var counter = form.querySelector(".ship-counter");
-    if (counter) counter.textContent = box.value.trim().length + " / " + MAX_REASON;
   }
 
   function saveAcceptance(checkId) {
@@ -316,12 +308,6 @@
     }
     var remove = target.closest(".ship-unaccept");
     if (remove) removeAcceptance(remove.getAttribute("data-check"));
-  });
-
-  document.addEventListener("input", function (event) {
-    if (event.target && event.target.classList.contains("ship-reason")) {
-      updateCounter(event.target);
-    }
   });
 
   document.addEventListener("DOMContentLoaded", runCheck);

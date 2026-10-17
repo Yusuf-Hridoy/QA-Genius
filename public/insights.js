@@ -53,23 +53,31 @@
     for (var i = 0; i < chosen.length; i++) {
       var file = chosen[i];
       var row = document.createElement("li");
-      row.className = "key-row";
+      row.className = "file-row";
       var name = document.createElement("span");
+      name.className = "file-name";
       name.textContent = file.name;
       var size = document.createElement("span");
       size.className = "muted small";
       size.textContent = sizeText(file.size);
+      var spacer = document.createElement("span");
+      spacer.className = "spacer";
       var remove = document.createElement("button");
       remove.type = "button";
-      remove.className = "btn btn-small";
+      remove.className = "btn btn-small btn-danger";
       remove.textContent = "Remove";
       remove.setAttribute("data-index", String(i));
+      remove.setAttribute("aria-label", "Remove " + file.name);
       remove.addEventListener("click", onRemove);
       row.appendChild(name);
       row.appendChild(size);
+      row.appendChild(spacer);
       row.appendChild(remove);
       list.appendChild(row);
     }
+    /* With files on the list the drop zone has said its piece. */
+    var zone = byId("insights-drop");
+    if (zone) zone.hidden = chosen.length > 0;
   }
 
   function onRemove(event) {

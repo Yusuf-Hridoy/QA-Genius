@@ -140,3 +140,20 @@ with the notes prefilled.
   request. It asks for the provider id and the key (hidden while typing)
   and prints `OK <provider> <model>` or the cleaned error. The key is
   never printed.
+
+## Development
+- `pytest -q` runs the suite; `ruff check .` lints. Both must pass before a
+  commit.
+- `python scripts/ui_screenshots.py` saves a PNG of every desk at 1366×900
+  and 390×844 into `ui-screens/` (git-ignored), so a UI change can be
+  compared side by side instead of described. It starts nothing itself:
+
+      pip install playwright          # a dev dependency, not in requirements.txt
+      playwright install chromium
+      uvicorn main:app --reload       # in one terminal
+      python scripts/ui_screenshots.py   # in another
+
+  Pass a different base URL as the one argument, e.g.
+  `python scripts/ui_screenshots.py http://localhost:9000`. Every page is
+  shot empty or through its own **Load example** button, so no API key is
+  needed and no request reaches a provider.

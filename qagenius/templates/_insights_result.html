@@ -135,7 +135,7 @@
       <button type="button" class="btn" hx-get="/insights/example-explained"
               hx-target="#insights-explanation" hx-swap="innerHTML">Explain with AI</button>
       {% else %}
-      <button type="submit" class="btn"><span class="btn-label">Explain with AI</span></button>
+      <button type="submit" class="btn" data-busy-label="Reading…"><span class="btn-label">Explain with AI</span></button>
       {% endif %}
       <button type="button" class="btn" id="insights-copy-md">Copy summary as Markdown</button>
     </div>

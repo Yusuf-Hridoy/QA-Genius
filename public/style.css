@@ -45,6 +45,10 @@
 
   --r-sm:6px; --r:10px; --r-card:14px; --r-lg:18px;
 
+  /* One height for every control and button, so a select never stands
+   * taller than the input beside it. --form-w keeps a line readable. */
+  --ctl-h:40px; --ctl-h-sm:32px; --ctl-h-lg:44px; --form-w:760px;
+
   --shadow-1:0 1px 2px rgba(28,24,16,.05), 0 1px 1px rgba(28,24,16,.04);
   --shadow-2:0 2px 4px rgba(28,24,16,.04), 0 10px 26px -10px rgba(28,24,16,.16);
   --shadow-3:0 28px 64px -18px rgba(28,24,16,.32);
@@ -93,6 +97,11 @@
   --shadow-3:0 28px 64px -18px rgba(0,0,0,.75);
   --ring:0 0 0 3px rgba(79,164,124,.26);
 }
+
+/* The hidden attribute wins. A component rule that sets display (.row, .btn,
+ * .card) used to beat it, so elements the JS had hidden stayed on screen -
+ * the bug desk showed a broken screenshot preview with nothing attached. */
+[hidden]{display:none !important}
 
 /* ------------------------------------------------------------ base type */
 *{box-sizing:border-box}
@@ -171,14 +180,6 @@ a{color:var(--accent);text-underline-offset:2px}
 .crumb .sep{color:var(--muted)}
 .topbar-right{margin-left:auto;display:flex;align-items:center;gap:8px}
 
-.icon-btn{width:34px;height:34px;display:inline-flex;align-items:center;
-  justify-content:center;border-radius:var(--r);cursor:pointer;
-  border:1px solid var(--border);background:var(--card);color:var(--text-2);
-  transition:border-color .14s var(--ease),color .14s var(--ease),
-    box-shadow .14s var(--ease)}
-.icon-btn:hover{color:var(--text);border-color:var(--border-strong);
-  box-shadow:var(--shadow-1)}
-.icon-btn svg{width:16px;height:16px}
 :root[data-theme="dark"] .theme-sun{display:none}
 :root:not([data-theme="dark"]) .theme-moon{display:none}
 
@@ -191,6 +192,10 @@ a{color:var(--accent);text-underline-offset:2px}
 .key-chip:hover{border-color:var(--border-strong);box-shadow:var(--shadow-2)}
 .key-chip.empty{background:var(--warn-bg);color:var(--warn-fg);
   border-color:color-mix(in srgb,var(--warn-line) 32%,transparent)}
+/* With a key saved the dot says so and the keyhole steps out, except on a
+ * narrow phone where the dot alone would be all that is left of the chip. */
+.key-chip:not(.empty) #key-chip-icon{display:none}
+@media (max-width:420px){.key-chip:not(.empty) #key-chip-icon{display:block}}
 .dot{width:7px;height:7px;border-radius:50%;background:var(--ok-line);
   box-shadow:0 0 0 3px color-mix(in srgb,var(--ok-line) 20%,transparent)}
 
@@ -211,8 +216,13 @@ a{color:var(--accent);text-underline-offset:2px}
 .card{background:var(--card);border:1px solid var(--border);
   border-radius:var(--r-card);padding:20px 22px;margin-bottom:16px;
   box-shadow:var(--shadow-1)}
-.card h2{margin:0 0 8px;font-size:17.5px;font-weight:700;letter-spacing:-.018em}
-.card h3{font-weight:650;letter-spacing:-.012em}
+/* One size for a card title, one for a sub-section inside it. */
+.card h2{margin:0 0 8px;font-size:17px;font-weight:600;letter-spacing:-.018em}
+.card h3{margin:18px 0 8px;font-size:14px;font-weight:600;
+  letter-spacing:-.008em}
+.card > h3:first-child{margin-top:0}
+/* Where an h3 is the card's own title rather than a section inside it. */
+.risk-card h3,#insights-explanation-card > h3{margin:0 0 8px;font-size:15.5px}
 .card p{margin:8px 0;color:var(--text-2)}
 .card > :last-child{margin-bottom:0}
 .card-quiet{background:var(--card-2);box-shadow:none}
@@ -298,48 +308,166 @@ a{color:var(--accent);text-underline-offset:2px}
 .pill.plain::before{display:none}
 
 /* -------------------------------------------------------------- buttons */
-.btn{display:inline-flex;align-items:center;justify-content:center;gap:7px;
-  padding:9px 15px;border-radius:var(--r);
+/* Three sizes, one height each, matching the controls. A secondary button no
+ * longer lifts on hover - only the primary moves, so the eye knows which one
+ * the page wants you to press. */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;
+  height:var(--ctl-h);padding:0 16px;border-radius:var(--r);
   border:1px solid var(--border-strong);background:var(--card);
   color:var(--text);font-weight:600;cursor:pointer;font-family:inherit;
-  text-decoration:none;font-size:14px;line-height:1.35;
+  text-decoration:none;font-size:14px;line-height:1.35;white-space:nowrap;
   box-shadow:var(--shadow-1);
-  transition:transform .12s var(--ease),box-shadow .14s var(--ease),
+  transition:box-shadow .14s var(--ease),filter .14s var(--ease),
     background .14s var(--ease),border-color .14s var(--ease)}
-.btn:hover{border-color:var(--text-2);box-shadow:var(--shadow-2);
-  transform:translateY(-1px)}
-.btn:active{transform:translateY(0);box-shadow:var(--shadow-1)}
+.btn:hover{border-color:var(--text-2);box-shadow:var(--shadow-2);transform:none}
+.btn:active{box-shadow:var(--shadow-1)}
+.btn:focus-visible{outline:none;box-shadow:var(--ring)}
 .btn-primary{background:linear-gradient(170deg,var(--accent-2),var(--accent));
   border-color:var(--accent-deep);color:var(--on-accent);
   box-shadow:0 1px 2px rgba(20,58,43,.3),inset 0 1px 0 rgba(255,255,255,.17)}
-.btn-primary:hover{border-color:var(--accent-deep);
+.btn-primary:hover{border-color:var(--accent-deep);filter:brightness(1.05);
   box-shadow:0 4px 14px -3px rgba(20,58,43,.45),inset 0 1px 0 rgba(255,255,255,.2)}
 .btn-ghost{background:transparent;border-color:transparent;box-shadow:none;
   color:var(--text-2)}
 .btn-ghost:hover{background:var(--card-2);border-color:var(--border);
   color:var(--text)}
+/* Delete, Remove, Clear: quiet until you hover, then unmistakably red. */
+.btn-danger{background:transparent;color:var(--bad-fg);box-shadow:none;
+  border-color:color-mix(in srgb,var(--bad-line) 55%,transparent)}
+.btn-danger:hover{background:var(--bad-bg);border-color:var(--bad-line);
+  box-shadow:none}
 .btn:disabled,.btn[aria-disabled="true"]{opacity:.55;cursor:not-allowed;
-  transform:none;box-shadow:var(--shadow-1)}
-.btn-small{padding:5px 10px;font-size:12.5px;border-radius:var(--r-sm)}
+  box-shadow:var(--shadow-1)}
+.btn-small{height:var(--ctl-h-sm);padding:0 12px;font-size:13px;
+  border-radius:var(--r-sm)}
+.btn-large{height:var(--ctl-h-lg);padding:0 20px;font-size:15px}
+.btn-block{width:100%}
+.btn-icon{width:36px;height:36px;padding:0;flex:0 0 36px;
+  color:var(--text-2);border-color:var(--border)}
+.btn-icon:hover{color:var(--text);border-color:var(--border-strong)}
 .btn svg{width:15px;height:15px}
+.btn-icon svg{width:16px;height:16px}
+
+/* Working: the button keeps its width, the label says what is happening and
+ * a spinner turns in front of it. */
+/* The spinner takes its 13px out of the side padding, and app.js has already
+ * pinned min-width to the idle width, so the button does not change size and
+ * nothing on the row shifts under the cursor. */
+.btn[aria-busy="true"]{pointer-events:none;padding-left:6px;padding-right:6px}
+.btn[aria-busy="true"] .btn-label{opacity:.85}
+.btn[aria-busy="true"]::before{content:"";width:13px;height:13px;
+  flex:0 0 13px;border-radius:50%;
+  border:2px solid color-mix(in srgb,currentColor 25%,transparent);
+  border-top-color:currentColor;animation:spin .7s linear infinite}
+
+/* Buttons that are not shaped like a button. They carry .btn so every button
+ * on the page belongs to the system, and take their own shape back here -
+ * .btn on its own would make a filter chip 40px tall. */
+.btn.key-chip{height:auto;padding:7px 13px;border-radius:999px;font-size:13px;
+  border-color:var(--border);box-shadow:var(--shadow-1)}
+.btn.key-chip:hover{border-color:var(--border-strong);box-shadow:var(--shadow-2)}
+.btn.to-top{padding:0;border-radius:50%}
+.btn.chip{height:var(--ctl-h-sm);padding:0 12px;border-radius:999px;
+  font-size:12.5px;font-weight:500;color:var(--text-2);
+  border-color:var(--border)}
+.btn.chip:hover{border-color:var(--border-strong)}
+.btn.chip.now{color:var(--accent-ink);font-weight:650}
+.btn.file-tab{height:auto;min-height:var(--ctl-h-sm);padding:8px 10px;
+  justify-content:flex-start;text-align:left;font-weight:500;
+  font-size:12px;white-space:normal;border-color:var(--border);
+  box-shadow:none}
+.btn.file-tab:hover{border-color:var(--border-strong);box-shadow:none}
+.btn.file-tab.now{font-weight:650}
+
+/* ------------------------------------------------------------- controls */
+/* Every text-like control shares one height, one border and one focus ring.
+ * .ctl is for controls built outside a .field; inside one the element
+ * selectors carry it, so no template has to remember the class. */
+.ctl,
+.field input:not([type=checkbox]):not([type=radio]):not([type=file]),
+.field select,.field textarea{
+  height:var(--ctl-h);padding:0 12px;font:inherit;font-size:14px;
+  border:1px solid var(--border-strong);border-radius:var(--r);
+  background:var(--card);color:var(--text);width:100%;
+  transition:border-color .14s var(--ease),box-shadow .14s var(--ease)}
+.field textarea,textarea.ctl{height:auto;min-height:132px;padding:10px 12px;
+  line-height:1.6;resize:vertical}
+/* An optional long-text field should not shout as loud as a required one. */
+.field textarea.short,textarea.ctl.short{min-height:84px}
+.ctl::placeholder,.field input::placeholder,
+.field textarea::placeholder{color:var(--muted)}
+
+/* Select: one chevron, same height as the inputs. The stroke is a literal
+ * because a data URI cannot read a custom property; #858C84 is --muted in
+ * the light theme and still reads on the dark card. */
+.field select,select.ctl{appearance:none;-webkit-appearance:none;
+  padding-right:36px;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23858C84' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;background-position:right 12px center;
+  background-size:12px}
+
+/* A count of attempts is not a sentence: give it the width of a number. */
+.field input[type=number],input.ctl[type=number]{width:140px;
+  font-variant-numeric:tabular-nums}
+
+.ctl:focus,.ctl:focus-visible,
+.field :is(input,select,textarea):focus,
+.field :is(input,select,textarea):focus-visible{
+  outline:none;border-color:var(--accent);box-shadow:var(--ring)}
+.ctl[aria-invalid=true],
+.field :is(input,select,textarea)[aria-invalid=true]{border-color:var(--bad-line)}
+.ctl:disabled,.field :is(input,select,textarea):disabled{
+  background:var(--card-2);color:var(--muted);cursor:not-allowed}
+
+input[type=checkbox],input[type=radio]{width:16px;height:16px;
+  accent-color:var(--accent);margin:0;vertical-align:-3px}
+.choice{display:inline-flex;align-items:center;gap:8px;min-height:32px;
+  cursor:pointer}
 
 /* --------------------------------------------------------------- fields */
-.field{margin-bottom:15px}
-.field label{display:block;font-weight:600;margin-bottom:6px;font-size:14px}
-.field .hint{display:block;font-weight:400;font-size:12.5px;color:var(--muted)}
-.field input[type=text],.field input[type=password],.field input[type=url],
-.field input[type=number],.field textarea,.field select{width:100%;
-  padding:10px 12px;border:1px solid var(--border-strong);border-radius:var(--r);
-  background:var(--card);color:var(--text);font:inherit;
-  transition:border-color .14s var(--ease),box-shadow .14s var(--ease)}
-.field textarea{min-height:124px;resize:vertical;line-height:1.6}
-.field input::placeholder,.field textarea::placeholder{color:var(--muted)}
-.field input:focus,.field textarea:focus,.field select:focus{
-  outline:none;border-color:var(--accent);box-shadow:var(--ring)}
-.field input[type=number]{width:auto}
-.num-input{width:82px;margin-left:6px;padding:7px 9px;
-  border:1px solid var(--border-strong);border-radius:var(--r-sm);
-  background:var(--card);color:var(--text);font:inherit}
+/* One order everywhere: label, then hint, then the control, then the help
+ * line and its counter. _form_fields.html is the only place that writes it. */
+.field{margin-bottom:18px}
+.field > label,.field > legend.label{display:block;font-size:14px;
+  font-weight:600;margin-bottom:3px;color:var(--text)}
+.field .opt{font-weight:400;color:var(--muted)}
+.field .hint{display:block;font-size:12.5px;color:var(--text-2);margin:0 0 7px}
+.field-under{display:flex;justify-content:space-between;gap:12px;
+  margin-top:6px;font-size:12px;color:var(--muted)}
+.field-under .counter{font-variant-numeric:tabular-nums;white-space:nowrap}
+.field-under .counter.near{color:var(--warn-fg)}
+.field-under .counter.over{color:var(--bad-fg);font-weight:600}
+.field-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:12px;margin-bottom:18px}
+.field-grid .field{margin-bottom:0}
+.field-pair{display:grid;grid-template-columns:repeat(2,140px);gap:12px}
+.field-pair label{font-size:12.5px;font-weight:500;color:var(--text-2);
+  margin-bottom:4px;display:block}
+@media (max-width:640px){.field-grid{grid-template-columns:1fr}}
+/* No control is narrower than its content on a phone. */
+@media (max-width:480px){
+  .field-pair{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .field input[type=number],input.ctl[type=number]{width:100%}
+}
+
+/* ---------------------------------------------------- form layout */
+/* A form is a column of fields you read down, so it stops at a readable
+ * width even when the card it sits in runs the full page. Results keep the
+ * whole width - a table has no reason to be 760px. */
+.form-body{max-width:var(--form-w)}
+.form-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap;
+  border-top:1px solid var(--border);padding-top:16px;margin-top:6px}
+.form-note{font-size:12px;color:var(--muted);margin:8px 0 0}
+.form-note:empty{display:none}
+.field-link{margin:6px 0 0;font-size:12.5px}
+/* The key is hidden; Show sits beside it rather than under it. */
+.secret-row{display:flex;gap:8px;align-items:center}
+.secret-row input{flex:1 1 auto;min-width:0}
+.repro-line{margin:10px 0 0}
+@media (max-width:480px){
+  .form-actions .btn{flex:1 1 100%}
+  .form-actions .spacer{display:none}
+}
 
 fieldset{border:none;margin:0 0 15px;padding:0}
 legend{padding:0}
@@ -373,9 +501,12 @@ details > summary:hover{color:var(--text)}
   border-color:color-mix(in srgb,var(--accent) 34%,transparent);
   color:var(--accent-ink);box-shadow:var(--shadow-1)}
 .steps li.now .step-n{background:var(--accent);color:var(--on-accent)}
-.steps li.locked > span,.steps li.locked a{opacity:.58;cursor:not-allowed;
-  box-shadow:none;background:var(--card-2)}
-.steps li.locked a:hover{transform:none;border-color:var(--border)}
+/* A locked step is still a word you must be able to read: the lock icon
+ * carries the state, not a wash of opacity that drops contrast under 4.5:1. */
+.steps li.locked > span,.steps li.locked a{cursor:not-allowed;
+  box-shadow:none;background:var(--card-2);color:var(--text-2)}
+.steps li.locked .step-n{background:var(--card-3);color:var(--text-2)}
+.steps li.locked a:hover{border-color:var(--border);color:var(--text-2)}
 .step-text{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .step-lock{margin-left:auto;opacity:.7;flex:0 0 auto}
 .step-lock svg{width:13px;height:13px;display:block}
@@ -403,7 +534,8 @@ mark{background:var(--warn-bg);color:var(--warn-fg);border-radius:3px;
 .htmx-indicator{display:none}
 .htmx-request .htmx-indicator{display:inline-flex}
 .htmx-request.htmx-indicator{display:inline-flex}
-.htmx-request .btn-label{display:none}
+/* A busy button keeps its label - app.js swaps the word and adds the
+ * spinner. Hiding the label here left an empty button mid-request. */
 .muted{color:var(--muted)}
 .small{font-size:13px}
 .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
@@ -561,8 +693,14 @@ tr.diff-row td:first-child{box-shadow:inset 3px 0 0 var(--warn-line)}
   border-color:var(--border-strong)}
 .chip.now{background:var(--accent-soft);color:var(--accent-ink);
   border-color:color-mix(in srgb,var(--accent) 36%,transparent);font-weight:650}
+/* Each id is its own box, so a narrow column wraps between ids and never
+ * splits TC- from the number that follows it. */
+.tc-ids{display:inline-flex;flex-wrap:wrap;gap:4px;vertical-align:-1px}
+.tc-id{white-space:nowrap;font-size:11.5px;background:var(--card-3);
+  color:var(--text-2);border-radius:var(--r-sm);padding:1px 5px}
+.tc-reasons{min-width:160px}
+
 .tc-card h3{margin:0 0 8px;font-size:15.5px}
-.tc-card[hidden]{display:none}
 .tc-steps{margin:8px 0;padding-left:21px}
 .tc-steps li{margin:3px 0}
 .tc-card h3 .tc-select{margin-right:7px;vertical-align:middle;
@@ -578,9 +716,9 @@ tr.diff-row td:first-child{box-shadow:inset 3px 0 0 var(--warn-line)}
 .ac-actions{flex-wrap:nowrap;align-items:flex-start}
 .tc-form fieldset{border:none;margin:14px 0;padding:0}
 .tc-form legend{padding:0}
-.check{display:inline-flex;align-items:center;gap:6px;margin-right:14px;
-  font-size:14px;color:var(--text-2)}
-.check input{accent-color:var(--accent)}
+/* Checkbox rows use .choice from the control system now; this keeps any
+ * older markup that still says .check reading the same. */
+.check,.choice{font-size:14px;color:var(--text-2);margin-right:14px}
 
 .depth-line{font-weight:600;margin:6px 0}
 .depth-line.thin{color:var(--warn-fg)}
@@ -627,14 +765,25 @@ tr.diff-row td:first-child{box-shadow:inset 3px 0 0 var(--warn-line)}
 /* ----------------------------------------------------------- bug desk */
 .bad-line{color:var(--bad-fg);font-weight:600;font-size:13px}
 .warn-line{color:var(--warn-fg)}
+/* A mark, one line, one button - and once a file is attached the zone steps
+ * aside for a compact row, so the form does not carry both. */
 .drop-zone{border:1.5px dashed var(--border-strong);border-radius:var(--r);
-  padding:22px 16px;text-align:center;background:var(--card-2);
+  padding:20px 16px;text-align:center;background:var(--card-2);
+  display:flex;flex-direction:column;align-items:center;gap:9px;
   transition:border-color .14s var(--ease),background .14s var(--ease)}
 .drop-zone:hover{border-color:var(--accent)}
 .drop-zone.over{border-color:var(--accent);background:var(--accent-soft)}
 .drop-zone p{margin:0}
-.shot-thumb{max-width:140px;max-height:100px;border-radius:var(--r);
-  border:1px solid var(--border)}
+.drop-mark{width:26px;height:26px;color:var(--muted)}
+.drop-line{font-size:13.5px;color:var(--text-2)}
+.file-row{display:flex;align-items:center;gap:10px;padding:8px 10px;
+  border:1px solid var(--border);border-radius:var(--r);
+  background:var(--card-2)}
+.file-name{font-size:13.5px;word-break:break-all}
+.attached-list{list-style:none;margin:0;padding:0;display:flex;
+  flex-direction:column;gap:8px}
+.shot-thumb{width:64px;height:64px;object-fit:cover;border-radius:var(--r-sm);
+  border:1px solid var(--border);flex:0 0 64px}
 .shot-shown{margin-bottom:10px}
 .shot-shown figcaption{color:var(--muted);font-size:13px;margin-top:4px}
 .check-rows{list-style:none;margin:12px 0 0;padding:0;font-size:14px}
@@ -698,9 +847,12 @@ table.heat{border-collapse:separate;border-spacing:3px;width:100%}
 .score-row{margin-top:10px}
 .score-field{font-size:12px;color:var(--muted);display:inline-flex;gap:6px;
   align-items:center}
-.score-field input{width:60px;padding:6px 8px;border:1px solid var(--border);
+/* Three scores side by side: the control system's 140px would push the last
+ * one onto its own line, so they keep a number's width. */
+.field .score-field input,.score-field input{width:68px;padding:0 8px;
+  height:var(--ctl-h-sm);border:1px solid var(--border-strong);
   border-radius:var(--r-sm);background:var(--card);color:var(--text);
-  font:inherit}
+  font:inherit;font-size:13px;font-variant-numeric:tabular-nums}
 @media (max-width:980px){.risk-split{grid-template-columns:1fr}
   .risk-heat{position:static}}
 
@@ -768,4 +920,29 @@ table.heat{border-collapse:separate;border-spacing:3px;width:100%}
   .page-head h1{font-size:22px}
   .verdict{padding:18px;gap:16px}
   .to-top{right:14px;bottom:14px}
+}
+
+@media (max-width:640px){
+  /* The rail is a strip you scroll. The fade at the right edge says there is
+   * more, and app.js scrolls the desk you are on into view on load, so
+   * "Risk radar" is never left as "Risk rada…". */
+  .sidebar{scroll-snap-type:x proximity;scrollbar-width:none;
+    -webkit-mask-image:linear-gradient(to right,#000 85%,transparent);
+    mask-image:linear-gradient(to right,#000 85%,transparent)}
+  .sidebar::-webkit-scrollbar{display:none}
+  .nav a{scroll-snap-align:center}
+  .nav a:last-child{margin-right:26px}
+  .content{padding:16px 16px 60px}
+  .card{padding:16px 16px}
+  .verdict{padding:16px;gap:14px}
+  .steps li{flex:1 1 100%}
+  .field-pair{grid-template-columns:repeat(2,minmax(0,1fr))}
+  table.grid th,table.grid td{padding:8px 9px}
+}
+
+@media (max-width:420px){
+  /* The chip keeps the key's state; its words move into the label. */
+  #key-chip-text{position:absolute;width:1px;height:1px;overflow:hidden;
+    clip-path:inset(50%);white-space:nowrap}
+  .btn.key-chip{padding:7px 10px;gap:6px}
 }

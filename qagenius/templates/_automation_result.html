@@ -42,7 +42,7 @@
   <div class="file-view">
     <div class="file-list">
       {% for file in report.files %}
-      <button type="button" class="file-tab{% if loop.first %} now{% endif %}" data-file="{{ loop.index0 }}">{{ file.name }}</button>
+      <button type="button" class="file-tab btn{% if loop.first %} now{% endif %}" data-file="{{ loop.index0 }}">{{ file.name }}</button>
       {% endfor %}
     </div>
     <div class="file-code">

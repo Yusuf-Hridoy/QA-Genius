@@ -74,17 +74,38 @@
     });
   }
 
-  function labelledBox(id, labelText, rows, placeholder, hint) {
+  function labelledBox(id, labelText, rows, placeholder, hint, options) {
+    var opts = options || {};
     var field = el("div", "field");
     var label = el("label", null, labelText);
     label.setAttribute("for", id);
+    if (opts.optional) {
+      label.appendChild(document.createTextNode(" "));
+      label.appendChild(el("span", "opt", "(optional)"));
+    }
+    field.appendChild(label);
+    if (hint) {
+      var hintLine = el("p", "hint", hint);
+      hintLine.id = id + "-hint";
+      field.appendChild(hintLine);
+    }
     var box = el("textarea");
     box.id = id;
     box.setAttribute("rows", String(rows));
     box.setAttribute("placeholder", placeholder);
-    field.appendChild(label);
     field.appendChild(box);
-    if (hint) field.appendChild(el("span", "hint", hint));
+    if (opts.max) {
+      var under = el("div", "field-under");
+      var help = el("span", null, "");
+      help.id = id + "-help";
+      under.appendChild(help);
+      var counter = el("span", "counter", "0 / " + opts.max);
+      counter.setAttribute("data-for", id);
+      counter.setAttribute("data-max", String(opts.max));
+      counter.setAttribute("aria-live", "polite");
+      under.appendChild(counter);
+      field.appendChild(under);
+    }
     return { field: field, box: box };
   }
 
@@ -109,25 +130,30 @@
     form.setAttribute("hx-swap", "innerHTML");
     form.setAttribute("hx-indicator", "#risk-paste-progress");
 
+    var body = el("div", "form-body");
+
     var story = labelledBox(
       "risk-paste-story",
       "User story",
       4,
       "As a shopper, I want…",
-      "Up to 3000 characters."
+      "",
+      { max: 3000 }
     );
     story.box.setAttribute("maxlength", "3000");
     story.box.required = true;
-    form.appendChild(story.field);
+    body.appendChild(story.field);
 
     var criteria = labelledBox(
       "risk-paste-criteria",
-      "Acceptance criteria (optional)",
+      "Acceptance criteria",
       6,
       "One criterion per block, separated by a blank line.",
-      "Separate criteria with a blank line. Risk radar runs without them."
+      "One criterion per block. Risk radar runs without them.",
+      { optional: true }
     );
-    form.appendChild(criteria.field);
+    body.appendChild(criteria.field);
+    form.appendChild(body);
 
     ["user_story", "criteria_json", "cases_json"].forEach(function (name) {
       var input = el("input");
@@ -136,7 +162,7 @@
       form.appendChild(input);
     });
 
-    var actions = el("div", "row");
+    var actions = el("div", "form-actions");
     var find = el("button", "btn btn-primary");
     find.id = "risk-paste-find";
     find.type = "submit";
@@ -146,15 +172,16 @@
     var link = el("a", "btn btn-ghost", "Start in Requirements");
     link.setAttribute("href", "/requirements/story");
     actions.appendChild(link);
-    form.appendChild(actions);
+    body.appendChild(actions);
 
     var progress = el("p", "htmx-indicator working", "Thinking about how this can fail…");
     progress.insertBefore(el("span", "spin"), progress.firstChild);
     progress.id = "risk-paste-progress";
-    form.appendChild(progress);
+    body.appendChild(progress);
 
     card.appendChild(form);
     root.appendChild(card);
+    if (window.QAG && window.QAG.initFields) window.QAG.initFields(root);
 
     /* What is pasted becomes the run, exactly as a checked story would:
      * a new story owns the run, so nothing from an older one survives. */
@@ -236,7 +263,7 @@
       form.appendChild(input);
     });
 
-    var actions = el("div", "row");
+    var actions = el("div", "form-actions");
     var find = el("button", "btn btn-primary");
     find.id = "risk-find";
     find.type = "submit";

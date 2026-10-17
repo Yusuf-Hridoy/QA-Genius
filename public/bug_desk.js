@@ -14,14 +14,6 @@
     return document.getElementById(id);
   }
 
-  /* ---------- notes counter ---------- */
-
-  function updateNotes() {
-    var box = byId("bug-notes");
-    var count = byId("bug-notes-count");
-    if (box && count) count.textContent = String(box.value.length);
-  }
-
   /* ---------- attempts ---------- */
 
   /* Same rule as reproducibility_text in qagenius/bug_report.py. */
@@ -44,12 +36,20 @@
     var happened = number(byId("bug-happened"), 0);
     if (happened > total) {
       line.textContent = "Happened can't be more than Tried";
-      line.className = "small bad-line";
+      line.className = "pill bad";
       if (run) run.disabled = true;
       return;
     }
-    line.textContent = reproText(total, happened);
-    line.className = "muted small";
+    var text = reproText(total, happened);
+    line.textContent = text;
+    /* Always is good news for a tester, intermittent is the warning. */
+    if (happened <= 0) {
+      line.className = "pill neutral";
+    } else if (happened >= total) {
+      line.className = "pill ok";
+    } else {
+      line.className = "pill warn";
+    }
     if (run) run.disabled = false;
   }
 
@@ -69,6 +69,8 @@
     if (data) data.value = "";
     if (thumb) thumb.removeAttribute("src");
     if (preview) preview.hidden = true;
+    var zone = byId("bug-drop");
+    if (zone) zone.hidden = false;
   }
 
   function decodedSize(base64) {
@@ -94,6 +96,8 @@
     if (size) size.textContent = Math.round(bytes / 1024) + " KB";
     var preview = byId("bug-shot-preview");
     if (preview) preview.hidden = false;
+    var zone = byId("bug-drop");
+    if (zone) zone.hidden = true;
     setStatus("");
   }
 
@@ -218,7 +222,6 @@
   document.addEventListener("input", function (event) {
     var target = event.target;
     if (!target || !target.id) return;
-    if (target.id === "bug-notes") updateNotes();
     if (target.id === "bug-total" || target.id === "bug-happened") updateAttempts();
   });
 
@@ -341,7 +344,6 @@
       zone.addEventListener("drop", onDrop);
     }
     usePrefill();
-    updateNotes();
     updateAttempts();
   });
 })();

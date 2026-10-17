@@ -1,0 +1,33 @@
+{# The one shape every field on every desk takes.
+
+   Label, then the hint that tells you what to type, then the control, then
+   the quiet line under it: help on the left, the character counter on the
+   right. Before this, one form put the hint under the label and the next put
+   it under the control, so no two desks lined up.
+
+   Ids are passed in, never generated from the label, so every id the JS and
+   the tests already know stays exactly as it was. #}
+
+{% macro field(id, label, optional=false, hint="", help="", counter_max=none, counter_id=none) %}
+<div class="field">
+  <label for="{{ id }}">{{ label }}{% if optional %} <span class="opt">(optional)</span>{% endif %}</label>
+  {% if hint %}<p class="hint" id="{{ id }}-hint">{{ hint }}</p>{% endif %}
+  {{ caller() }}
+  {% if help or counter_max %}
+  <div class="field-under">
+    <span id="{{ id }}-help">{{ help }}</span>
+    {% if counter_max %}<span class="counter"{% if counter_id %} id="{{ counter_id }}"{% endif %} data-for="{{ id }}" data-max="{{ counter_max }}" aria-live="polite">0 / {{ counter_max }}</span>{% endif %}
+  </div>
+  {% endif %}
+</div>
+{% endmacro %}
+
+{# A fieldset for controls that only mean something as a pair, such as the
+   two attempt counts on the bug desk. #}
+{% macro group(label, optional=false, hint="", id=none) %}
+<fieldset class="field"{% if id %} id="{{ id }}"{% endif %}>
+  <legend class="label">{{ label }}{% if optional %} <span class="opt">(optional)</span>{% endif %}</legend>
+  {% if hint %}<p class="hint">{{ hint }}</p>{% endif %}
+  {{ caller() }}
+</fieldset>
+{% endmacro %}

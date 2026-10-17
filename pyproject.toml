@@ -19,6 +19,9 @@ dependencies = [
 dev = [
     "pytest",
     "ruff",
+    # Only scripts/ui_screenshots.py uses it; the app never imports it, so it
+    # stays out of requirements.txt and off the deployed server.
+    "playwright",
 ]
 
 [tool.pytest.ini_options]

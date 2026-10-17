@@ -2,6 +2,7 @@
 {% block title %}Story check — QA-Genius{% endblock %}
 {% block top_title %}Requirements · Story check{% endblock %}
 {% block content %}
+{% from "_form_fields.html" import field %}
 {% with step = 1 %}{% include "_steps.html" %}{% endwith %}
 <div class="page-head">
   <span class="eyebrow">Step 1 of 4</span>
@@ -12,32 +13,29 @@
 </div>
 <div class="card" id="story-card" data-input-card="Your story">
   <form id="story-form" hx-post="/requirements/story/run" hx-target="#story-output" hx-swap="innerHTML" hx-indicator="#check-btn">
-    <div class="field">
-      <label for="story-user-story">User story</label>
+    <div class="form-body">
+      {% call field("story-user-story", "User story", counter_max=3000) %}
       <textarea id="story-user-story" name="user_story" maxlength="3000" required placeholder="As a shopper, I want…"></textarea>
-      <span class="hint">Up to 3000 characters.</span>
-    </div>
-    <div class="field">
-      <label for="story-type">Story type</label>
+      {% endcall %}
+      {% call field("story-type", "Story type") %}
       <select id="story-type" name="story_type">
         <option value="User story">User story</option>
         <option value="Technical story">Technical story</option>
         <option value="Bug fix story">Bug fix story</option>
         <option value="Spike/Research">Spike/Research</option>
       </select>
+      {% endcall %}
+      {% call field("story-context", "Context", optional=true, hint="The page, the role, anything the story leaves out.", counter_max=1000) %}
+      <textarea id="story-context" name="context" class="short" maxlength="1000" placeholder="Login page, shoppers sign in with email and password…"></textarea>
+      {% endcall %}
+      <div class="form-actions">
+        <button id="check-btn" type="submit" class="btn btn-primary" data-busy-label="Checking…"><span class="btn-label">Check story</span></button>
+        <button id="load-example" type="button" class="btn" hx-get="/requirements/story/example" hx-target="#story-output" hx-swap="innerHTML">Load example</button>
+        <button id="duel-btn" type="button" class="btn" hx-post="/requirements/story/duel" hx-target="#duel-output" hx-swap="innerHTML" hx-include="#story-form" hx-indicator="#duel-progress">Run ambiguity duel</button>
+      </div>
+      <p class="form-note">Ambiguity duel uses 3 AI calls with your key.</p>
+      <p id="duel-progress" class="htmx-indicator working"><span class="spin"></span>Reader A and Reader B are reading your story…</p>
     </div>
-    <div class="field">
-      <label for="story-context">Context <span class="hint">optional — page, role, constraints (up to 1000 characters)</span></label>
-      <textarea id="story-context" name="context" maxlength="1000" placeholder="Login page, shoppers sign in with email and password…"></textarea>
-    </div>
-    <div class="row">
-      <button id="check-btn" type="submit" class="btn btn-primary"><span class="btn-label">Check story</span><span class="htmx-indicator"><span class="spin"></span>Checking…</span></button>
-      <button id="load-example" type="button" class="btn" hx-get="/requirements/story/example" hx-target="#story-output" hx-swap="innerHTML">Load example</button>
-      <button id="duel-btn" type="button" class="btn" hx-post="/requirements/story/duel" hx-target="#duel-output" hx-swap="innerHTML" hx-include="#story-form" hx-indicator="#duel-progress">Run ambiguity duel</button>
-      <span class="spacer"></span>
-      <span class="hint">Ambiguity duel runs 3 short AI calls.</span>
-    </div>
-    <p id="duel-progress" class="htmx-indicator working"><span class="spin"></span>Reader A and Reader B are reading your story…</p>
   </form>
 </div>
 <div id="story-output"></div>

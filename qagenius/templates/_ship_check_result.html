@@ -1,5 +1,6 @@
 {# The verdict, then one row per check. Every number on this page was computed
    by qagenius/ship_check.py; no AI text reaches it, so nothing is marked safe. #}
+{% from "_form_fields.html" import field %}
 <div class="ship-report">
   <div class="verdict ship-verdict ship-{{ verdict_tone }}">
     <div>
@@ -28,7 +29,7 @@
       {% if item.status == "accepted" and item.accepted_note %}
       <p class="ship-accepted-note"><em>Accepted: {{ item.accepted_note }}</em></p>
       <div class="row">
-        <button type="button" class="btn btn-small ship-unaccept" data-check="{{ item.id }}">Remove acceptance</button>
+        <button type="button" class="btn btn-small btn-danger ship-unaccept" data-check="{{ item.id }}">Remove acceptance</button>
       </div>
       {% endif %}
 
@@ -46,14 +47,13 @@
         <button type="button" class="btn btn-small ship-accept" data-check="{{ item.id }}">Accept with reason</button>
       </div>
       <div class="ship-accept-form" data-check="{{ item.id }}" hidden>
-        <div class="field">
-          <label for="ship-reason-{{ item.id }}">Why are you shipping with this?</label>
-          <textarea id="ship-reason-{{ item.id }}" class="ship-reason" rows="3"
-                    minlength="{{ min_reason }}" maxlength="{{ max_reason }}"
-                    placeholder="Behind a feature flag for internal users until the shared counter lands."></textarea>
-          <span class="hint ship-counter" aria-live="polite">0 / {{ max_reason }}</span>
-        </div>
-        <div class="row">
+        {% call field("ship-reason-" ~ item.id, "Why are you shipping with this?",
+                      help="At least " ~ min_reason ~ " characters.", counter_max=max_reason) %}
+        <textarea id="ship-reason-{{ item.id }}" class="ship-reason short" rows="3"
+                  minlength="{{ min_reason }}" maxlength="{{ max_reason }}"
+                  placeholder="Behind a feature flag for internal users until the shared counter lands."></textarea>
+        {% endcall %}
+        <div class="form-actions">
           <button type="button" class="btn btn-primary btn-small ship-accept-save" data-check="{{ item.id }}">Accept</button>
           <button type="button" class="btn btn-small ship-accept-cancel" data-check="{{ item.id }}">Cancel</button>
           <span class="muted small ship-accept-status" aria-live="polite"></span>

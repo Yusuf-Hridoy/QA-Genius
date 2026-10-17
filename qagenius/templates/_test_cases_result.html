@@ -1,3 +1,4 @@
+{% from "_form_fields.html" import field %}
 {% if is_example %}
 {% with caption = "Add a key and press Generate test cases to run this on your own criteria." %}
 {% include "_example_flag.html" %}
@@ -36,7 +37,7 @@
   {% endif %}
   {% if coverage.uncovered %}
   <p class="muted small">Not covered:
-    {% for ac_id in coverage.uncovered %}<span class="pill warn" title="{{ ac_text[ac_id] }}">{{ ac_id }}</span> {% endfor %}
+    {% for ac_id in coverage.uncovered %}<span class="pill warn plain" title="{{ ac_text[ac_id] }}">{{ ac_id }}</span> {% endfor %}
   </p>
   {% endif %}
   <p class="muted small">Coverage is counted from the ids each test case lists, not from the AI's own summary.</p>
@@ -45,37 +46,38 @@
 <div class="card">
   <h2>Depth by criterion</h2>
   <table class="grid">
-    <tr><th>Criterion</th><th>Cases</th><th>Kinds</th><th>Status</th></tr>
+    <tr><th>Criterion</th><th>Cases</th><th>Kinds</th><th class="tc-reasons">Status</th></tr>
     {% for row in depth.rows %}
     <tr>
-      <td><span class="pill accent" title="{{ row.text }}">{{ row.id }}</span></td>
-      <td>{{ row.case_ids | length }}{% if row.case_ids %} <span class="mono small">· {{ row.case_ids | join(", ") }}</span>{% endif %}</td>
-      <td>{% for kind in row.kinds %}<span class="pill neutral small">{{ kind }}</span> {% endfor %}</td>
-      <td>
+      <td><span class="pill accent plain" title="{{ row.text }}">{{ row.id }}</span></td>
+      {# Each id is its own box, so a narrow column wraps between ids and
+         never splits TC- from its number. #}
+      <td>{{ row.case_ids | length }}{% if row.case_ids %} <span class="tc-ids">{% for case_id in row.case_ids %}<code class="tc-id">{{ case_id }}</code>{% endfor %}</span>{% endif %}</td>
+      <td>{% for kind in row.kinds %}<span class="pill neutral small plain">{{ kind }}</span> {% endfor %}</td>
+      <td class="tc-reasons">
         {% if row.thin %}<span class="pill warn">thin</span> <span class="muted small">{{ row.reasons | join(", ") }}</span>
         {% else %}<span class="pill ok">solid</span>{% endif %}
       </td>
     </tr>
     {% endfor %}
   </table>
-  <div class="row" id="tc-actions">
+  <div class="form-actions" id="tc-actions">
     {% if depth.thin_ids %}
     <button type="button" class="btn" id="strengthen-btn"
-      hx-post="/requirements/test-cases/refine" hx-target="#tc-proposal" hx-swap="innerHTML" hx-indicator="#tc-refine-progress">Strengthen thin criteria</button>
+      hx-post="/requirements/test-cases/refine" hx-target="#tc-proposal" hx-swap="innerHTML" hx-indicator="#tc-refine-progress"><span class="btn-label">Strengthen thin criteria</span></button>
     {% endif %}
     <button type="button" class="btn" id="refine-open">Refine…</button>
-    <button type="button" class="btn" id="undo-btn" hidden>Undo last change</button>
+    <span class="spacer"></span>
+    <button type="button" class="btn btn-small btn-danger" id="undo-btn" hidden>Undo last change</button>
   </div>
-  <div id="refine-panel" hidden>
-    <div class="field">
-      <label for="refine-instruction">What should change?</label>
-      <textarea id="refine-instruction" rows="3" maxlength="1000"
-        placeholder="e.g. Use exact times at the 15-minute boundary and add a case for an unknown email."></textarea>
-      <span class="hint"><span id="refine-count">0</span>/1000</span>
-    </div>
-    <div class="row">
+  <div id="refine-panel" class="form-body" hidden>
+    {% call field("refine-instruction", "What should change?", counter_max=1000, counter_id="refine-count") %}
+    <textarea id="refine-instruction" class="short" rows="3" maxlength="1000"
+      placeholder="e.g. Use exact times at the 15-minute boundary and add a case for an unknown email."></textarea>
+    {% endcall %}
+    <div class="form-actions">
       <button type="button" class="btn" id="refine-submit"
-        hx-post="/requirements/test-cases/refine" hx-target="#tc-proposal" hx-swap="innerHTML" hx-indicator="#tc-refine-progress">Propose changes</button>
+        hx-post="/requirements/test-cases/refine" hx-target="#tc-proposal" hx-swap="innerHTML" hx-indicator="#tc-refine-progress"><span class="btn-label">Propose changes</span></button>
       <button type="button" class="btn" id="refine-cancel">Cancel</button>
     </div>
   </div>
@@ -85,20 +87,21 @@
 <div id="tc-proposal"></div>
 {% if categories %}
 <div class="row filter-chips" id="tc-filters">
-  <button type="button" class="chip now" data-filter="all">All</button>
+  <button type="button" class="chip btn" data-filter="all" aria-pressed="true">All</button>
   {% for category in categories %}
-  <button type="button" class="chip" data-filter="{{ category }}">{{ category }}</button>
+  <button type="button" class="chip btn" data-filter="{{ category }}" aria-pressed="false">{{ category }}</button>
   {% endfor %}
 </div>
 {% endif %}
 <div class="card" id="tc-select-bar">
   <div class="row">
     <button type="button" class="btn btn-small" id="select-all-cases">Select all</button>
-    <button type="button" class="btn btn-small" id="clear-selected-cases">Clear</button>
+    <button type="button" class="btn btn-small btn-danger" id="clear-selected-cases">Clear</button>
     <span class="muted small" id="selected-count" aria-live="polite">0 selected</span>
+    <span class="spacer"></span>
     <button type="button" class="btn" id="automate-selected" disabled>Automate selected →</button>
   </div>
-  <p class="muted small" id="select-hint"></p>
+  <p class="form-note" id="select-hint"></p>
 </div>
 <div id="tc-list">
   {% for item in cases %}

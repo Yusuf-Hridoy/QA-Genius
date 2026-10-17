@@ -99,13 +99,15 @@
         {% if item.risk.test_idea %}
         <p class="small"><strong>Test idea:</strong> {{ item.risk.test_idea }}</p>
         {% endif %}
-        <div class="row score-row">
-          {% for field, value in [("severity", item.risk.severity), ("likelihood", item.risk.likelihood), ("detectability", item.risk.detectability)] %}
-          <label class="score-field">{{ field | capitalize }}
-            <input type="number" min="1" max="5" step="1" value="{{ value }}"
-                   class="score-input" data-risk-id="{{ item.risk.id }}" data-field="{{ field }}">
-          </label>
-          {% endfor %}
+        <div class="field">
+          <div class="row score-row">
+            {% for field, value in [("severity", item.risk.severity), ("likelihood", item.risk.likelihood), ("detectability", item.risk.detectability)] %}
+            <label class="score-field">{{ field | capitalize }}
+              <input type="number" min="1" max="5" step="1" value="{{ value }}"
+                     class="score-input" data-risk-id="{{ item.risk.id }}" data-field="{{ field }}">
+            </label>
+            {% endfor %}
+          </div>
         </div>
         <p class="muted small">Scores are the AI's proposal — adjust them with your own judgement.</p>
       </details>
