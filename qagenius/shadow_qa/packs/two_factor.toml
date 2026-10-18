@@ -8,7 +8,7 @@ exclude = []
 id = "wrong_code"
 title = "A wrong code is rejected"
 severity = "high"
-why = "If a wrong code ever passes, the second factor is decoration."
+why = "If a wrong code is ever accepted, the second step protects nobody."
 covered_if = ["wrong code", "incorrect code", "invalid code", "bad code", "rejected"]
   [checks.test]
   title = "A wrong verification code is refused"
@@ -23,7 +23,7 @@ covered_if = ["wrong code", "incorrect code", "invalid code", "bad code", "rejec
 id = "expired_code"
 title = "An expired code is rejected"
 severity = "high"
-why = "A code that works ten minutes later is a password someone can read over a shoulder and use at leisure."
+why = "A code that still works ten minutes later is just a password someone can read and reuse."
 covered_if = ["expired", "expiry", "expires", "time window", "no longer valid", "stale code"]
   [checks.test]
   title = "A code entered after its window has passed is refused"
@@ -38,7 +38,7 @@ covered_if = ["expired", "expiry", "expires", "time window", "no longer valid", 
 id = "code_reuse"
 title = "The same code cannot be used twice"
 severity = "high"
-why = "A replayed code lets anyone who sees it once sign in again inside the same window."
+why = "If the same code works twice, anyone who sees it once can sign in again."
 covered_if = ["reuse", "re-use", "used twice", "replay", "already used", "one-time"]
   [checks.test]
   title = "A code that already signed someone in is refused the second time"
@@ -53,7 +53,7 @@ covered_if = ["reuse", "re-use", "used twice", "replay", "already used", "one-ti
 id = "recovery_once"
 title = "A recovery code works once and only once"
 severity = "high"
-why = "Recovery codes are written on paper and photographed; one that keeps working is a permanent spare key."
+why = "People write backup codes on paper and photograph them. One that works twice is a spare key for life."
 covered_if = ["recovery code", "backup code", "single use", "once only", "used once", "burn"]
   [checks.test]
   title = "A used recovery code is refused on the second attempt"
@@ -68,8 +68,9 @@ covered_if = ["recovery code", "backup code", "single use", "once only", "used o
 id = "disable_needs_password"
 title = "Turning two-factor off needs the password again"
 severity = "high"
-why = "An unattended signed-in tab should not be enough to strip the account's strongest protection."
+why = "A tab somebody left open should not be enough to turn off the account's best protection."
 covered_if = ["re-enter", "reauthenticate", "re-authenticate", "reauthentication", "re-authentication", "confirm password", "password again", "disable"]
+only_if = ["disable", "disabling", "turn off", "turning off", "switch off", "remove 2fa"]
   [checks.test]
   title = "Disabling two-factor asks for the password before it takes effect"
   category = "Functional"
@@ -83,8 +84,9 @@ covered_if = ["re-enter", "reauthenticate", "re-authenticate", "reauthentication
 id = "lost_device"
 title = "There is a usable path when the device is lost"
 severity = "medium"
-why = "A phone is lost every day; without a tested route back the account is simply gone."
+why = "People lose phones every day. With no tested way back, the account is gone for good."
 covered_if = ["lost device", "lost phone", "recovery", "locked out", "support", "no access to"]
+only_if = ["recovery", "recovery code", "recovery codes", "lost", "locked out", "backup code", "backup codes", "no access"]
   [checks.test]
   title = "A user without the authenticator app can still reach their account"
   category = "Edge Case"
@@ -102,7 +104,7 @@ likelihood = 3
 detectability = 4
 effect = "Anyone who reads one code can sign in again until the window closes."
 cause = "The code is checked against the time-based algorithm but never marked as used."
-covered_if = ["replay", "used twice", "one-time", "already used"]
+covered_if = ["replay", "replayed", "used twice", "reuse the code", "one-time", "single use", "already used"]
 
 [[risks]]
 title = "Verification codes are not rate limited"
@@ -112,4 +114,4 @@ likelihood = 3
 detectability = 3
 effect = "A six-digit code can be guessed by trying every value."
 cause = "The attempt counter sits on the password step only, not on the code step."
-covered_if = ["rate limit", "attempts", "throttle", "lockout", "brute"]
+covered_if = ["code attempts", "verification attempts", "guess the code", "brute force the code", "throttle the code", "rate limit the code"]

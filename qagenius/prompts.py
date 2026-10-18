@@ -325,3 +325,18 @@ def test_matrix_prompt(
         + (test_case_lines or '(none yet)')
     )
     return TEST_MATRIX_SYSTEM, user
+
+
+# ── phase 13: the AI writes for the same reader the screens do ───────────────
+# Appended to the user text of every call, never edited into the v1 prompts.
+# A real run came back with "eventual consistency or network partition in the
+# distributed cache layer", which no new tester can act on.
+PLAIN_WORDS = (
+    "\n\nWrite every sentence in plain, simple English: short sentences, "
+    "everyday words, and explain any technical term in a few words."
+)
+
+
+def with_plain_words(user: str) -> str:
+    """The user text, asking for words a new tester can read."""
+    return str(user or "") + PLAIN_WORDS

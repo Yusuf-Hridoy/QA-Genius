@@ -107,14 +107,14 @@ def test_run_rejects_broken_criteria(monkeypatch) -> None:
     monkeypatch.setattr(llm, "generate_json", _never)
     data = dict(FORM, criteria_json="{not json")
     body = client.post("/risks/run", data=data, headers=KEYS_HEADER).text
-    assert "Please check the story, criteria and test cases." in body
+    assert "Check the story, the criteria and the test cases" in body
 
 
 def test_run_rejects_broken_test_cases(monkeypatch) -> None:
     monkeypatch.setattr(llm, "generate_json", _never)
     data = dict(FORM, cases_json=json.dumps([{"id": "TC-001"}]))
     body = client.post("/risks/run", data=data, headers=KEYS_HEADER).text
-    assert "Please check the story, criteria and test cases." in body
+    assert "Check the story, the criteria and the test cases" in body
 
 
 def test_run_sends_the_criteria_and_the_cases_to_the_ai(monkeypatch) -> None:
@@ -135,7 +135,7 @@ def test_run_works_before_any_test_case_exists(monkeypatch) -> None:
     response = client.post("/risks/run", data=data, headers=KEYS_HEADER)
     assert response.status_code == 200
     assert "(none yet)" in captured[0][1]
-    assert "No test covers this risk" in response.text
+    assert "No test for this yet" in response.text
 
 
 def test_run_drops_test_case_ids_the_ai_invented(monkeypatch) -> None:
@@ -147,7 +147,7 @@ def test_run_drops_test_case_ids_the_ai_invented(monkeypatch) -> None:
     body = client.post("/risks/run", data=FORM, headers=KEYS_HEADER).text
     # The apostrophe in the note is escaped on the way into the page.
     assert "Removed 1 unknown test case ids from the AI" in body
-    assert "No test covers this risk" in body
+    assert "No test for this yet" in body
 
 
 def test_run_escapes_whatever_the_ai_wrote(monkeypatch) -> None:
@@ -168,11 +168,11 @@ def test_rescore_recomputes_the_level_without_calling_the_ai(monkeypatch) -> Non
     monkeypatch.setattr(llm, "generate_json", _never)
     low = _analysis(mode("R1", severity=2, likelihood=2, detectability=2))
     body = client.post("/risks/rescore", json=_body(low)).text
-    assert "RPN 8 · low" in body
+    assert "Risk score 8 of 125 · low" in body
 
     raised = _analysis(mode("R1", severity=5, likelihood=2, detectability=2))
     body = client.post("/risks/rescore", json=_body(raised)).text
-    assert "RPN 20 · medium" in body
+    assert "Risk score 20 of 125 · medium" in body
 
 
 def test_rescore_reorders_the_list(monkeypatch) -> None:
@@ -199,7 +199,7 @@ def test_rescore_reads_a_score_the_user_typed_as_text(monkeypatch) -> None:
     payload["analysis"]["failure_modes"][0]["likelihood"] = "5"
     payload["analysis"]["failure_modes"][0]["detectability"] = "5"
     body = client.post("/risks/rescore", json=payload).text
-    assert "RPN 125 · high" in body
+    assert "Risk score 125 of 125 · high" in body
 
 
 def test_rescore_refuses_a_payload_that_is_not_an_analysis() -> None:
@@ -219,7 +219,7 @@ def test_the_page_data_round_trips_through_rescore(monkeypatch) -> None:
     data = json.loads(raw)
     again = client.post("/risks/rescore", json=data)
     assert again.status_code == 200
-    assert "Verified by TC-010" in again.text
+    assert "Tested by TC-010" in again.text
 
 
 # ---------- /risks/example ----------
@@ -227,23 +227,23 @@ def test_the_page_data_round_trips_through_rescore(monkeypatch) -> None:
 
 def test_the_example_shows_every_coverage_state() -> None:
     body = client.get("/risks/example").text
-    assert "Verified by TC-010 (tagged risk:R1)" in body
-    assert "Likely covered by TC-005" in body
-    assert "matched on:" in body
-    assert "to mark it verified" in body
-    assert "but the test doesn't seem to match" in body
-    assert "No test covers this risk" in body
+    assert "Tested by TC-010 (tagged risk:R1)" in body
+    assert "Probably tested by TC-005" in body
+    assert "both say:" in body
+    assert "and it counts for sure" in body
+    assert "but it doesn't look like it" in body
+    assert "No test for this yet" in body
 
 
 def test_the_example_counts_its_untested_high_risks() -> None:
     body = client.get("/risks/example").text
-    # The saved analysis plus the classics Principal QA adds; the button and
+    # The saved analysis plus the classics the senior tester adds; the button and
     # the stat must agree on the number whatever that number is.
     shown = re.search(
-        r'<div class="num">(\d+)</div><div class="lbl">High risk, untested</div>', body
+        r'<div class="num">(\d+)</div><div class="lbl">High risk, no test</div>', body
     )
     assert shown and int(shown.group(1)) >= 2
-    assert f"Write tests for {shown.group(1)} untested high risks" in body
+    assert f"Write tests for {shown.group(1)} high risks with no test" in body
     assert "stat stat-bad" in body
 
 
@@ -277,13 +277,13 @@ def test_the_rpn_pill_is_coloured_by_level(monkeypatch) -> None:
     }
     for tone, risk in levels.items():
         body = client.post("/risks/rescore", json=_body(_analysis(risk))).text
-        assert f'<span class="pill {tone}">RPN' in body
+        assert f'<span class="pill {tone}">Risk score' in body
 
 
 def test_the_card_shows_the_reasons_and_the_test_idea() -> None:
     body = client.get("/risks/example").text
     assert "Why these scores" in body
-    assert "Scores are the AI's proposal" in body
+    assert "These scores are the AI's guess" in body
     assert "class=\"score-input\"" in body
 
 

@@ -220,7 +220,7 @@
     });
   }
 
-  /* "Keep my factors": the result is declared current without rebuilding it. */
+  /* "Keep what I have": the result is declared current without rebuilding it. */
   function markBuilt(run, key) {
     if (!BUILT_FROM[key]) return run;
     run[key + "_built_from"] = sourcesOf(run, BUILT_FROM[key]);

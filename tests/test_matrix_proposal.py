@@ -5,8 +5,11 @@ from qagenius.models import MatrixProposal, ProposedFactor, ProposedRule
 from qagenius.pairwise import validate
 from qagenius.test_matrix_defaults import STANDARD_FACTORS
 from qagenius.test_matrix_proposal import (
+    ADDED_NOTE,
+    ADDED_ONE_NOTE,
     FALLBACK_NOTE,
     clean_proposal,
+    is_backend_only,
     reasons_for,
     standard_set,
 )
@@ -98,8 +101,14 @@ def test_a_factor_with_one_value_is_dropped_with_a_note():
         factor("Signed in", ["Yes", "No"]),
     ]
     factors, _, notes = clean_proposal(proposal(thin))
-    assert [one.name for one in factors] == ["Device", "Signed in"]
-    assert notes == ["Dropped 1 suggested factor with fewer than two values."]
+    # Browser is dropped for having one value, then put back with the standard
+    # four: a screen is still opened in a browser.
+    assert [one.name for one in factors] == ["Device", "Signed in", "Browser"]
+    assert factors[2].values == ("Chrome", "Firefox", "Safari", "Edge")
+    assert notes == [
+        "Dropped 1 suggested factor with fewer than two values.",
+        ADDED_ONE_NOTE.format(name="Browser"),
+    ]
 
 
 def test_a_rule_about_an_unknown_value_is_dropped_with_a_note():
@@ -155,10 +164,9 @@ def test_a_rule_is_not_added_twice_in_either_direction():
 
 
 def test_an_unusable_proposal_falls_back_to_the_standard_set():
-    _, _, _ = clean_proposal(proposal([factor("Browser", ["Chrome", "Safari"])]))
-    factors, rules, notes = clean_proposal(
-        proposal([factor("Browser", ["Chrome", "Safari"])])
-    )
+    """An API story gets no screen factors, so one factor stays unusable."""
+    one = proposal([factor("Payload", ["Valid", "Malformed"])])
+    factors, rules, notes = clean_proposal(one, "The orders API endpoint")
     assert [one.name for one in factors] == [one.name for one in STANDARD_FACTORS]
     assert FALLBACK_NOTE in notes
     assert validate(factors, rules) == []
@@ -180,3 +188,79 @@ def test_the_reasons_come_back_for_the_editor():
     found = reasons_for(proposal(GOOD))
     assert found["browser"] == "The story is a web page."
     assert reasons_for(None) == {}
+
+
+# ── a screen is always opened in a browser, on a device ──────────────────────
+
+LOCKOUT = (
+    "As a shopper, I want my account locked after too many wrong passwords. "
+    "The sign-in page shows how many attempts are left."
+)
+
+
+def _lockout_proposal() -> MatrixProposal:
+    """What a real run suggested for the lockout story: no Browser, no Device."""
+    return proposal(
+        [
+            factor("Signed in", ["Yes", "No"], "The page differs when signed in."),
+            factor("Role", ["Shopper", "Admin"], "Admins unlock accounts."),
+            factor("Language", ["en", "bn"], "The message is translated."),
+        ]
+    )
+
+
+def test_browser_and_device_are_put_back_when_the_ai_forgets_them():
+    factors, rules, notes = clean_proposal(_lockout_proposal(), LOCKOUT)
+    names = [one.name for one in factors]
+    assert "Browser" in names and "Device" in names
+    assert names[:3] == ["Signed in", "Role", "Language"]
+    assert ADDED_NOTE in notes
+    assert validate(factors, rules) == []
+
+
+def test_the_standard_rules_come_with_them():
+    _, rules, _ = clean_proposal(_lockout_proposal(), LOCKOUT)
+    pairs = {(one.if_value, one.then_value) for one in rules}
+    assert ("Firefox", "Phone") in pairs
+
+
+def test_only_the_missing_one_is_added():
+    half = proposal(
+        [
+            factor("Browser", ["Chrome", "Safari"]),
+            factor("Signed in", ["Yes", "No"]),
+        ]
+    )
+    factors, _, notes = clean_proposal(half, LOCKOUT)
+    assert [one.name for one in factors] == ["Browser", "Signed in", "Device"]
+    assert notes == [ADDED_ONE_NOTE.format(name="Device")]
+
+
+def test_a_proposal_that_already_has_both_is_left_alone():
+    factors, _, notes = clean_proposal(proposal(GOOD), LOCKOUT)
+    assert [one.name for one in factors] == ["Browser", "Device", "Signed in"]
+    assert notes == []
+
+
+def test_an_api_story_keeps_the_factors_the_ai_chose():
+    api = (
+        "As a partner system, I want the orders API endpoint to reject a "
+        "malformed payload so that bad data never reaches the backend."
+    )
+    factors, _, notes = clean_proposal(_lockout_proposal(), api)
+    assert [one.name for one in factors] == ["Signed in", "Role", "Language"]
+    assert notes == []
+
+
+def test_a_webhook_story_is_backend_too():
+    assert is_backend_only("The webhook retries three times.")
+    assert is_backend_only("A service-to-service call carries the token.")
+    assert not is_backend_only("The shopper opens the sign-in page.")
+
+
+def test_the_six_factor_cap_still_holds_when_two_are_added():
+    many = proposal([factor(f"F{i}", ["a", "b"]) for i in range(6)])
+    factors, rules, _ = clean_proposal(many, LOCKOUT)
+    assert len(factors) == 6
+    assert [one.name for one in factors][-2:] == ["Browser", "Device"]
+    assert validate(factors, rules) == []

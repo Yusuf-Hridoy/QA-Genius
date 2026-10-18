@@ -8,47 +8,45 @@
 <div class="verdict" style="--pct:{{ coverage.percent }};--ring-color:var(--{{ coverage_pill }}-line)">
   <div class="score-ring" role="img" aria-label="Coverage {{ coverage.percent }} percent">
     <span class="score-num">{{ coverage.percent }}<span style="font-size:16px">%</span></span>
-    <span class="score-of">covered</span>
+    <span class="score-of">tested</span>
   </div>
   <div>
-    <span class="pill {{ coverage_pill }}">{{ coverage.covered | length }} of {{ criteria | length }} criteria covered</span>
+    <span class="pill {{ coverage_pill }}">{{ coverage.covered | length }} of {{ criteria | length }} criteria tested</span>
     <h2>{{ counts.total }} test case{{ "" if counts.total == 1 else "s" }}</h2>
-    <p>{% if depth.thin_ids %}{{ depth.thin_ids | length }} of {{ depth.rows | length }} criteria
-      are thin — they have no negative or boundary case yet.{% else %}Every criterion has a
-      negative and a boundary case.{% endif %}</p>
+    <p>{{ depth_line }}</p>
   </div>
 </div>
 <div class="stat-row">
   <div class="stat"><div class="num">{{ counts.total }}</div><div class="lbl">Test cases</div></div>
-  <div class="stat"><div class="num">{{ coverage.covered | length }} / {{ criteria | length }}</div><div class="lbl">Criteria covered</div></div>
-  <div class="stat"><div class="num">{{ counts.by_category.get("Negative", 0) }}</div><div class="lbl">Negative</div></div>
-  <div class="stat"><div class="num">{{ counts.by_category.get("Boundary", 0) }}</div><div class="lbl">Boundary</div></div>
+  <div class="stat"><div class="num">{{ coverage.covered | length }} / {{ criteria | length }}</div><div class="lbl">Criteria tested</div></div>
+  <div class="stat"><div class="num">{{ counts.by_category.get("Negative", 0) }}</div><div class="lbl">Wrong input<span data-explain="negative"></span></div></div>
+  <div class="stat"><div class="num">{{ counts.by_category.get("Boundary", 0) }}</div><div class="lbl">At the limit<span data-explain="boundary"></span></div></div>
   <div class="stat"><div class="num">{{ counts.by_priority.get("High", 0) }}</div><div class="lbl">High priority</div></div>
 </div>
 <div class="card card-section">
-  <h2>Coverage</h2>
+  <h2>What is tested</h2>
   <div class="meter" role="img" aria-label="Coverage {{ coverage.percent }} percent">
     <div class="meter-fill {{ coverage_pill }}" style="width:{{ coverage.percent }}%"></div>
   </div>
-  <p>Coverage {{ coverage.percent }}% — {{ coverage.covered | length }} of {{ criteria | length }} criteria</p>
+  <p>{{ coverage.percent }}% tested — {{ coverage.covered | length }} of {{ criteria | length }} criteria</p>
   {% if depth.thin_ids %}
-  <p class="depth-line thin">Depth: {{ depth.thin_ids | length }} of {{ depth.rows | length }} criteria thin</p>
+  <p class="depth-line thin">How well tested: {{ depth.thin_ids | length }} of {{ depth.rows | length }} criteria need more tests</p>
   {% else %}
-  <p class="depth-line solid">Depth: every criterion has negative and boundary cases</p>
+  <p class="depth-line solid">How well tested: every criterion has a test for wrong input and one at the limits</p>
   {% endif %}
   {% if coverage.uncovered %}
-  <p class="muted small">Not covered:
+  <p class="muted small">No test yet:
     {% for ac_id in coverage.uncovered %}<span class="pill warn plain" title="{{ ac_text[ac_id] }}">{{ ac_id }}</span> {% endfor %}
   </p>
   {% endif %}
-  <p class="muted small">Coverage is counted from the ids each test case lists, not from the AI's own summary.</p>
+  <p class="muted small">Counted from the criteria ids each test case lists, not from what the AI said.</p>
 </div>
 {% if depth.rows %}
 <div class="card">
-  <h2>Depth by criterion</h2>
+  <h2>How well each criterion is tested</h2>
   <div class="table-scroll">
   <table class="grid">
-    <tr><th>Criterion</th><th>Cases</th><th>Kinds</th><th class="tc-reasons">Status</th></tr>
+    <tr><th>Criterion</th><th>Tests</th><th>Kinds</th><th class="tc-reasons">Status</th></tr>
     {% for row in depth.rows %}
     <tr>
       <td><span class="pill accent plain" title="{{ row.text }}">{{ row.id }}</span></td>
@@ -57,8 +55,8 @@
       <td>{{ row.case_ids | length }}{% if row.case_ids %} <span class="tc-ids">{% for case_id in row.case_ids %}<code class="tc-id">{{ case_id }}</code>{% endfor %}</span>{% endif %}</td>
       <td>{% for kind in row.kinds %}<span class="pill neutral small plain">{{ kind }}</span> {% endfor %}</td>
       <td class="tc-reasons">
-        {% if row.thin %}<span class="pill warn">thin</span> <span class="muted small">{{ row.reasons | join(", ") }}</span>
-        {% else %}<span class="pill ok">solid</span>{% endif %}
+        {% if row.thin %}<span class="pill warn">needs more tests</span> <span class="muted small">{{ row.reasons | join(", ") }}</span>
+        {% else %}<span class="pill ok">well tested</span>{% endif %}
       </td>
     </tr>
     {% endfor %}
@@ -67,9 +65,9 @@
   <div class="form-actions" id="tc-actions">
     {% if depth.thin_ids %}
     <button type="button" class="btn" id="strengthen-btn"
-      hx-post="/requirements/test-cases/refine" hx-target="#tc-proposal" hx-swap="innerHTML" hx-indicator="#tc-refine-progress"><span class="btn-label">Strengthen thin criteria</span></button>
+      hx-post="/requirements/test-cases/refine" hx-target="#tc-proposal" hx-swap="innerHTML" hx-indicator="#tc-refine-progress"><span class="btn-label">Add more tests where needed</span></button>
     {% endif %}
-    <button type="button" class="btn" id="refine-open">Refine…</button>
+    <button type="button" class="btn" id="refine-open">Change with your own instruction…</button>
     <span class="spacer"></span>
     <button type="button" class="btn btn-small btn-danger" id="undo-btn" hidden>Undo last change</button>
   </div>
@@ -92,7 +90,7 @@
 <div class="row filter-chips" id="tc-filters">
   <button type="button" class="chip btn" data-filter="all" aria-pressed="true">All</button>
   {% for category in categories %}
-  <button type="button" class="chip btn" data-filter="{{ category }}" aria-pressed="false">{{ category }}</button>
+  <button type="button" class="chip btn" data-filter="{{ category }}" aria-pressed="false">{{ category_words.get(category, category) }}</button>
   {% endfor %}
 </div>
 {% endif %}
@@ -107,7 +105,7 @@
   <p class="form-note" id="select-hint"></p>
 </div>
 {% if review and review_line %}
-{# What the principal QA did to this suite, in one line. Everything under it
+{# What the senior tester did to this suite, in one line. Everything under it
    is detail, so it stays shut until someone asks for it. #}
 <details class="card pq-review" id="pq-review">
   <summary>
@@ -128,9 +126,9 @@
       {% endfor %}
     </ul>
     {% if review.more | length > 10 %}
-    <p class="muted small">…and {{ review.more | length - 10 }} more the rule packs
-      know about for this kind of feature. A list this long is the epic warning
-      saying the same thing twice: split the story.</p>
+    <p class="muted small">…and {{ review.more | length - 10 }} more QA-Genius knows
+      about for this kind of feature. A list this long means one thing: the story
+      is too big. Split it.</p>
     {% endif %}
     {% endif %}
     {% if review.quality %}
@@ -140,10 +138,10 @@
     </ul>
     {% endif %}
     {% if review.covered %}
-    <p class="muted small">The AI already covered {{ review.covered | length }} of the
-      checklist items on its own.</p>
+    <p class="muted small">The AI had already thought of {{ review.covered | length }} of
+      these on its own.</p>
     {% endif %}
-    <p class="muted small">Found by QA-Genius's own rules inside the same request —
+    <p class="muted small">Found by QA-Genius's own testing rules, in the same request —
       no second AI call, no extra key.</p>
   </div>
 </details>

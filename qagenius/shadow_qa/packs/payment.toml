@@ -9,7 +9,7 @@ exclude = []
 id = "double_click_pay"
 title = "A double click on Pay charges once"
 severity = "high"
-why = "Charging a customer twice is the one defect nobody forgives."
+why = "Taking someone's money twice is the one bug nobody forgives."
 covered_if = ["double click", "twice", "duplicate charge", "idempotent", "idempotency", "idempotency key", "double submit", "once only"]
   [checks.test]
   title = "Clicking Pay twice in quick succession creates one charge"
@@ -24,7 +24,7 @@ covered_if = ["double click", "twice", "duplicate charge", "idempotent", "idempo
 id = "card_declined"
 title = "A declined card is explained"
 severity = "high"
-why = "Half of all payment failures are declines, and a blank page loses the sale."
+why = "Half of all payment problems are refused cards. A blank page loses the sale."
 covered_if = ["declined", "decline", "rejected card", "insufficient", "payment failed", "try another card"]
   [checks.test]
   title = "A declined card shows a readable message and keeps the basket"
@@ -39,8 +39,9 @@ covered_if = ["declined", "decline", "rejected card", "insufficient", "payment f
 id = "sca_cancelled"
 title = "The user cancels 3-D Secure"
 severity = "medium"
-why = "The bank's own screen is where people stop, and the app has to recover from a half-finished payment."
+why = "People stop on the bank's own screen. The app has to cope with a half-finished payment."
 covered_if = ["3-d secure", "3ds", "two-step", "bank page", "cancel", "authentication step"]
+only_if = ["3-d secure", "3ds", "bank", "card", "authentication step", "sca"]
   [checks.test]
   title = "Cancelling on the bank's authentication page leaves no charge and no order"
   category = "Negative"
@@ -54,8 +55,9 @@ covered_if = ["3-d secure", "3ds", "two-step", "bank page", "cancel", "authentic
 id = "currency_rounding"
 title = "Currency rounding on totals"
 severity = "medium"
-why = "Per-line rounding and total rounding disagree by a penny, and the invoice no longer adds up."
+why = "Round each line and round the total and you get different answers. The invoice stops adding up."
 covered_if = ["rounding", "round", "decimal", "cents", "penny", "total matches", "vat", "tax"]
+only_if = ["currency", "currencies", "exchange", "multi-currency", "tax", "vat"]
   [checks.test]
   title = "Line totals, tax and the grand total agree to the penny"
   category = "Boundary"
@@ -69,8 +71,9 @@ covered_if = ["rounding", "round", "decimal", "cents", "penny", "total matches",
 id = "refund_updates"
 title = "A refund updates the order and the balance"
 severity = "medium"
-why = "A refund issued at the provider but not recorded in the app leaves support guessing."
+why = "If the bank refunds but the app does not record it, support cannot tell what happened."
 covered_if = ["refund", "refunded", "credit", "balance", "order status", "partial refund"]
+only_if = ["refund", "refunds", "refunded", "money back", "cancel the order"]
   [checks.test]
   title = "A refund is reflected in the order, the balance and the invoice"
   category = "Functional"
@@ -88,4 +91,4 @@ likelihood = 3
 detectability = 4
 effect = "The customer is charged twice for one basket and asks for a refund and an apology."
 cause = "The payment call carries no idempotency key, so a retry after a timeout is a new charge."
-covered_if = ["idempotent", "idempotency", "idempotency key", "double charge", "twice", "retry", "duplicate"]
+covered_if = ["idempotent", "idempotency", "idempotency key", "double charge", "charged twice", "double click", "duplicate charge", "one charge", "charged once"]

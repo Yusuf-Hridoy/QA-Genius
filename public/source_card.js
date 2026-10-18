@@ -15,10 +15,10 @@
 
   /* desk -> what its primary action is called, and the button that does it. */
   var ACTIONS = {
-    risks: { build: "Find risks for this", update: "Update for latest", button: "#risk-find,#risk-paste-find" },
-    matrix: { build: "Build matrix for this", update: "Update for latest", button: "#matrix-suggest" },
-    test_cases: { build: "Generate test cases", update: "Update for latest", button: "#tc-generate" },
-    automation: { build: "Generate automation", update: "Update for latest", button: "#automation-generate" }
+    risks: { build: "Find risks for this", update: "Update to my latest work", button: "#risk-find,#risk-paste-find" },
+    matrix: { build: "Build matrix for this", update: "Update to my latest work", button: "#matrix-suggest" },
+    test_cases: { build: "Generate test cases", update: "Update to my latest work", button: "#tc-generate" },
+    automation: { build: "Generate automation", update: "Update to my latest work", button: "#automation-generate" }
   };
   var DESK_NAMES = {
     risks: "Risk radar",
@@ -91,10 +91,10 @@
     var when = window.QAGRun.timeAgo(builtAt);
     var built = when ? " · built " + when : "";
     if (DEPENDS_ON_STORY_ONLY[desk]) {
-      return "Up to date with your latest story" + built;
+      return "Matches your latest story" + built;
     }
     return (
-      "Up to date with your latest story, " +
+      "Matches your latest story, " +
       latest.criteriaCount +
       (latest.criteriaCount === 1 ? " criterion" : " criteria") +
       " and " +
@@ -202,7 +202,7 @@
     card.appendChild(icon(ICONS.stale, "source-mark"));
     var body = el("div", "source-body");
     var title = el("p", "source-title");
-    title.appendChild(el("strong", null, "Out of date."));
+    title.appendChild(el("strong", null, "Old — your work changed."));
     if (status.changes.length) {
       title.appendChild(document.createTextNode(" " + status.changes[0] + "."));
     }
@@ -220,7 +220,7 @@
     addExampleLink(actions, desk);
     if (desk === "matrix") {
       // The factors may have been hand-edited; keeping them costs no AI call.
-      var keep = el("button", "btn source-keep", "Keep my factors");
+      var keep = el("button", "btn source-keep", "Keep what I have");
       keep.type = "button";
       actions.appendChild(keep);
     }
@@ -242,9 +242,9 @@
         el(
           "p",
           "source-extra",
-          "Coverage rechecked for your " +
+          "Checked again against your " +
             latest.caseCount +
-            " latest test cases — no AI needed."
+            " newest test cases — no AI needed."
         )
       );
     }
@@ -256,12 +256,12 @@
     card.appendChild(icon(ICONS.fresh, "source-mark"));
     var body = el("div", "source-body");
     body.appendChild(
-      el("p", "source-title", "Computed just now from your latest results.")
+      el("p", "source-title", "Worked out just now from your latest results.")
     );
     if (status.changes.length) {
       var warn = el("div", "source-older");
       warn.appendChild(
-        el("span", null, "Some inputs are older than your latest work: ")
+        el("span", null, "Some of this is older than your latest work: ")
       );
       status.changes.forEach(function (desk, index) {
         var reason = window.QAGRun.statusOf(desk, run).changes[0] || "";
@@ -302,8 +302,8 @@
       if (stale) {
         var reason =
           desk === "ship"
-            ? "Out of date — some inputs are older than your latest work"
-            : "Out of date — " + (status.changes[0] || "your work moved on").toLowerCase();
+            ? "Old — some of this is older than your latest work"
+            : "Old — " + (status.changes[0] || "your work changed").toLowerCase();
         slot.appendChild(el("span", "dot-stale"));
         slot.appendChild(el("span", "sr-only", "out of date"));
         slot.setAttribute("title", reason);
@@ -312,9 +312,9 @@
       }
       if (desk !== "ship" && status.state === "fresh") {
         slot.appendChild(icon(ICONS.fresh, "tick-fresh"));
-        slot.appendChild(el("span", "sr-only", "up to date"));
-        slot.setAttribute("title", "Up to date");
-        slot.setAttribute("aria-label", "Up to date");
+        slot.appendChild(el("span", "sr-only", "matches your latest work"));
+        slot.setAttribute("title", "Matches your latest work");
+        slot.setAttribute("aria-label", "Matches your latest work");
         return;
       }
       slot.removeAttribute("aria-label");
@@ -323,7 +323,7 @@
 
   /* ---------- the "next" strip on a result ---------- */
 
-  var STATE_WORDS = { none: "Not built", stale: "Out of date", fresh: "Up to date" };
+  var STATE_WORDS = { none: "Not built yet", stale: "Old", fresh: "Matches your work" };
 
   function renderNext() {
     var chips = document.querySelectorAll("#next-strip .next-chip[data-desk]");
@@ -413,8 +413,8 @@
       "p",
       "stale-result-note muted small",
       desk === "matrix"
-        ? "From your previous story — update to refresh"
-        : "From your previous criteria — update to refresh"
+        ? "Built from an older story — press update"
+        : "Built from older criteria — press update"
     );
     target.parentNode.insertBefore(note, target);
   }

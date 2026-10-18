@@ -1,4 +1,4 @@
-"""The Principal QA reviewers. Deterministic, no AI, no network, under 50 ms."""
+"""The senior-tester reviewers. Deterministic, no AI, no network, under 50 ms."""
 
 import time
 
@@ -297,7 +297,7 @@ def test_brittle_selectors_are_warnings():
     )
     messages = " ".join(one.message for one in review_automation(script(), [_file("a.ts", code)]))
     assert "nth-child" in messages
-    assert "absolute XPath" in messages
+    assert "fragile locator (full XPath)" in messages
     assert "levels deep" in messages
 
 
@@ -319,7 +319,7 @@ def test_a_python_test_without_an_assertion_is_flagged():
 def test_every_automation_finding_is_labelled():
     code = "test.only('TC-001', async () => {});\n"
     findings = review_automation(script(), [_file("a.ts", code)])
-    assert findings and all(one.message.startswith("Principal QA: ") for one in findings)
+    assert findings and all(one.message.startswith("Senior tester: ") for one in findings)
 
 
 # ── risks ─────────────────────────────────────────────────────────────────────
@@ -480,3 +480,98 @@ def test_a_role_selector_is_never_called_brittle():
         "});\n"
     )
     assert "levels deep" not in _selector_messages(code)
+
+
+# ── phase 13: the reviewer reads the story before it speaks ───────────────────
+
+
+def test_a_risk_the_ai_said_in_other_words_is_not_added_again():
+    """The real run: the AI called it a timing side-channel, the pack calls it
+    a response time. Titles share almost nothing; the pack's own words match."""
+    analysis = RiskAnalysis(
+        failure_modes=[
+            _risk("Timing side-channel attack distinguishes valid vs invalid emails")
+        ]
+    )
+    added = review_risks(LOCKOUT_STORY, LOCKOUT_CRITERIA, analysis)
+    assert not any("Response time differs" in one.title for one in added)
+
+
+def test_the_words_are_looked_for_in_the_effect_and_cause_too():
+    analysis = RiskAnalysis(
+        failure_modes=[
+            _risk(
+                "Sign-in is not constant work",
+                effect="An attacker measures the response time to find real accounts.",
+                cause="Hashing only runs for a known email.",
+            )
+        ]
+    )
+    added = review_risks(LOCKOUT_STORY, LOCKOUT_CRITERIA, analysis)
+    assert not any("Response time differs" in one.title for one in added)
+
+
+def test_a_genuinely_new_risk_is_still_added():
+    analysis = RiskAnalysis(failure_modes=[_risk("The audit log fills the disk")])
+    added = review_risks(LOCKOUT_STORY, LOCKOUT_CRITERIA, analysis)
+    assert any("reveals whether an email" in one.title for one in added)
+
+
+def test_an_added_risk_carries_the_words_that_mean_it_is_tested():
+    added = review_risks(LOCKOUT_STORY, LOCKOUT_CRITERIA, RiskAnalysis())
+    assert added and all(one.covered_if for one in added)
+
+
+def test_a_lockout_story_gets_no_case_about_email_language():
+    """only_if: a check about one narrow thing waits until the story raises it."""
+    review = review_test_cases(LOCKOUT_STORY, LOCKOUT, suite(case()))
+    titles = " ".join(one.title.lower() for one in review.added + [])
+    listed = " ".join(one.title.lower() for one in review.more)
+    assert "language" not in titles and "language" not in listed
+
+
+def test_a_story_about_languages_does_get_that_check():
+    story = (
+        "As a shopper, I want the emails Aurora Storefront sends me to arrive in "
+        "my own language so that I can read them."
+    )
+    criteria = number_criteria(
+        [
+            "A notification email uses the language set on the account",
+            "An email is queued and sent by a background job",
+        ]
+    )
+    review = review_test_cases(story, criteria, suite(case()))
+    offered = [one.title.lower() for one in review.added] + [
+        one.title.lower() for one in review.more
+    ]
+    assert any("language" in title for title in offered)
+
+
+def test_an_added_case_is_linked_to_the_criterion_it_is_about():
+    """The real run linked "two devices" to the unlock criterion, not the limit."""
+    criteria = number_criteria(
+        [
+            "The account locks after 5 failed sign-in attempts in 15 minutes",
+            "Support can unlock the account for the user straight away",
+        ]
+    )
+    # Cover the checks that would otherwise fill the eight slots first.
+    already = suite(
+        case(case_id="TC-001", title="Sign in with the email in capital letters"),
+        case(case_id="TC-002", title="Unknown email gives the same message"),
+        case(case_id="TC-003", title="A script in the email field is escaped"),
+        case(case_id="TC-004", title="The nth attempt locks, the one below does not"),
+        case(case_id="TC-005", title="The counter resets once the window has passed"),
+        case(case_id="TC-006", title="A trailing space in the email is trimmed"),
+    )
+    review = review_test_cases(LOCKOUT_STORY, criteria, already)
+    by_check = {
+        tag[len("qa:") :]: one
+        for one in review.added
+        for tag in one.tags
+        if tag.startswith("qa:")
+    }
+    per_account = by_check["rate_limiting.per_account"]
+    assert "two devices" in per_account.title
+    assert per_account.traceability == "AC-1"

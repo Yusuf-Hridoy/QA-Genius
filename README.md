@@ -4,16 +4,15 @@ Old Streamlit app lives on `main` and is untouched.
 Phase 1: sidebar, keys page, story check, load example.
 Live URL: TBD
 
-## Ambiguity duel
-On Story check, **Run ambiguity duel** asks two AI readers (strict and
-relaxed) to interpret the story separately, then compares them. Forks are
-highlighted in the story text — hover or focus a highlight to see both
-readings and a suggested rewrite. It uses 3 short AI calls. Both readers
-must commit to concrete numbers with units for every vague word. A code
-check removes any reading the comparison invents. Numbers from both
-readers are matched by unit and name in code, so "same" and "different"
-are computed, not guessed. Rewrites that are still vague are flagged and
-can't be applied.
+## Two-reader check
+On Story check, **Run the two-reader check** asks two AI readers — one
+strict, one loose — to read the story separately, then compares them. The
+places they disagree are marked in the story text. Hover or focus a mark to
+see both readings and better wording. It uses 3 short AI calls. Both readers
+have to give a real number with a unit for every unclear word. Code then
+removes any reading the comparison invented. The numbers are matched by name
+and unit in code, so "same" and "different" are worked out, not guessed.
+Wording that is still unclear is flagged and cannot be used.
 
 ## Test cases
 Requirements runs in three steps: **Story** check, **Acceptance criteria**,
@@ -21,117 +20,130 @@ then **Test cases**. The Use these criteria button carries the story and its
 criteria to step 2, where you can edit, reorder, add and delete them; ids
 stay AC-1..AC-n by position. Step 3 writes test cases from the story plus
 those criteria, and each case shows the criteria it covers as AC chips. The
-coverage meter, the per-category counts and the chips are all computed in
-code from the ids each case lists, never read from the AI's own summary, so
-an uncovered criterion is always reported. Download CSV or Excel for the
+coverage meter, the counts by kind and the chips are all worked out in code
+from the ids each case lists, never read from the AI's own summary, so a
+criterion with no test is always reported. Download CSV or Excel for the
 whole suite; the workbook adds a Coverage sheet and both formats quote any
 cell that starts with = + - or @ so a spreadsheet cannot run it as a
 formula. The run lives in your browser's sessionStorage only — the server
 never stores it.
 
-Coverage only says a criterion was touched, so the card also shows
-**depth**: how many cases reach each criterion and whether any of them is
-negative or boundary; a criterion with one happy-path case is marked thin.
-**Strengthen thin criteria** asks the AI for just the missing kinds of case
-and is additive by construction — code keeps every existing case exactly as
-it was and drops any edit or deletion the AI attempted. **Refine…** takes an
-instruction in your own words; either way the proposal arrives as a
-before/after view with added, changed and removed cases counted in code,
-which you can **Accept** or **Keep current**, and **Undo last change**
-steps back through the last five accepted lists.
+Being tested at all is not the same as being tested well, so the card also
+shows **how well tested** each criterion is: how many tests reach it, and
+whether any of them tries wrong input or sits at a limit. A criterion with one
+happy-path test is marked *needs more tests*, and the line above says what is
+really missing — *"5 of 5 criteria need more tests — 4 have no test for wrong
+input, 1 has only one test."* **Add more tests where needed** asks the AI for
+just the missing kinds of test and can only add: code keeps every existing
+test exactly as it was and drops any edit or deletion the AI tried. **Change
+with your own instruction…** takes a sentence in your own words. Either way
+the answer arrives as a before/after view with added, changed and removed
+tests counted in code, which you can **Accept** or **Keep current**, and
+**Undo last change** steps back through the last five lists you accepted.
 
 ## Automation
 Step 3 cards carry a checkbox, so you can tick up to twelve cases and hit
 **Automate selected →** to reach step 4, where you choose a framework and
 language (Playwright, Cypress or Selenium), Page Object Model or flat
 scripts, the browsers to run, and an optional base URL. The AI writes the
-project; code then checks it, as always. **Traceability** reports how many
-of the selected cases have a test that names their id, listing any that do
-not. Python files are parsed with `ast.parse`, so `valid` there means it
-really parses; TypeScript and JavaScript only get a **basic check** that
-brackets, quotes and comments balance — it is not a compile and not a type
-check, and the result card says so. Any `waitForTimeout`, `time.sleep`,
-numeric `cy.wait` or `Thread.sleep` is flagged as a fixed-wait warning with
-its file and line. **Download ZIP** packs every file under one folder, with
+project; code then checks it, as always. The card says how many of the tests
+you picked have a test that names their id, and lists any that do not. Python
+files are read by a real parser, so *it parses* there means exactly that.
+TypeScript and JavaScript only get a **quick code check** that brackets,
+quotes and comments match — it is not a compile and not a type check, and the
+card says so. Any `waitForTimeout`, `time.sleep`, numeric `cy.wait` or
+`Thread.sleep` is flagged as a **fixed pause**, with its file and line,
+because a fixed pause makes tests slow and flaky. **Download ZIP** packs every file under one folder, with
 a README carrying the setup steps, the run command and the same checks; the
 file names the AI chose are cleaned first, so nothing can be written outside
 that folder.
 
 ## Risk radar
-**Risk radar** runs an FMEA over the current run: the AI lists the ways the
-feature can fail in production — security, performance, reliability, data,
-usability, accessibility and functional — and proposes a severity, likelihood
-and detectability from 1 to 5 with a reason for each. Code does the rest: the
-RPN is severity x likelihood x detectability, the level, the 5x5 heat map, the
-counts and the order all come from that one formula, never from the model.
-Coverage is checked rather than believed: a test case tagged `risk:R1` counts
-as **verified**, a test case the AI claims is checked by word overlap and shows
-as **covered** or, when the text does not match, as a **weak** link, and an id
-the AI invented is dropped with a note. Adjust any score in the card and the
-server recomputes everything, so the heat map and the order follow your
-judgement. **Write tests for N untested high risks** sends those risks to step
-3, where an additive refine writes cases tagged `risk:Rn` and shows them in the
-usual Accept / Keep current / Undo view. **Download CSV** and **Download Excel**
-give you the risk register, the Excel one with a Risk register sheet coloured by
-level and a Heat map sheet.
+**Risk radar** lists the ways this feature can break in production — security,
+performance, reliability, data, usability, accessibility and plain broken
+behaviour — and gives each one three scores from 1 to 5, with a reason: how bad
+it is, how likely it is, and how hard it is to notice. Code does the rest. The
+risk score is how bad × how likely × how hard to notice, and the level, the
+5×5 risk map, the counts and the order all come from that one sum, never from
+the model. Whether a test covers a risk is checked, not believed: a test tagged
+`risk:R1` was written for it; a test the AI names is checked on shared words
+and shows as *probably tested*, or, when the words do not match, as a doubt the
+page states plainly; and an id the AI invented is dropped with a note. A risk
+QA-Genius added itself knows the words that mean it is tested, so *"System
+prevents email enumeration"* is matched to the enumeration risk without anyone
+tagging anything. Change any score in the card and the server works it all out
+again, so the map and the order follow your judgement. **Write tests for N high
+risks with no test** sends those risks to step 3, where an add-only change
+writes tests tagged `risk:Rn` and shows them in the usual Accept / Keep current
+/ Undo view. **Download CSV** and **Download Excel** give you the risk
+register, the Excel one with a register sheet coloured by level and a risk map
+sheet.
 
 ## Ship check
-**Ship check** answers one question — *can we ship this feature?* — and
-answers it without an API key and without an AI call: every status is computed
-by code from results the other desks already produced, using the same
-functions those pages use, so Ship check can never disagree with the page you
-just came from. Seven checks run over whatever your run holds: **story
-clarity** (100 minus the ambiguity score), the **ambiguity duel** (agreement
-and the worst fork), **criteria coverage** (any criterion with no test case
-fails), **test depth** (thin criteria warn, more than half thin fails),
-**risk coverage** (a high risk with no test fails, a medium risk with no test
-or a high risk only weakly matched warns), **automation** (a syntax error
-fails, a missing selected id or a fixed wait warns) and the **test matrix**
-(a matrix that misses pairs or needs manual runs warns; it never fails). Each check is pass, warn, fail or *not
-checked*, with the exact numbers behind it and a link back to the desk that
-fixes it. The verdict follows in a fixed order: any fail means **Don't ship**;
-otherwise a missing coverage or risk check means **Ship with risks**, because
-there is not enough evidence to ship; otherwise any warning means **Ship with
-risks**; and only a clean sweep is **Ship**. A failed check can be accepted
-with a written reason of 10 to 300 characters — the acceptance is recorded on
-the row, counts as a warning rather than a pass, and is removed again in one
-click. **Copy as Markdown** gives you the whole verdict as a table with a
-details section to paste into a release thread, and **Print / save as PDF**
-prints the banner and every check with their details open, with the
-sidebar, buttons and key chip left off the page.
+**Ship check** answers one question — *can we release this feature?* — with no
+API key and no AI call. Code works out every line from results the other desks
+already produced, using the same functions those pages use, so Ship check can
+never disagree with the page you just came from. Seven checks run over whatever
+your run holds: **how clear the story is** (100 minus the unclear score), the
+**two-reader check** (how far apart the readers were, and the worst
+disagreement), **criteria with a test** (any criterion with no test fails),
+**how well tested** (criteria needing more tests warn; more than half fails),
+**risks with a test** (a high risk with no test fails; a medium risk with no
+test, or a high risk matched only by a few shared words, warns), **automation**
+(a code error fails; a missing id or a fixed pause warns) and the **test
+matrix** (a matrix that misses pairs or needs runs by hand warns; it never
+fails). Each check is *fine*, *have a look*, *needs fixing* or *not done yet*,
+with the numbers behind it and a link back to the desk that fixes it. The
+decision follows in a fixed order: anything needing fixing means **Not ready**;
+otherwise a missing coverage or risk check means **Release with known risks**,
+because there is not enough to go on; otherwise any warning means **Release
+with known risks**; and only a clean sweep is **Ready to release**. A failed
+check can be accepted with a written reason of 10 to 300 characters — the
+reason is kept on the row, counts as a warning rather than a pass, and is
+removed again in one click. **Copy as Markdown** gives you the whole decision
+as a table to paste into a release thread, and **Print / save as PDF** prints
+the banner and every check with its detail open, leaving the sidebar, the
+buttons and the key chip off the page.
 
 ## Test matrix
-Browsers times devices times roles times languages is hundreds of combinations,
-so teams test Chrome on a desktop and hope. *Pairwise* testing is the way out:
-most environment bugs need only two things to coincide, so the smallest set of
-runs where **every pair of values appears together at least once** finds them
-without running everything — 216 combinations become 16 runs, and the page
-proves it with *85 of 85 pairs covered*. QA-Genius proposes the factors that
-matter for your story with a reason each (an AI reads the story; it never
-decides a row), you add or remove factors, values and impossible combinations
-such as *Firefox never on a phone*, and the matrix recalculates instantly in
-code. Pin the runs you always want and they stay. **Download Playwright
-config** gives you one project per automatable run with the right device
-profile, locale, colour scheme and stored session, and **Download CSV** covers
-the rest, including the runs Playwright cannot drive, which are counted rather
-than quietly dropped. The result feeds the Test matrix row of Ship check.
+Browsers times devices times roles times languages is hundreds of runs, so
+teams test Chrome on a desktop and hope. There is a way out: most setup bugs
+need only two things to meet, so the smallest set of runs where **every two
+options are tested together at least once** finds them without running
+everything — 216 combinations become 16 runs, and the page proves it with *85
+of 85 pairs covered*. QA-Genius suggests the things worth varying for your
+story, with a reason for each (an AI reads the story; it never decides a run).
+If the AI forgets Browser or Device, code puts them back, because almost every
+story is a screen. You then add or remove things to vary, their options, and
+combinations that can't happen such as *Firefox never on a phone*, and the
+matrix works itself out again at once, in code. Mark the runs you always want
+with **Always keep** and they stay. **Download Playwright config** gives you
+one project per run a tool can drive, with the right device, language, colour
+scheme and saved sign-in, and **Download CSV** covers the rest, including the
+runs Playwright cannot drive, which are counted rather than quietly dropped.
+The result feeds the Test matrix row of Ship check.
 
-## Principal QA (Shadow QA)
-Every AI call on every desk has a principal QA engineer sitting either side of
-it, and it costs you nothing: same click, same single AI call, no key of its
-own, no waiting. **Before** the call, QA-Genius appends a short checklist of
-what a senior tester would insist on for this kind of feature — the email typed
-in capitals, the same error for an unknown email and a wrong password, the file
-of exactly 5 MB and the one a byte over — together with the exact boundary
-values your criteria imply (4 / 5 / 6 attempts, 14 / 15 / 16 minutes). **After**
-the call it reads what came back and adds what is still missing, straight into
-the same result: test cases labelled **Principal QA** with the reason they
-exist and a Remove button, extra risks scored by the same rules as the AI's own,
-findings on automation code that never asserts or leaves `.only` behind, and a
-warning on Story check when a story is really seven features wearing one hat.
-It never edits the AI's own work — it only adds, and everything it adds is
-removable, with Undo. All of it is plain Python over rule packs, so it runs on
+## The senior tester
+Every AI call on every desk has a senior tester sitting either side of it, and
+it costs you nothing: same click, same single AI call, no key of its own, no
+waiting. **Before** the call, QA-Genius adds a short list of what a senior
+tester would insist on for this kind of feature — the email typed in capitals,
+the same error for an unknown email and a wrong password, the file of exactly
+5 MB and the one a byte over — along with the exact numbers your criteria imply
+(4 / 5 / 6 attempts, 14 / 15 / 16 minutes). **After** the call it reads what
+came back and adds what is still missing, straight into the same result: tests
+labelled **Added by senior tester** with the reason they exist and a Remove
+button, extra risks scored by the same rules as the AI's own, notes on
+automation code that never checks anything or leaves `.only` behind, and a
+warning on Story check when a story is really seven features in a trench coat.
+It never changes the AI's own work — it only adds, and everything it adds can
+be removed, with Undo. All of it is plain Python over rule packs, so it runs on
 **Load example** with no key at all.
+
+A check that is only about one narrow thing — the language an email is written
+in, rounding a second currency — carries `only_if` and waits until your story
+raises that subject, so a lockout story is never asked for a test about
+languages.
 
 The rules live in `qagenius/shadow_qa/packs/*.toml`, one file per kind of
 feature, and you can add your own — drop a file in and it is picked up. A pack
@@ -153,8 +165,9 @@ weak_triggers = ["voucher", "discount"]
 id = "expired"
 title = "An expired coupon is refused"
 severity = "high"
-why = "An expired code that still works is money out of the door."
+why = "An expired code that still works gives money away."
 covered_if = ["expired", "expiry", "no longer valid"]
+only_if = []          # optional: use this check only when the story says one of these
   [checks.test]
   title = "Apply a coupon one day after it expired"
   category = "Negative"
@@ -167,8 +180,9 @@ covered_if = ["expired", "expiry", "no longer valid"]
 
 ## Always up to date
 Every desk says, at the top, what it was built from and whether that is still
-your latest work: **Not built yet**, **Out of date** or **Up to date**, each
-with an icon and words so the state never rests on colour alone. The card
+your latest work: **Not built yet**, **Old — your work changed** or **Matches
+your latest work**, each with an icon and words, so the state never rests on
+colour alone. The card
 names the change in numbers — *"Your criteria changed 3 min ago (4 → 5)"* —
 and its button is the page's one primary action, so there is never a second
 button competing with it. Work that code can redo updates by itself: Risk
@@ -190,9 +204,22 @@ still tested; they are simply not in the sidebar.
   and prints `OK <provider> <model>` or the cleaned error. The key is
   never printed.
 
+## Plain words
+Every word on a screen is meant to be readable by a tester in their first
+month, or by one whose first language is not English: short sentences,
+everyday words, and no QA jargon standing in for an idea. The few standard
+words that stay — acceptance criteria, test case, at the limit, wrong input,
+INVEST, risk score, Playwright, given/when/then — carry a small ⓘ that says
+what they mean. Those notes live in one place, `public/plain_words.js`, and a
+template reaches one with `data-explain="boundary"`. Exports keep the standard
+QA words, because a CSV goes to a tool, not to a reader. Every AI call also
+asks for plain English, so the text that comes back reads like the rest.
+`tests/test_plain_words.py` renders every page and fails if a word from the
+banned list reaches a screen.
+
 ## Development
-- `pytest -q` runs the suite; `ruff check .` lints. Both must pass before a
-  commit.
+- `pytest -q` runs the suite; `ruff check .` lints; `node --test tests/js`
+  runs the browser-side unit tests. All three must pass before a commit.
 - `python scripts/ui_screenshots.py` saves a PNG of every desk at 1366×900
   and 390×844 into `ui-screens/` (git-ignored), so a UI change can be
   compared side by side instead of described. It starts nothing itself:

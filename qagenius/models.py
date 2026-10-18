@@ -423,6 +423,9 @@ class FailureMode(BaseModel):
     test_idea: str = ""
     # "ai" or "principal-qa": who proposed this failure mode.
     source: str = "ai"
+    # Words that mean a test already reaches this risk. Only read for risks
+    # the rule packs added, which is where the words come from.
+    covered_if: List[str] = []
 
     @field_validator("severity", "likelihood", "detectability", mode="before")
     @classmethod

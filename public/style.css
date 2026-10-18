@@ -1142,3 +1142,28 @@ body[data-card-primary="automation"] #automation-generate.btn-primary:hover{
     clip-path:inset(50%);white-space:nowrap}
   .btn.key-chip{padding:7px 10px;gap:6px}
 }
+
+/* ── "What's this?" for the few QA words a tester has to learn ──────────────
+   The mark sits inline after the word, so the button must not change the
+   line height of the heading it lives in. The panel is positioned against
+   the mark and uses the same tokens as every other card, which is what makes
+   it readable in both themes without a second rule. */
+.explain{position:relative;display:inline-flex;align-items:center;white-space:nowrap}
+.explain-btn{appearance:none;background:none;border:0;cursor:pointer;
+  margin:0 0 0 4px;padding:0 2px;line-height:1;font-size:13px;
+  color:var(--muted);border-radius:4px}
+.explain-btn:hover,.explain-btn:focus-visible{color:var(--accent-2)}
+.explain-btn:focus-visible{outline:2px solid var(--accent-2);outline-offset:2px}
+.explain-btn[aria-expanded="true"]{color:var(--accent-2)}
+.explain-panel{position:absolute;z-index:40;top:calc(100% + 7px);left:0;
+  width:max(240px,min(320px,78vw));white-space:normal;
+  background:var(--card);color:var(--text);border:1px solid var(--border-strong);
+  border-radius:10px;box-shadow:var(--shadow-2);
+  padding:10px 12px;font-size:12.5px;font-weight:400;line-height:1.5;
+  text-transform:none;letter-spacing:normal}
+.explain-panel strong{display:block;margin-bottom:2px;color:var(--text)}
+
+@media (max-width:560px){
+  /* Near the right edge a left-anchored panel runs off the page. */
+  .explain-panel{left:auto;right:0}
+}

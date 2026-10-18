@@ -81,7 +81,7 @@ def test_each_case_card_has_a_labelled_checkbox() -> None:
     body = client.get("/requirements/test-cases/example").text
     assert 'aria-label="Select TC-001"' in body
     assert 'data-case-id="TC-001"' in body
-    # Every case on the page is selectable, the Principal QA ones included.
+    # Every case on the page is selectable, the senior tester's included.
     assert body.count('class="tc-select"') == body.count('class="card tc-card')
 
 
@@ -253,10 +253,10 @@ def test_the_result_shows_traced_missing_and_syntax(monkeypatch) -> None:
         "/requirements/automation/run", data=_form(), headers=KEYS_HEADER
     )
     assert response.status_code == 200
-    assert "1 of 2 selected test cases have a matching test" in response.text
+    assert "1 of 2 test cases you picked have a test that names them" in response.text
     assert "No test mentions TC-003" in response.text
-    assert "basic check passed" in response.text
-    assert "not a full compile" in response.text
+    assert "looks OK" in response.text
+    assert "That is not a compile" in response.text
 
 
 def test_a_syntax_error_is_shown(monkeypatch) -> None:
@@ -289,13 +289,13 @@ def test_a_busy_key_shows_the_friendly_card(monkeypatch) -> None:
 def test_the_example_needs_no_key_and_traces_every_case() -> None:
     response = client.get("/requirements/automation/example")
     assert response.status_code == 200
-    assert "3 of 3 selected test cases have a matching test" in response.text
+    assert "3 of 3 test cases you picked have a test that names them" in response.text
     assert "saved example" in response.text
 
 
 def test_the_example_shows_exactly_one_fixed_wait_warning() -> None:
     body = client.get("/requirements/automation/example").text
-    assert body.count("Fixed wait") == 1
+    assert body.count("Fixed pause") == 1
 
 
 # ---------------------------------------------------------------- the file viewer
@@ -313,8 +313,8 @@ def test_there_is_one_button_per_file() -> None:
 def test_the_stat_row_counts_files_traces_syntax_and_warnings() -> None:
     body = client.get("/requirements/automation/example").text
     assert ">3 / 3<" in body
-    assert "all valid" in body
-    assert ">Tests traced<" in body
+    assert "all fine" in body
+    assert ">Tests linked<" in body
     assert ">Warnings<" in body
 
 

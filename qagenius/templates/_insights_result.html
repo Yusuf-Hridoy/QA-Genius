@@ -16,16 +16,16 @@
     <h2>{{ ins.overall.total }} results across
       {{ ins.runs | length }} run{{ "" if ins.runs | length == 1 else "s" }}</h2>
     <p>{{ ins.overall.failed }} failed, {{ ins.overall.flaky }} flaky,
-      {{ ins.overall.skipped }} skipped. Every number here was computed from your files
-      by code — nothing was sent to an AI.</p>
+      {{ ins.overall.skipped }} skipped. Code worked out every number here from your own
+      files. Nothing was sent to an AI.</p>
   </div>
 </div>
 <div class="stat-row">
   <div class="stat{% if ins.overall.failed %} stat-bad{% endif %}"><div class="num">{{ ins.overall.failed }}</div><div class="lbl">Failed</div></div>
   <div class="stat"><div class="num">{{ ins.overall.flaky }}</div><div class="lbl">Flaky</div></div>
   <div class="stat"><div class="num">{{ ins.overall.skipped }}</div><div class="lbl">Skipped</div></div>
-  <div class="stat"><div class="num">{{ ins.groups | length }}</div><div class="lbl">Failure groups</div></div>
-  <div class="stat"><div class="num">{{ "%.1f" | format(ins.overall.duration_s) }}<span class="unit"> s</span></div><div class="lbl">Duration</div></div>
+  <div class="stat"><div class="num">{{ ins.groups | length }}</div><div class="lbl">Groups of failures</div></div>
+  <div class="stat"><div class="num">{{ "%.1f" | format(ins.overall.duration_s) }}<span class="unit"> s</span></div><div class="lbl">Time taken</div></div>
 </div>
 {% if ins.runs | length > 1 %}
 <div class="card">
@@ -33,7 +33,7 @@
   <table class="grid" id="insights-runs">
     <thead>
       <tr><th>Run</th><th>Tests</th><th>Passed</th><th>Failed</th><th>Flaky</th>
-        <th>Skipped</th><th>Pass rate</th><th>Duration</th></tr>
+        <th>Skipped</th><th>Passing</th><th>Time</th></tr>
     </thead>
     <tbody>
       {% for run in ins.runs %}
@@ -49,7 +49,7 @@
 {% endif %}
 
 <div class="card card-section">
-  <h2>Failure groups</h2>
+  <h2>Failures, grouped</h2>
   {% if not ins.groups %}
   <p class="muted">No failures in these runs.</p>
   {% endif %}
@@ -73,7 +73,7 @@
     <p class="muted small">Seen in: {{ group.runs | join(", ") }}</p>
     {% if group.example_details %}
     <details>
-      <summary>Example details</summary>
+      <summary>What one of them looked like</summary>
       <pre class="code">{{ group.example_details }}</pre>
     </details>
     {% endif %}
@@ -89,7 +89,7 @@
 
 <div class="card card-section">
   <h2>Flaky tests</h2>
-  <p class="muted small">Flaky = retried and passed, or passed in one run and failed in another.</p>
+  <p class="muted small">A flaky test passes one time and fails the next, with nothing changed.</p>
   {% if not ins.flaky %}
   <p class="muted">None found.</p>
   {% else %}

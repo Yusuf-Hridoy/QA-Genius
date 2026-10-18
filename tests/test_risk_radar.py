@@ -395,3 +395,80 @@ def test_filler_words_alone_are_not_a_match():
         case_id="TC-022", title="and it was all", expected_result="", steps=[]
     )
     assert match_score(risk, unrelated) == (0.0, [])
+
+
+# ── a senior tester's own risk knows the words that cover it ──────────────────
+
+
+def _pack_risk(title: str, words: list[str], **overrides) -> FailureMode:
+    """A risk as review_risks adds it: from the rule packs, with its own words."""
+    overrides.setdefault("covered_by", [])
+    return mode(title=title, source="principal-qa", covered_if=words, **overrides)
+
+
+def test_a_senior_tester_risk_is_covered_by_a_case_that_says_its_words():
+    """The real run: "System prevents email enumeration" tests exactly this risk."""
+    risk = _pack_risk(
+        "Error message reveals whether an email is registered",
+        ["enumeration", "same message", "reveals whether"],
+    )
+    tested = case(case_id="TC-003", title="System prevents email enumeration")
+    report = score_risks(RiskAnalysis(failure_modes=[risk]), [tested])
+    assert report.risks[0].coverage == "covered"
+    assert [row[0] for row in report.risks[0].covered_tests] == ["TC-003"]
+
+
+def test_a_senior_tester_risk_is_covered_by_a_case_that_says_its_words_in_a_step():
+    risk = _pack_risk(
+        "The attempt limit is counted per IP address rather than per account",
+        ["per ip", "two devices", "same account"],
+    )
+    tested = case(
+        case_id="TC-022",
+        title="Attempts from two devices count against the same account",
+    )
+    report = score_risks(RiskAnalysis(failure_modes=[risk]), [tested])
+    assert report.risks[0].coverage == "covered"
+    assert [row[0] for row in report.risks[0].covered_tests] == ["TC-022"]
+
+
+def test_a_senior_tester_risk_no_case_mentions_stays_untested():
+    risk = _pack_risk(
+        "Response time differs between a known and an unknown email",
+        ["timing", "response time", "constant time"],
+    )
+    other = case(case_id="TC-001", title="The account locks after five attempts")
+    report = score_risks(RiskAnalysis(failure_modes=[risk]), [other])
+    assert report.risks[0].coverage == "none"
+    assert report.risks[0].covered_tests == []
+
+
+def test_the_ai_s_own_risk_is_never_matched_by_words_alone():
+    """Only a rule-pack risk carries words that mean a test reaches it."""
+    risk = mode(title="Anything", covered_if=["enumeration"], covered_by=[])
+    tested = case(case_id="TC-003", title="System prevents email enumeration")
+    report = score_risks(RiskAnalysis(failure_modes=[risk]), [tested])
+    assert report.risks[0].coverage == "none"
+
+
+def test_a_tagged_case_still_wins_over_a_word_match():
+    risk = _pack_risk(
+        "Error message reveals whether an email is registered", ["enumeration"]
+    )
+    written = case(case_id="TC-050", title="Written for R1", tags=["risk:R1"])
+    mentioned = case(case_id="TC-003", title="System prevents email enumeration")
+    report = score_risks(RiskAnalysis(failure_modes=[risk]), [written, mentioned])
+    scored = report.risks[0]
+    assert scored.coverage == "verified"
+    assert [row[0] for row in scored.covered_tests] == ["TC-050", "TC-003"]
+
+
+def test_a_word_match_is_listed_once_even_when_the_ai_also_claimed_it():
+    risk = _pack_risk(
+        "Error message reveals whether an email is registered",
+        ["enumeration"],
+        covered_by=["TC-003"],
+    )
+    tested = case(case_id="TC-003", title="System prevents email enumeration")
+    report = score_risks(RiskAnalysis(failure_modes=[risk]), [tested])
+    assert [row[0] for row in report.risks[0].covered_tests] == ["TC-003"]

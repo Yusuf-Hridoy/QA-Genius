@@ -36,19 +36,19 @@
   </ul>
 </div>
 <div class="card card-section">
-  <h2>Environment</h2>
+  <h2>Where it happened</h2>
   <p class="mono small">{{ environment }}</p>
-  <h2>Steps to reproduce</h2>
+  <h2>How to make it happen again</h2>
   <ol class="tc-steps">
     {% for step in report.steps_to_reproduce %}<li>{{ step }}</li>{% endfor %}
   </ol>
   <div class="two-cols">
     <div>
-      <h3>Actual</h3>
+      <h3>What happened</h3>
       <p>{{ report.actual_result }}</p>
     </div>
     <div>
-      <h3>Expected</h3>
+      <h3>What should have happened</h3>
       <p>{{ report.expected_result }}</p>
     </div>
   </div>

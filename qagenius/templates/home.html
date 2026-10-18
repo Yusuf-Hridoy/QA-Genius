@@ -5,9 +5,9 @@
 <div class="page-head">
   <span class="eyebrow">QA-Genius</span>
   <h1>Four desks between a vague story and a release you can defend.</h1>
-  <p class="lede">Bring your own API key — it stays in this browser and never touches our
-    server. Start anywhere; each desk works on its own, and the Requirements flow carries
-    one run from story to a runnable project.</p>
+  <p class="lede">Bring your own API key. It stays in this browser and is never kept on
+    our server. Start anywhere. Each desk works on its own, and Requirements carries one
+    story all the way to a project you can run.</p>
   <div class="row">
     <a href="/requirements/story" class="btn btn-primary">Start with a story
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a>
@@ -18,32 +18,32 @@
   <a class="desk" href="/requirements/story">
     <span class="desk-mark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h12l4 4v12H4z"/><path d="M16 4v4h4"/><path d="M8 13h8M8 17h5"/></svg></span>
     <h3>Requirements</h3>
-    <p>Score a story's clarity, run the INVEST check, agree the acceptance criteria, then
-      write and automate the test cases. Four steps, one run.</p>
+    <p>See how clear a story is, agree the acceptance criteria, then write and automate
+      the test cases. Four steps, one run.</p>
     <span class="go">Story check
       <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span>
   </a>
   <a class="desk" href="/risks">
     <span class="desk-mark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4.5"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3"/></svg></span>
     <h3>Risk radar</h3>
-    <p>Find the failure modes your criteria imply, score them by severity, likelihood and
-      detectability, and see which ones no test covers yet.</p>
+    <p>List the ways this feature can break. Score each one by how bad, how likely and
+      how hard to notice it is. Then see which ones have no test.</p>
     <span class="go">Find risks
       <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span>
   </a>
   <a class="desk" href="/requirements/matrix">
     <span class="desk-mark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg></span>
     <h3>Test matrix</h3>
-    <p>Browsers times devices times roles is hundreds of combinations. Code finds the
-      fewest runs where every pair still appears together, and proves it.</p>
+    <p>Browsers times devices times roles is hundreds of runs. Code finds the fewest
+      runs where every two options are still tested together, and proves it.</p>
     <span class="go">Build a matrix
       <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span>
   </a>
   <a class="desk" href="/ship">
     <span class="desk-mark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 7 9.5 17.5 4 12"/></svg></span>
     <h3>Ship check</h3>
-    <p>One verdict — Ship, Ship with risks or Don't ship — computed by code from everything
-      the other desks found. No AI, no key.</p>
+    <p>One decision: Ready to release, Release with known risks, or Not ready. Code
+      works it out from what the other desks found. No AI, no key.</p>
     <span class="go">Check a release
       <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span>
   </a>
@@ -52,9 +52,9 @@
 <div class="card">
   <h2>How the key works</h2>
   <p>QA-Genius has no accounts and no database. You paste an API key from Google Gemini,
-    OpenAI or another provider; it is saved in this browser's storage and sent with each
-    request you make. The server uses it for that one call and never stores or logs it.
-    Add more than one and a busy or rejected key falls through to the next.</p>
+    OpenAI or another provider. It is saved in this browser and sent with each request you
+    make. The server uses it for that one call and never saves or logs it. Add more than
+    one key and QA-Genius tries the next one when a key is busy or refused.</p>
   <div class="row">
     <button type="button" class="btn" id="home-add-key">Add an API key</button>
   </div>

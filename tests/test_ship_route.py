@@ -46,7 +46,7 @@ def post(body: dict):
 def test_the_page_loads():
     response = client.get("/ship")
     assert response.status_code == 200
-    assert "Can we ship this feature?" in response.text
+    assert "Can we release this feature?" in response.text
 
 
 def test_the_page_says_no_ai_and_no_key():
@@ -65,9 +65,9 @@ def test_an_empty_body_leaves_every_check_not_checked():
 
 def test_an_empty_run_ships_with_risks_because_the_core_checks_are_missing():
     body = post({"story": "A story nobody has checked yet."}).text
-    assert "Ship with risks" in body
-    assert "Not enough evidence" in body
-    assert "Criteria coverage, Risk coverage not checked yet." in body
+    assert "Release with known risks" in body
+    assert "Not enough to go on" in body
+    assert "Criteria with a test, Risks with a test not done yet." in body
 
 
 def test_no_body_at_all_is_not_an_error():
@@ -80,8 +80,8 @@ def test_no_body_at_all_is_not_an_error():
 def test_the_example_cannot_ship():
     response = client.get("/ship/example")
     assert response.status_code == 200
-    assert "Don&#39;t ship" in response.text or "Don't ship" in response.text
-    assert "1 check failed: Risk coverage." in response.text
+    assert "Not ready" in response.text
+    assert "1 check failed: Risks with a test." in response.text
 
 
 def test_the_example_has_the_statuses_the_brief_asks_for():
@@ -114,7 +114,7 @@ def test_invalid_automation_is_treated_as_missing_and_said_so():
     body["automation"] = {"script": {"framework": "Playwright"}, "selected_ids": ["TC-001"]}
     response = post(body)
     assert response.status_code == 200
-    assert "Ignored invalid data for: automation" in response.text
+    assert "could not be read, so these were skipped: automation" in response.text
     assert statuses(response.text)["automation"] == "not_checked"
 
 
@@ -150,7 +150,7 @@ def test_an_acceptance_turns_the_risk_fail_into_accepted():
     body["acceptances"] = {"risks": REASON}
     response = post(body)
     assert statuses(response.text)["risks"] == "accepted"
-    assert "Ship with risks" in response.text
+    assert "Release with known risks" in response.text
     assert REASON in response.text
 
 
@@ -186,8 +186,8 @@ def test_the_markdown_block_is_present_and_parses():
     )
     assert match
     markdown = json.loads(match.group(1))
-    assert markdown.startswith("# Ship check — Don't ship")
-    assert "| Risk coverage | ❌ Fail |" in markdown
+    assert markdown.startswith("# Ship check — Not ready")
+    assert "| Risks with a test | ❌ Fail |" in markdown
 
 
 def test_the_rows_come_in_check_ids_order():

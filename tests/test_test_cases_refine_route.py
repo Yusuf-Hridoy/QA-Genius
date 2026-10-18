@@ -50,8 +50,8 @@ def test_render_redraws_the_result_card() -> None:
         json={"result": sample["result"], "criteria": sample["criteria"]},
     )
     assert response.status_code == 200
-    assert "Coverage 80%" in response.text
-    assert "Depth by criterion" in response.text
+    assert "80% tested" in response.text
+    assert "How well each criterion is tested" in response.text
 
 
 def test_render_rejects_a_bad_body() -> None:
@@ -100,13 +100,13 @@ def test_strengthen_ignores_ai_edits_to_existing_cases(monkeypatch) -> None:
     body = client.post(
         "/requirements/test-cases/refine", data=_form(), headers=KEYS_HEADER
     ).text
-    # The AI's one new case, plus whatever Principal QA found missing.
+    # The AI's one new case, plus whatever the senior tester found missing.
     assert "added" in body and "+0 added" not in body
     assert "Unknown email is refused politely" in body
     assert "~0 changed" in body
     assert "−0 removed" in body
     assert "The AI rewrote this title" not in body
-    assert "Strengthen only adds cases." in body
+    assert "This only adds tests." in body
 
 
 def test_strengthen_with_nothing_thin_makes_no_ai_call(monkeypatch) -> None:
@@ -157,7 +157,7 @@ def test_instruction_mode_shows_added_changed_and_removed(monkeypatch) -> None:
     assert "Fifteen minutes exactly still refuses" in body
     assert "~1 changed" in body
     assert "−7 removed" in body
-    assert "This removes 7 test cases." in body
+    assert "This deletes 7 test cases." in body
     assert "Strengthen only adds cases." not in body
 
 
@@ -221,7 +221,7 @@ def test_proposal_json_round_trips_through_render(monkeypatch) -> None:
     raw = raw.split("</script>")[0]
     payload = json.loads(raw)
     cases = payload["result"]["test_cases"]
-    # The 8 current cases, the AI's new one, and the Principal QA additions.
+    # The 8 current cases, the AI's new one, and the senior tester's additions.
     assert len(cases) >= 9
     assert [one["id"] for one in cases][:9] == [f"TC-{n:03d}" for n in range(1, 10)]
     response = client.post("/requirements/test-cases/render", json=payload)
@@ -236,9 +236,9 @@ def test_example_strengthen_only_adds_cases() -> None:
     assert "+5 added" in body
     assert "~0 changed" in body
     assert "−0 removed" in body
-    assert "Thin criteria" in body
+    assert "Criteria needing more tests" in body
     assert "3 → 0" in body
-    assert "Strengthen only adds cases." in body
+    assert "This only adds tests." in body
 
 
 def test_example_offers_the_strengthen_link() -> None:

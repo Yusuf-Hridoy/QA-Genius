@@ -10,7 +10,7 @@
    score is about wording, this is about scope. #}
 {{ pq.banner(epic, "recommended-split" if result.recommended_split else "") }}
 
-{# The answer opens with the one verdict, then the numbers, then the detail.
+{# The answer opens with the one line that matters, then the numbers, then the detail.
    Before this it was twelve cards of the same weight and you had to read all
    of them to learn whether the story was in trouble. #}
 <div class="verdict" style="--pct:{{ clarity_score }};--ring-color:var(--{{ score_tone }}-line)">
@@ -20,10 +20,10 @@
   </div>
   <div>
     <span class="pill {{ score_tone }}">{{ (result.clarity_label | confidence).text }}</span>
-    <h2>Clarity score {{ clarity_score }}</h2>
-    <p>{{ invest_passes }} of 6 INVEST dimensions pass and
-      {{ result.vague_phrases | length }} vague
-      phrase{{ "" if result.vague_phrases | length == 1 else "s" }}
+    <h2>How clear: {{ clarity_score }} of 100</h2>
+    <p>{{ invest_passes }} of 6 story quality checks pass.
+      {{ result.vague_phrases | length }} unclear
+      word{{ "" if result.vague_phrases | length == 1 else "s" }}
       {{ "needs" if result.vague_phrases | length == 1 else "need" }} a number or a name
       before anyone can test this.</p>
   </div>
@@ -32,26 +32,26 @@
 <div class="stat-row">
   <div class="stat">
     <div class="num">{{ invest_passes }}<span class="unit"> / 6</span></div>
-    <div class="lbl">INVEST passes</div>
+    <div class="lbl">Story quality checks passed<span data-explain="invest"></span></div>
     <div class="meter"><span class="meter-fill {{ 'ok' if invest_passes >= 5 else ('warn' if invest_passes >= 3 else 'bad') }}"
       style="width:{{ (invest_passes / 6 * 100) | round | int }}%"></span></div>
   </div>
   <div class="stat">
     <div class="num">{{ result.vague_phrases | length }}</div>
-    <div class="lbl">Vague phrases</div>
+    <div class="lbl">Unclear words</div>
   </div>
   <div class="stat">
     <div class="num">{{ result.generated_acceptance_criteria | length }}</div>
-    <div class="lbl">Criteria drafted</div>
+    <div class="lbl">Criteria written for you</div>
   </div>
 </div>
 
 {# The one thing to do next sits above the detail, not six cards below it. #}
 <div class="panel">
   <div class="panel-head">
-    <h2>Acceptance criteria</h2>
+    <h2>Acceptance criteria<span data-explain="acceptance-criteria"></span></h2>
     <span class="spacer"></span>
-    <span class="pill accent plain">{{ result.generated_acceptance_criteria | length }} drafted</span>
+    <span class="pill accent plain">{{ result.generated_acceptance_criteria | length }} written for you</span>
   </div>
   <div class="panel-body">
     <pre class="code" id="ac-block">{{ acceptance_criteria }}</pre>
@@ -76,9 +76,9 @@
 </div>
 
 <div class="card card-section">
-  <h2>INVEST check</h2>
+  <h2>Story quality check (INVEST)<span data-explain="invest"></span></h2>
   <table class="grid">
-    <thead><tr><th>Dimension</th><th>Verdict</th></tr></thead>
+    <thead><tr><th>What is checked</th><th>Result</th></tr></thead>
     <tbody>
     {% for row in invest_rows %}
     <tr>
@@ -94,10 +94,10 @@
 {{ pq.notes(shadow_notes, "" if epic else "Nothing to add — this story names its actor, its benefit, and what happens when something goes wrong.") }}
 
 <div class="card card-section">
-  <h2>Vague phrases</h2>
+  <h2>Unclear words</h2>
   {% if result.vague_phrases %}
   <table class="grid">
-    <thead><tr><th>Phrase</th><th>Severity</th><th>Why it matters</th><th>Say instead</th></tr></thead>
+    <thead><tr><th>Word or phrase</th><th>How bad</th><th>Why it matters</th><th>Say instead</th></tr></thead>
     <tbody>
     {% for vp in result.vague_phrases %}
     <tr>
@@ -110,12 +110,12 @@
     </tbody>
   </table>
   {% else %}
-  <p class="muted">No vague phrases found. Clear story.</p>
+  <p class="muted">Nothing unclear here. This story reads well.</p>
   {% endif %}
 </div>
 
 <div class="card card-section">
-  <h2>Suggested rewrites</h2>
+  <h2>Better ways to write it</h2>
   <ul>
     {% for rewrite in result.suggested_rewrites %}
     <li>{{ conf.said(rewrite) }}</li>
@@ -127,20 +127,20 @@
 <div class="card card-section">
   <h2>What is still missing</h2>
   {% if missing_elements %}
-  <h3>Missing elements</h3>
+  <h3>Things the story does not say</h3>
   <ul>
     {# Criteria have been drafted, so lines about them are already answered. #}
     {% for item in missing_elements %}<li>{{ conf.said(item) }}</li>{% endfor %}
   </ul>
   {% endif %}
   {% if result.risks %}
-  <h3>Risks if built as-is</h3>
+  <h3>What could go wrong if you build it as written</h3>
   <ul>
     {% for risk in result.risks %}<li>{{ conf.said(risk) }}</li>{% endfor %}
   </ul>
   {% endif %}
   {% if result.recommended_split %}
-  <h3 id="recommended-split">Recommended split</h3>
+  <h3 id="recommended-split">How to split this story</h3>
   <ul>
     {% for split in result.recommended_split %}<li>{{ conf.said(split) }}</li>{% endfor %}
   </ul>

@@ -9,8 +9,9 @@ exclude = []
 id = "deep_link_protected"
 title = "A deep link to a protected page sends signed-out users to sign-in, then back"
 severity = "high"
-why = "Everyone shares links; losing the destination after sign-in is the oldest bug in web apps."
+why = "People open shared links. Sending them to the home page after sign-in loses what they wanted."
 covered_if = ["deep link", "redirect", "return to", "after sign-in", "protected page", "next url"]
+only_if = ["sign in", "signed in", "sign-in", "log in", "logged in", "login", "protected", "authenticated", "permission"]
   [checks.test]
   title = "Opening a protected URL while signed out returns there after signing in"
   category = "Functional"
@@ -24,7 +25,7 @@ covered_if = ["deep link", "redirect", "return to", "after sign-in", "protected 
 id = "back_forward"
 title = "Browser back and forward keep the right item active"
 severity = "medium"
-why = "Single-page navigation updates the view and forgets the menu, so the highlight points at the wrong place."
+why = "The page changes but the menu does not, so the highlight points at the wrong place."
 covered_if = ["back button", "forward", "history", "active item", "highlighted", "browser back"]
   [checks.test]
   title = "The active menu item follows the browser's back and forward buttons"
@@ -39,7 +40,7 @@ covered_if = ["back button", "forward", "history", "active item", "highlighted",
 id = "keyboard_focus"
 title = "Tab order is sensible and focus is visible"
 severity = "medium"
-why = "Keyboard users and screen readers navigate by this order, and an invisible focus ring makes the page unusable."
+why = "People who use a keyboard follow this order. Without a visible outline they are lost."
 covered_if = ["tab order", "keyboard", "focus", "focus ring", "focus visible", "skip link", "accessib"]
   [checks.test]
   title = "The menu can be used by keyboard alone with a visible focus ring"
@@ -54,7 +55,7 @@ covered_if = ["tab order", "keyboard", "focus", "focus ring", "focus visible", "
 id = "active_after_refresh"
 title = "The active item is still correct after a refresh"
 severity = "low"
-why = "The highlight is often set by the click handler, so a reload leaves nothing highlighted."
+why = "The highlight is usually set by the click. Reload the page and nothing is highlighted."
 covered_if = ["refresh", "reload", "active item", "highlighted", "direct url"]
   [checks.test]
   title = "Reloading a sub-page keeps its menu item highlighted"

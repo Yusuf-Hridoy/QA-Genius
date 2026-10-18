@@ -1,4 +1,4 @@
-{# The factors and rules, editable, with the computed matrix under them.
+{# The things to vary and the rules, editable, with the matrix under them.
    Every edit re-posts to /requirements/matrix/build; no AI runs on an edit. #}
 {% if is_example %}
 {% with caption = "The Aurora Storefront login story. Edit anything and the runs recalculate." %}
@@ -12,20 +12,20 @@
 
 <div class="card card-form" id="matrix-factors-card">
   <div class="row">
-    <h2>Factors</h2>
+    <h2>Things to vary</h2>
     <span class="spacer"></span>
     <button type="button" class="btn btn-small" id="matrix-suggest">Suggest from my story</button>
     <button type="button" class="btn btn-small" id="matrix-example">Load example</button>
   </div>
-  <p class="muted small">What changes how this feature behaves. Values are the
-    options you would actually test.</p>
+  <p class="muted small">The things that change how this feature behaves. The options
+    are what you would really test.</p>
   <div id="matrix-factor-list">
     {% for factor in factors %}
     <div class="matrix-factor" data-factor="{{ loop.index0 }}">
       <div class="row matrix-factor-head">
         <input class="ctl matrix-factor-name" value="{{ factor.name }}"
-               aria-label="Factor name" maxlength="40">
-        <button type="button" class="btn btn-small btn-danger matrix-remove-factor">Remove factor</button>
+               aria-label="Name of the thing to vary" maxlength="40">
+        <button type="button" class="btn btn-small btn-danger matrix-remove-factor">Remove this</button>
       </div>
       <div class="matrix-values">
         {% for value in factor.values %}
@@ -33,8 +33,8 @@
           class="btn btn-icon-tiny matrix-remove-value"
           aria-label="Remove {{ value }}">×</button></span>
         {% endfor %}
-        <input class="ctl matrix-add-value" placeholder="add value" maxlength="40"
-               aria-label="Add a value to {{ factor.name }}">
+        <input class="ctl matrix-add-value" placeholder="add an option" maxlength="40"
+               aria-label="Add an option to {{ factor.name }}">
       </div>
       {% if reasons.get(factor.name | lower) %}
       <p class="muted small matrix-reason">{{ reasons[factor.name | lower] }}</p>
@@ -43,14 +43,14 @@
     {% endfor %}
   </div>
   <div class="form-actions">
-    <button type="button" class="btn" id="matrix-add-factor">+ Add factor</button>
+    <button type="button" class="btn" id="matrix-add-factor">+ Add something to vary</button>
   </div>
 </div>
 
 <div class="card card-form" id="matrix-rules-card">
-  <h2>Impossible combinations</h2>
-  <p class="muted small">Pairs that cannot happen in the real world. No run will
-    contain one.</p>
+  <h2>Combinations that can't happen</h2>
+  <p class="muted small">Two options that never go together in real life, like Firefox
+    on a phone. No run will have both.</p>
   <ul class="matrix-rule-list" id="matrix-rule-list">
     {% for rule in rules %}
     <li class="matrix-rule" data-rule="{{ loop.index0 }}">
@@ -74,6 +74,5 @@
 
 {# Said once, here: an edit re-renders only #matrix-output, so this stays
    put and never doubles up. #}
-<p class="form-note">{% if from_ai %}Factors suggested by AI from your story;
-  runs and coverage computed by code.{% else %}Standard factors; runs and
-  coverage computed by code.{% endif %}</p>
+<p class="form-note">{% if from_ai %}The AI read your story and suggested what to vary.
+  Code works out the runs.{% else %}The usual things to vary. Code works out the runs.{% endif %}</p>

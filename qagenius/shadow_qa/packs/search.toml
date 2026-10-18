@@ -9,7 +9,7 @@ exclude = []
 id = "empty_search"
 title = "An empty search"
 severity = "low"
-why = "Pressing the button with nothing typed is the first thing anybody does."
+why = "Pressing the button with an empty form is the first thing anyone tries."
 covered_if = ["empty search", "blank", "no input", "without typing", "empty query"]
   [checks.test]
   title = "Searching with an empty box does something sensible"
@@ -24,7 +24,7 @@ covered_if = ["empty search", "blank", "no input", "without typing", "empty quer
 id = "special_characters"
 title = "Special characters and quotes"
 severity = "medium"
-why = "Apostrophes, percent signs and quotes reach the query layer and either break it or return nothing."
+why = "Apostrophes, percent signs and quotes reach the database. They break the search or return nothing."
 covered_if = ["special character", "quote", "apostrophe", "percent", "wildcard", "escape", "injection"]
   [checks.test]
   title = "A query with quotes, a percent sign and an apostrophe is handled safely"
@@ -39,7 +39,7 @@ covered_if = ["special character", "quote", "apostrophe", "percent", "wildcard",
 id = "no_results"
 title = "The no-results message"
 severity = "low"
-why = "An empty list with no words leaves the user unsure whether the search ran at all."
+why = "An empty list with no message leaves people unsure the search even ran."
 covered_if = ["no results", "nothing found", "no matches", "empty state", "zero results"]
   [checks.test]
   title = "A search with no matches explains itself"
@@ -54,7 +54,7 @@ covered_if = ["no results", "nothing found", "no matches", "empty state", "zero 
 id = "very_long_query"
 title = "A very long query"
 severity = "low"
-why = "A pasted paragraph reaches the URL length limit and the request fails before the page can say why."
+why = "Paste a long paragraph and the web address gets too long. The page fails with no reason."
 covered_if = ["long query", "very long", "max length", "truncated", "truncation", "cut off", "url length", "too long"]
   [checks.test]
   title = "A query of several thousand characters is handled, not crashed on"
@@ -69,8 +69,9 @@ covered_if = ["long query", "very long", "max length", "truncated", "truncation"
 id = "results_paging"
 title = "Paging through results"
 severity = "medium"
-why = "Page two usually loses the search term, the filter or both."
+why = "Page two usually forgets what was searched for, or the filter, or both."
 covered_if = ["paging", "pagination", "page 2", "next page", "load more", "keeps the filter"]
+only_if = ["page", "pages", "paging", "pagination", "load more", "infinite scroll", "per page", "next page"]
   [checks.test]
   title = "Moving to the next page keeps the search term and the filters"
   category = "Functional"

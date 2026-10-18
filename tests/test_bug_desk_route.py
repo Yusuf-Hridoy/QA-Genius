@@ -229,7 +229,7 @@ def test_the_result_shows_the_checks(monkeypatch) -> None:
     assert response.status_code == 200
     assert "Report checks" in response.text
     assert "Checked by code, not by the AI." in response.text
-    assert "Steps to reproduce" in response.text
+    assert "Steps to make it happen" in response.text
     # No screenshot was sent, so that one check is missing.
     assert "Ask for a screenshot or screen recording." in response.text
 

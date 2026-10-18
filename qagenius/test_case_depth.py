@@ -13,9 +13,15 @@ from qagenius.test_cases import (
 DEPTH_KINDS = ("Negative", "Boundary")  # kinds every criterion should have
 MIN_CASES = 2
 
-NOT_COVERED = "not covered"
-ONLY_ONE = "only 1 case"
-NO_KIND = {"Negative": "no negative case", "Boundary": "no boundary case"}
+NOT_COVERED = "no tests yet"
+ONLY_ONE = "only one test"
+NO_KIND = {"Negative": "no test for wrong input", "Boundary": "no test at the limits"}
+# Each reason reads as the end of "4 have ...", so the summary sentence can be
+# built from the same words the table shows.
+REASON_ORDER = (NOT_COVERED, ONLY_ONE, NO_KIND["Negative"], NO_KIND["Boundary"])
+# Two reasons is a sentence anyone can read in one go; the table below the
+# line has the rest, per criterion.
+MAX_REASONS_IN_LINE = 2
 
 
 @dataclass(frozen=True)
@@ -79,3 +85,39 @@ def compute_depth(result: TestCaseList, criteria: list[Criterion]) -> DepthRepor
             )
         )
     return DepthReport(rows=rows, thin_ids=[row.id for row in rows if row.thin])
+
+
+def reason_counts(report: DepthReport) -> list[tuple[str, int]]:
+    """How many criteria each reason applies to, commonest first.
+
+    A criterion can need more than one thing, so the counts are per reason and
+    do not add up to the number of criteria.
+    """
+    counts = {reason: 0 for reason in REASON_ORDER}
+    for row in report.rows:
+        for reason in row.reasons:
+            if reason in counts:
+                counts[reason] += 1
+    found = [(reason, count) for reason, count in counts.items() if count]
+    return sorted(found, key=lambda pair: (-pair[1], REASON_ORDER.index(pair[0])))
+
+
+def summary_line(report: DepthReport) -> str:
+    """One sentence saying what is really missing, built from the rows.
+
+    The old sentence said every thin criterion had no negative or boundary
+    case, which a suite with twelve boundary cases makes a plain untruth.
+    """
+    total = len(report.rows)
+    thin = len(report.thin_ids)
+    if not total:
+        return ""
+    if not thin:
+        return "Every criterion has a test for wrong input and one at the limits."
+    parts = [
+        f"{count} {'has' if count == 1 else 'have'} {reason}"
+        for reason, count in reason_counts(report)[:MAX_REASONS_IN_LINE]
+    ]
+    word = "criterion" if total == 1 else "criteria"
+    needs = "needs" if thin == 1 else "need"
+    return f"{thin} of {total} {word} {needs} more tests — {', '.join(parts)}."

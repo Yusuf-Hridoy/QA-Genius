@@ -79,8 +79,21 @@ class CaseReview:
 # ──────────────────────────────────────────────────────────────────────────────
 
 
-def _ordered_checks(active: list[PackHit]) -> list[Check]:
-    """Every active pack's checks, worst first.
+def applies(check: Check, text: str) -> bool:
+    """Is this check about anything the story actually mentions?
+
+    Most checks apply to every build of their feature. A few are about one
+    narrow thing -- the language an email is written in, rounding a second
+    currency -- and asking for a test of it when the story never raised it
+    wastes a case and makes the reviewer look like it is not reading.
+    """
+    if not check.only_if:
+        return True
+    return any(mentions(text, word) for word in check.only_if)
+
+
+def _ordered_checks(active: list[PackHit], text: str) -> list[Check]:
+    """Every active pack's checks that this story is about, worst first.
 
     Severity decides first. Then a pack the story named out loud comes before
     one found only in a criterion: "upload an avatar" in the story is the
@@ -90,7 +103,12 @@ def _ordered_checks(active: list[PackHit]) -> list[Check]:
         hit.pack.id: (0 if hit.in_story else 1, index)
         for index, hit in enumerate(active)
     }
-    checks = [check for hit in active for check in hit.pack.checks]
+    checks = [
+        check
+        for hit in active
+        for check in hit.pack.checks
+        if applies(check, text)
+    ]
     return sorted(
         checks,
         key=lambda check: (SEVERITY_RANK[check.severity], *rank[check.pack_id]),
@@ -104,7 +122,7 @@ def checklist_block(story: str, criteria: list[Criterion]) -> tuple[str, list[st
     room = MAX_CHECKLIST_LINES - len(boundaries)
     lines: list[str] = []
     ids: list[str] = []
-    for check in _ordered_checks(detect_hits(text, story)):
+    for check in _ordered_checks(detect_hits(text, story), text):
         if len(lines) >= room:
             break
         lines.append(f"- [{check.id}] {check.title}")
@@ -150,21 +168,48 @@ def _jaccard(left: str, right: str) -> float:
     return len(a & b) / len(a | b)
 
 
-def _traceability(
-    subject: str, pack_id: str, criteria: list[Criterion], hits: list[PackHit]
-) -> str:
-    """The criterion this case belongs to: most shared words, else the pack's own."""
+def _most_words(criteria: list[Criterion], words) -> str | None:
+    """The criterion saying most of these words, or None if none says any.
+
+    Counting beats first-match: a lock-duration check shares "minutes" with
+    the criterion about failed attempts and shares "lock duration" *and*
+    "minutes" with the one that is actually about the duration. Criteria
+    arrive in AC order, so a tie lands on the lower number.
+    """
+    best_id, best_score = None, 0
+    for criterion in criteria:
+        score = sum(1 for word in words if mentions(criterion.text, word))
+        if score > best_score:
+            best_id, best_score = criterion.id, score
+    return best_id
+
+
+def _traceability(check: Check, criteria: list[Criterion], hits: list[PackHit]) -> str:
+    """Which criterion this added case belongs to.
+
+    Shared words alone put "Attempts from two devices count against the same
+    account" against the criterion about unlocking, because both sentences say
+    "account". The check's own words come first, then the words that made its
+    pack active, and only then raw overlap. Criteria are in AC order, so a tie
+    always lands on the lower number.
+    """
     if not criteria:
         return ""
+    best = _most_words(criteria, check.covered_if)
+    if best is not None:
+        return best
+    # Trigger words belong to the pack, not to this check, so counting them
+    # only rewards a wordy criterion. First match, lowest AC number.
+    triggers = next(
+        (hit.triggers for hit in hits if hit.pack.id == check.pack_id), []
+    )
+    for criterion in criteria:
+        if any(mentions(criterion.text, word) for word in triggers):
+            return criterion.id
+    subject = f"{check.title} {check.test.title}"
     best = max(criteria, key=lambda item: _jaccard(subject, item.text))
     if _jaccard(subject, best.text) > 0:
         return best.id
-    for hit in hits:
-        if hit.pack.id != pack_id:
-            continue
-        for criterion in criteria:
-            if any(mentions(criterion.text, word) for word in hit.triggers):
-                return criterion.id
     return criteria[0].id
 
 
@@ -185,9 +230,7 @@ def _case_from_check(
         automation_feasibility="Medium",
         automation_effort="Medium",
         tags=[PRINCIPAL_TAG, CHECK_TAG + check.id, PACK_TAG + check.pack_id],
-        traceability=_traceability(
-            f"{check.title} {check.test.title}", check.pack_id, criteria, hits
-        ),
+        traceability=_traceability(check, criteria, hits),
     )
 
 
@@ -283,7 +326,7 @@ def review_test_cases(
 
     covered: list[str] = []
     gaps: list[tuple[Gap, Check]] = []
-    for check in _ordered_checks(hits):
+    for check in _ordered_checks(hits, text):
         if _check_covered(check, cases, texts):
             covered.append(check.id)
             continue
@@ -391,9 +434,18 @@ _SECRET_NAME = re.compile(
 )
 _ENV_READ = re.compile(r"process\.env|os\.environ|os\.getenv|Deno\.env", re.IGNORECASE)
 _BRITTLE = (
-    (re.compile(r"nth-child", re.IGNORECASE), "nth-child selector — breaks when the list changes"),
-    (re.compile(r":nth-of-type", re.IGNORECASE), "nth-of-type selector — breaks when the markup changes"),
-    (re.compile(r"/html/body", re.IGNORECASE), "absolute XPath — breaks on any layout change"),
+    (
+        re.compile(r"nth-child", re.IGNORECASE),
+        "fragile locator (`nth-child`) — it breaks when the list changes",
+    ),
+    (
+        re.compile(r":nth-of-type", re.IGNORECASE),
+        "fragile locator (`nth-of-type`) — it breaks when the page changes",
+    ),
+    (
+        re.compile(r"/html/body", re.IGNORECASE),
+        "fragile locator (full XPath) — any layout change breaks it",
+    ),
 )
 # Any quoted string could be a selector or could be a sentence, so a literal
 # only counts when every part of it is selector-shaped (see _is_selector).
@@ -418,7 +470,7 @@ _SIMPLE_PART = re.compile(
     r"(?:[.#][\w-]+|\[[^\]\s]*\]|::?[\w-]+(?:\([^)]*\))?)*$"
 )
 
-PRINCIPAL_PREFIX = "Principal QA: "
+PRINCIPAL_PREFIX = "Senior tester: "
 
 
 def _line_of(code: str, index: int) -> int:
@@ -515,8 +567,9 @@ def _selector_findings(file: ProjectFile) -> list[Finding]:
                 _finding(
                     file,
                     match.start(),
-                    f"selector chain `{selector[:60]}` is {len(parts)} levels deep — "
-                    "prefer a role, label or test-id",
+                    f"fragile locator `{selector[:60]}` goes {len(parts)} levels "
+                    "deep — it breaks when the page changes. Use a role, a label "
+                    "or a test id instead.",
                     "warning",
                 )
             )
@@ -524,7 +577,7 @@ def _selector_findings(file: ProjectFile) -> list[Finding]:
 
 
 def review_automation(script: AutomationScript, files: list[ProjectFile]) -> list[Finding]:
-    """What a principal QA would send back on this project. Adds to the existing checks."""
+    """What a senior tester would send back on this project. Only ever adds."""
     findings: list[Finding] = []
     for file in files or []:
         findings.extend(_only_findings(file))
@@ -562,6 +615,28 @@ def risk_titles(story: str, criteria: list[str], limit: int = 6) -> list[str]:
     return [risk.title for risk in pack_risks(story_text(story, criteria), story)][:limit]
 
 
+def _risk_words(risk: FailureMode) -> str:
+    """Where an already-named risk could be hiding under other words."""
+    return " ".join([str(risk.title or ""), str(risk.effect or ""), str(risk.cause or "")])
+
+
+def _already_named(risk: PackRisk, others: list[FailureMode]) -> bool:
+    """Is this risk already in the list, under its own name or another one?
+
+    The AI called one of these "Timing side-channel attack distinguishes valid
+    vs invalid email addresses" and the pack calls it "Response time differs
+    between a known and an unknown email". Two names, one risk, so the words
+    that mean the risk decide it, not the title alone.
+    """
+    for other in others:
+        if title_score(risk.title, other.title) >= RISK_TITLE_MATCH:
+            return True
+        text = _risk_words(other)
+        if any(mentions(text, word) for word in risk.covered_if):
+            return True
+    return False
+
+
 def review_risks(
     story: str, criteria: list[str], analysis: RiskAnalysis
 ) -> list[FailureMode]:
@@ -571,8 +646,7 @@ def review_risks(
     for risk in pack_risks(story_text(story, criteria), story):
         if len(added) >= MAX_ADDED_RISKS:
             break
-        twins = existing + added
-        if any(title_score(risk.title, other.title) >= RISK_TITLE_MATCH for other in twins):
+        if _already_named(risk, existing + added):
             continue
         added.append(
             FailureMode(
@@ -584,10 +658,13 @@ def review_risks(
                 severity=risk.severity,
                 likelihood=risk.likelihood,
                 detectability=risk.detectability,
-                severity_reason="Principal QA rule pack: typical for this kind of feature.",
-                likelihood_reason="Principal QA rule pack: seen on most builds of this feature.",
-                detectability_reason="Principal QA rule pack: rarely visible until it is reported.",
+                severity_reason="A senior tester's rule: this is how bad it usually is here.",
+                likelihood_reason="A senior tester's rule: it happens on most builds of this feature.",
+                detectability_reason="A senior tester's rule: nobody sees it until someone reports it.",
                 source=PRINCIPAL_SOURCE,
+                # Carried through so the risk page can see for itself whether
+                # a test already reaches this one.
+                covered_if=list(risk.covered_if),
             )
         )
     return added

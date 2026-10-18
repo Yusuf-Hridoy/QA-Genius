@@ -95,7 +95,7 @@ def test_a_story_without_an_actor_gets_a_principal_qa_note(monkeypatch) -> None:
         data={"user_story": "The profile page shows a name and a bio."},
         headers=KEYS_HEADER,
     ).text
-    assert "Principal QA notes" in body
+    assert "Notes from the senior tester" in body
     assert "No actor" in body
 
 
@@ -193,7 +193,7 @@ def test_the_review_card_and_labels_are_shown(monkeypatch) -> None:
     assert 'id="pq-review"' in body
     assert "Added " in body and "the AI missed" in body
     assert body.count("pq-label") >= 2
-    assert "Why a principal QA insists on this" in body
+    assert "Why a senior tester always asks for this" in body
 
 
 def test_remove_buttons_sit_only_on_principal_qa_cases(monkeypatch) -> None:
@@ -300,7 +300,7 @@ def test_a_test_with_only_and_no_assertion_is_flagged(monkeypatch) -> None:
     assert "this test never asserts anything" in body
     assert "hard-coded secret" in body
     assert "pq-label" in body
-    assert ">Principal QA</div>" in body
+    assert ">Senior tester</div>" in body
 
 
 def test_clean_automation_code_is_not_flagged(monkeypatch) -> None:
@@ -314,8 +314,8 @@ def test_clean_automation_code_is_not_flagged(monkeypatch) -> None:
     body = client.post(
         "/requirements/automation/run", data=AUTO_FORM, headers=KEYS_HEADER
     ).text
-    assert "Principal QA: " not in body
-    assert '<div class="num">0</div><div class="lbl">Principal QA</div>' in body
+    assert "Senior tester: " not in body
+    assert '<div class="num">0</div><div class="lbl">Senior tester</div>' in body
 
 
 # ── risk radar ────────────────────────────────────────────────────────────────
@@ -370,7 +370,7 @@ def test_principal_qa_risks_are_added_scored_and_labelled(monkeypatch) -> None:
     assert "pq-label" in body
     assert "The AI did not raise this one" in body
     # Scored and numbered like every other risk.
-    assert "RPN " in body
+    assert "Risk score " in body
     assert "R2" in body
 
 

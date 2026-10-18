@@ -80,7 +80,7 @@ def test_fake_llm_returns_result_cards(monkeypatch) -> None:
     )
     assert response.status_code == 200
     body = response.text
-    assert "Clarity score" in body
+    assert "How clear:" in body
     assert "48" in body  # 100 - sample ambiguity_score 52
     assert "<mark>quickly</mark>" in body
     assert "Scenario:" in body
@@ -91,7 +91,7 @@ def test_load_example_needs_no_keys() -> None:
     response = client.get("/requirements/story/example")
     assert response.status_code == 200
     body = response.text
-    assert "Clarity score" in body
+    assert "How clear:" in body
     assert "<mark>" in body
     assert "Scenario:" in body
 
@@ -223,7 +223,7 @@ def _missing_card(body: str) -> str:
     The whole analysis is also embedded as JSON for Ship check, which keeps
     every line and applies its own rule, so the page has to be read on its own.
     """
-    after = body.split("<h3>Missing elements</h3>")
+    after = body.split("<h3>Things the story does not say</h3>")
     return "" if len(after) == 1 else after[1].split("</ul>")[0]
 
 

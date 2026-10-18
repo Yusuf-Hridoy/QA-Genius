@@ -78,7 +78,7 @@ def test_clarity_boundaries(clarity, expected):
 def test_clarity_summary_names_the_number_and_the_vague_phrases():
     result = report(story_analysis=analysis(18, vague=2))
     item = item_of(result, "clarity")
-    assert item.summary == "Clarity 82, 2 vague phrases"
+    assert item.summary == "How clear: 82 of 100, 2 unclear words"
     assert len(item.details) == 2
 
 
@@ -154,7 +154,7 @@ def test_thin_but_not_more_than_half_warns():
     cases = suite(*_deep("AC-1", 1), case(case_id="TC-200", traceability="AC-2"))
     item = item_of(report(test_cases=cases, criteria=CRITERIA), "depth")
     assert item.status == "warn"
-    assert item.summary.startswith("1 of 2 criteria thin")
+    assert item.summary.startswith("1 of 2 criteria needs more tests")
 
 
 def test_more_than_half_thin_fails():
@@ -434,18 +434,18 @@ def test_everything_passing_ships():
 def test_one_warn_ships_with_risks():
     result = report(**_everything_passes(duel=duel(60)))
     assert result.verdict == "ship_with_risks"
-    assert result.verdict_reason == "No blockers, but 1 item needs attention."
+    assert result.verdict_reason == "Nothing blocks the release, but 1 thing still needs a look."
 
 
 def test_two_warns_read_as_plural():
     result = report(**_everything_passes(duel=duel(60), risk_analysis=RiskAnalysis(failure_modes=[MEDIUM])))
-    assert result.verdict_reason == "No blockers, but 2 items need attention."
+    assert result.verdict_reason == "Nothing blocks the release, but 2 things still need a look."
 
 
 def test_a_fail_beats_everything_else():
     result = report(**_everything_passes(risk_analysis=RiskAnalysis(failure_modes=[HIGH])))
     assert result.verdict == "dont_ship"
-    assert result.verdict_reason == "1 check failed: Risk coverage."
+    assert result.verdict_reason == "1 check failed: Risks with a test."
 
 
 def test_two_fails_are_both_named():
@@ -457,7 +457,7 @@ def test_two_fails_are_both_named():
             risk_analysis=RiskAnalysis(failure_modes=[HIGH]),
         )
     )
-    assert result.verdict_reason == "2 checks failed: Ambiguity duel, Risk coverage."
+    assert result.verdict_reason == "2 checks failed: Two-reader check, Risks with a test."
 
 
 @pytest.mark.parametrize("core", CORE_CHECKS)
@@ -468,7 +468,7 @@ def test_a_core_check_not_run_blocks_ship_even_when_all_the_rest_pass(core):
     }[core]
     result = report(**_everything_passes(**drop))
     assert result.verdict == "ship_with_risks"
-    assert "Not enough evidence" in result.verdict_reason
+    assert "Not enough to go on" in result.verdict_reason
     assert result.verdict != "ship"
 
 
@@ -593,20 +593,24 @@ def test_criteria_hold_a_failing_clarity_score_at_warn():
         report(story_analysis=analysis(58), criteria=REAL_RUN_CRITERIA), "clarity"
     )
     assert item.status == "warn"
-    assert item.summary == "Clarity 42 — vague story, but 4 acceptance criteria pin it down"
+    assert item.summary == (
+        "How clear: 42 of 100 — unclear, but 4 acceptance criteria pin it down"
+    )
 
 
 def test_without_criteria_a_failing_clarity_score_still_fails():
     item = item_of(report(story_analysis=analysis(58)), "clarity")
     assert item.status == "fail"
-    assert item.summary == "Clarity 42"
+    assert item.summary == "How clear: 42 of 100"
 
 
 def test_one_criterion_reads_as_one():
     item = item_of(
         report(story_analysis=analysis(58), criteria=REAL_RUN_CRITERIA[:1]), "clarity"
     )
-    assert item.summary == "Clarity 42 — vague story, but 1 acceptance criterion pins it down"
+    assert item.summary == (
+        "How clear: 42 of 100 — unclear, but 1 acceptance criterion pins it down"
+    )
 
 
 def test_criteria_do_not_lift_a_warn_to_a_pass():
@@ -615,7 +619,7 @@ def test_criteria_do_not_lift_a_warn_to_a_pass():
         report(story_analysis=analysis(40), criteria=REAL_RUN_CRITERIA), "clarity"
     )
     assert item.status == "warn"
-    assert item.summary == "Clarity 60"
+    assert item.summary == "How clear: 60 of 100"
 
 
 def test_criteria_leave_a_passing_score_alone():
@@ -623,7 +627,7 @@ def test_criteria_leave_a_passing_score_alone():
         report(story_analysis=analysis(10), criteria=REAL_RUN_CRITERIA), "clarity"
     )
     assert item.status == "pass"
-    assert item.summary == "Clarity 90"
+    assert item.summary == "How clear: 90 of 100"
 
 
 def test_the_missing_acceptance_criteria_line_goes_when_there_are_criteria():

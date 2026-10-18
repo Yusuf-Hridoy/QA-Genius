@@ -70,6 +70,7 @@ from qagenius.prompts import (
     story_check_prompt,
     test_cases_prompt,
     test_matrix_prompt,
+    with_plain_words,
 )
 from qagenius.providers import PROVIDERS, get_provider, pick_default
 from qagenius.report_parsers import ReportError, RunReport, parse_report
@@ -113,7 +114,7 @@ from qagenius.risk_radar import (
     criteria_lines,
     score_risks,
 )
-from qagenius.test_case_depth import compute_depth
+from qagenius.test_case_depth import compute_depth, summary_line
 from qagenius.test_case_diff import diff_cases
 from qagenius.test_case_exports import to_csv, to_xlsx
 from qagenius.test_case_refine import (
@@ -166,7 +167,7 @@ REPORT_SIZE_LIMIT = 2 * 1024 * 1024
 REPORT_TOTAL_LIMIT = 4 * 1024 * 1024
 REPORT_LIMIT_ERROR = "Upload up to 5 files, 2 MB each, 4 MB in total."
 FACTS_JSON_LIMIT = 300000
-ANALYZE_AGAIN_ERROR = "Please analyze the reports again."
+ANALYZE_AGAIN_ERROR = "Read the reports again first."
 SAMPLE_REPORTS = ("nightly-chromium.xml", "nightly-firefox.json")
 # The AI's kind, shown as a pill. Mirrors GroupInsight.kind in models.py.
 KIND_PILLS = {
@@ -174,6 +175,22 @@ KIND_PILLS = {
     "test issue": "warn",
     "environment": "info",
     "unknown": "neutral",
+}
+# The test-case kinds, in words a tester says out loud. The keys are the
+# category values the code compares and the exports carry, so only the words
+# on the screen change.
+CATEGORY_WORDS = {
+    "Negative": "Wrong input",
+    "Boundary": "At the limit",
+    "Edge Case": "Unusual case",
+}
+# The code check result, in words a reader does not have to decode. The report
+# itself keeps the QA words, because the ZIP README is read by developers.
+SYNTAX_WORDS = {
+    "valid": "it parses",
+    "basic check passed": "looks OK",
+    "error": "error",
+    "not checked": "not done yet",
 }
 # Starlette caps a form field at 1 MB, which a 2 MB screenshot exceeds once it is
 # base64 (about 2.7 MB). Raised just for the bug form, still under Vercel's ~4.5 MB body.
@@ -186,6 +203,10 @@ templates.env.globals["providers"] = PROVIDERS
 # Every template that shows model text uses this to take the confidence
 # tag off the end of a line and show it as a pill instead.
 templates.env.filters["confidence"] = split_confidence
+# Plain words for values the code compares: the data keeps its spelling, the
+# screen gets the words. Globals, so every template that shows a card has them.
+templates.env.globals["category_words"] = CATEGORY_WORDS
+templates.env.globals["syntax_words"] = SYNTAX_WORDS
 
 
 @app.get("/health")
@@ -222,8 +243,8 @@ def bugs_page(request: Request) -> HTMLResponse:
             "page_title": "Turn rough notes into a report worth filing",
             "page_lede": (
                 "Say what happened in your own words. QA-Genius writes the title, the "
-                "steps, actual vs expected and a severity, then scores the report "
-                "against the checks a developer would ask about."
+                "steps and what should have happened instead. It then checks the "
+                "report against what a developer will ask you."
             ),
             "eyebrow": "Bug desk",
         },
@@ -240,8 +261,8 @@ def insights_page(request: Request) -> HTMLResponse:
             "page_title": "What your last test run is telling you",
             "page_lede": (
                 "Drop in JUnit XML or Playwright JSON. Code groups the failures, finds "
-                "the flaky tests and ranks the slow ones — no API key, nothing "
-                "sent to an AI unless you ask for an explanation."
+                "the flaky tests and puts the slow ones in order. No API key needed, "
+                "and nothing is sent to an AI unless you ask."
             ),
             "eyebrow": "Quality insights",
         },
@@ -294,7 +315,7 @@ def test_key(body: KeyTestRequest) -> dict:
     except (llm.ProviderError, llm.BadOutputError, llm.NoKeysError) as e:
         return {"ok": False, "error": str(e)}
     if not result.ok:
-        return {"ok": False, "error": "Unexpected answer. Try again."}
+        return {"ok": False, "error": "That answer made no sense. Try again."}
     return {"ok": True}
 
 
@@ -669,6 +690,7 @@ def story_run(
     system, user = story_check_prompt(
         user_story, story_type=story_type, context=context
     )
+    user = with_plain_words(user)
     try:
         result, used_index, notes = llm.generate_json(
             keys, system, user, AmbiguityAnalysis
@@ -904,6 +926,7 @@ def _test_cases_result_context(
         "coverage": coverage,
         "counts": counts,
         "depth": depth,
+        "depth_line": summary_line(depth),
         "categories": list(counts.by_category),
         "ac_text": {criterion.id: criterion.text for criterion in criteria},
         "category_pill": _category_pill,
@@ -971,7 +994,7 @@ def test_cases_run(
     user = build_user_text(base_user, list(coverage_focus), criteria)
     # The checklist rides along with the request the user already made. The v1
     # prompt text is untouched; this is appended to the user text.
-    user += checklist_block(user_story, criteria)[0]
+    user = with_plain_words(user + checklist_block(user_story, criteria)[0])
     try:
         result, used_index, notes = llm.generate_json(keys, system, user, TestCaseList)
     except llm.NoKeysError:
@@ -1097,28 +1120,28 @@ def _refine_rows(
     rows = [
         ("Test cases", before_counts.total, after_counts.total, "up", ""),
         (
-            "Coverage",
+            "Criteria tested",
             compute_coverage(current, criteria).percent,
             compute_coverage(proposed, criteria).percent,
             "up",
             "%",
         ),
         (
-            "Thin criteria",
+            "Criteria needing more tests",
             len(before_depth.thin_ids),
             len(after_depth.thin_ids),
             "down",
             "",
         ),
         (
-            "Negative",
+            "Wrong input",
             before_counts.by_category.get("Negative", 0),
             after_counts.by_category.get("Negative", 0),
             "up",
             "",
         ),
         (
-            "Boundary",
+            "At the limit",
             before_counts.by_category.get("Boundary", 0),
             after_counts.by_category.get("Boundary", 0),
             "up",
@@ -1183,14 +1206,14 @@ def _diff_context(
 
 FIELD_LABELS = {
     "title": "Title",
-    "category": "Category",
+    "category": "Kind",
     "priority": "Priority",
-    "pre_conditions": "Pre-conditions",
+    "pre_conditions": "Before you start",
     "steps": "Steps",
-    "expected_result": "Expected result",
-    "test_data": "Test data",
-    "bdd_scenario": "BDD scenario",
-    "traceability": "Traceability",
+    "expected_result": "What should happen",
+    "test_data": "Data to use",
+    "bdd_scenario": "Given / When / Then version",
+    "traceability": "Linked to",
 }
 
 
@@ -1331,7 +1354,7 @@ def test_cases_refine(
     else:
         asked = strengthen_instruction(depth)
     user = refine_user_text(base, current, criteria, asked)
-    user += checklist_block(user_story, criteria)[0]
+    user = with_plain_words(user + checklist_block(user_story, criteria)[0])
     try:
         ai_result, used_index, notes = llm.generate_json(
             keys, system, user, TestCaseList
@@ -1503,7 +1526,7 @@ def _automation_result_context(
         "warnings": warnings,
         "errors": errors,
         "principal_findings": principal,
-        "syntax_label": "all valid" if not errors else f"{len(errors)} error"
+        "syntax_label": "all fine" if not errors else f"{len(errors)} error"
         + ("s" if len(errors) != 1 else ""),
         "notes": notes,
         "provider_name": provider_name,
@@ -1569,7 +1592,9 @@ def automation_run(
         _browsers_text(framework, list(browsers)),
         site_type,
     )
-    user = automation.build_user_text(base_user, cases, base_url) + CODING_RULES
+    user = with_plain_words(
+        automation.build_user_text(base_user, cases, base_url) + CODING_RULES
+    )
     try:
         script, used_index, notes = llm.generate_json(
             keys, system, user, AutomationScript
@@ -2059,7 +2084,7 @@ async def insights_explain(request: Request) -> HTMLResponse:
 # RISK RADAR
 # ══════════════════════════════════════════════════════════════════════════════
 
-RISK_BAD_INPUT = "Please check the story, criteria and test cases."
+RISK_BAD_INPUT = "Check the story, the criteria and the test cases, then try again."
 RISK_NO_STORY = "Start from a story in Requirements first."
 RISK_NO_KEY = '<p class="muted">Add an API key to find risks.</p>'
 LEVEL_PILLS = {"high": "bad", "medium": "warn", "low": "ok"}
@@ -2221,9 +2246,9 @@ def risks_page(request: Request) -> HTMLResponse:
             "active": "risks",
             "page_title": "Where this feature is most likely to break",
             "page_lede": (
-                "Risk radar reads your story, criteria and test cases and names the "
-                "failure modes they imply. Each one is scored by severity, likelihood "
-                "and detectability, and matched against the tests you already have."
+                "Risk radar reads your story, criteria and tests. It lists the ways "
+                "this feature can break, gives each one a risk score, and checks if "
+                "a test already covers it."
             ),
             "eyebrow": "Risk radar",
         },
@@ -2257,7 +2282,7 @@ def risks_run(
     system, user = risk_radar_prompt(
         user_story, criteria_lines(criteria), case_lines(cases)
     )
-    user += _typical_risks_block(user_story, texts)
+    user = with_plain_words(user + _typical_risks_block(user_story, texts))
     try:
         result, used_index, notes = llm.generate_json(keys, system, user, RiskAnalysis)
     except llm.NoKeysError:
@@ -2419,11 +2444,11 @@ SHIP_STATUS_TONES = {
     "not_checked": "neutral",
 }
 SHIP_STATUS_LABELS = {
-    "pass": "pass",
-    "warn": "warn",
-    "fail": "fail",
-    "accepted": "accepted",
-    "not_checked": "not checked",
+    "pass": "fine",
+    "warn": "have a look",
+    "fail": "needs fixing",
+    "accepted": "accepted risk",
+    "not_checked": "not done yet",
 }
 STORY_IN_BANNER = 160
 
@@ -2571,11 +2596,10 @@ def ship_page(request: Request) -> HTMLResponse:
         "ship_check.html",
         {
             "active": "ship",
-            "page_title": "Can we ship this feature?",
+            "page_title": "Can we release this feature?",
             "page_lede": (
-                "Ship check reads what the other desks already worked out — clarity, "
-                "coverage, depth, risks, automation and the test matrix — and "
-                "turns them into one verdict you can defend. Nothing is sent to an AI."
+                "Ship check reads what the other desks already worked out and turns "
+                "it into one decision you can defend. Nothing is sent to an AI."
             ),
             "eyebrow": "Ship check",
         },
@@ -2619,10 +2643,11 @@ def ship_example(request: Request) -> HTMLResponse:
 # ──────────────────────────────────────────────────────────────────────────────
 
 MATRIX_NO_KEY_NOTE = (
-    "Using the standard set. Add an AI key to get factors suggested from your story."
+    "These are the usual things to vary. Add an AI key and QA-Genius will "
+    "pick them from your own story."
 )
 MAX_PINNED = 20
-MATRIX_BAD_INPUT = "That run didn't arrive in one piece. Reload the page and try again."
+MATRIX_BAD_INPUT = "Some of that run did not reach the server. Reload the page and try again."
 
 
 class MatrixFactorBody(BaseModel):
@@ -2762,8 +2787,8 @@ def matrix_page(request: Request) -> HTMLResponse:
             "page_title": "Which runs actually need testing?",
             "page_lede": (
                 "Browsers times devices times roles times languages is hundreds of "
-                "combinations. Code works out the fewest runs where every pair of "
-                "values still appears together, and proves it."
+                "runs. Code works out the fewest runs where every two options are "
+                "still tested together, and proves it."
             ),
             "eyebrow": "Test matrix",
         },
@@ -2812,6 +2837,7 @@ def matrix_suggest(
         system, user = test_matrix_prompt(
             story, criteria_lines(criteria), case_lines(cases)
         )
+        user = with_plain_words(user)
         try:
             result, _used, call_notes = llm.generate_json(
                 keys, system, user, MatrixProposal
@@ -2822,7 +2848,9 @@ def matrix_suggest(
             factors, rules = standard_set()
             notes.append(MATRIX_NO_KEY_NOTE)
         else:
-            factors, rules, guard_notes = clean_proposal(result)
+            factors, rules, guard_notes = clean_proposal(
+                result, "\n".join([story, *texts])
+            )
             from_ai = True
             reasons = reasons_for(result)
             notes = call_notes + guard_notes

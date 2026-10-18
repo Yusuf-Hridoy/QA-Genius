@@ -234,10 +234,10 @@ def generate_json(
 ) -> tuple[BaseModel, int, list[str]]:
     """Call the first working key and return (result, used_key_index, notes).
 
-    `used_key_index` is the 0-based position in `keys`. `notes` describes
-    skipped keys plus who answered, e.g.
-    ["Key 1 (Gemini, gemini-…) was busy, trying the next key",
-     "Used Key 2 (Groq, llama-…)"].
+    `used_key_index` is the 0-based position in `keys`. On a success `notes`
+    is one sentence naming the keys that were skipped and the one that
+    answered, e.g. ["Key 1 (Gemini) was busy, so Key 2 (Groq) answered."].
+    When every key failed it is one short clause per key.
     Keys without a (valid) model get one from the provider's live list.
     """
     if not keys:
@@ -255,7 +255,10 @@ def generate_json(
     if client_factory is None:
         client_factory = default_client_factory
 
+    # Clauses about keys that were skipped; they become one sentence at the end.
     notes: list[str] = []
+    # Anything else worth saying, which is not part of that sentence.
+    asides: list[str] = []
     invalid_count = 0
     notfound_count = 0
     attempted = 0
@@ -281,34 +284,25 @@ def generate_json(
                     )
                 except openai.AuthenticationError:
                     logger.warning("key %d rejected (invalid key)", index + 1)
-                    notes.append(
-                        f"{_label(index, short)} looked invalid, trying the next key"
-                    )
+                    notes.append(f"{_label(index, short)} looked invalid")
                     invalid_count += 1
                     attempted += 1
                     continue
                 except openai.PermissionDeniedError:
                     logger.warning("key %d rejected (forbidden)", index + 1)
-                    notes.append(
-                        f"{_label(index, short)} looked invalid, trying the next key"
-                    )
+                    notes.append(f"{_label(index, short)} looked invalid")
                     invalid_count += 1
                     attempted += 1
                     continue
                 except openai.OpenAIError:
                     logger.warning("key %d could not list models", index + 1)
-                    notes.append(
-                        f"{_label(index, short)} could not list models, "
-                        "trying the next key"
-                    )
+                    notes.append(f"{_label(index, short)} could not list its models")
                     attempted += 1
                     continue
             model = pick_default(provider, listed[provider["base_url"]])
             if not model:
                 logger.warning("key %d has no chat models", index + 1)
-                notes.append(
-                    f"{_label(index, short)} has no chat models, trying the next key"
-                )
+                notes.append(f"{_label(index, short)} has no chat models")
                 attempted += 1
                 continue
         label = _label(index, short, model)
@@ -324,7 +318,7 @@ def generate_json(
                 if image is None or not _cannot_read_images(e, api_key):
                     raise
                 logger.info("%s cannot read images, retrying without it", label)
-                notes.append(
+                asides.append(
                     f"{label} can't read images — the screenshot was not used."
                 )
                 content = _call_json_then_plain(
@@ -332,17 +326,17 @@ def generate_json(
                 )
         except openai.AuthenticationError:
             logger.warning("%s rejected (invalid key)", label)
-            notes.append(f"{label} looked invalid, trying the next key")
+            notes.append(f"{label} looked invalid")
             invalid_count += 1
             continue
         except openai.PermissionDeniedError:
             logger.warning("%s rejected (forbidden)", label)
-            notes.append(f"{label} looked invalid, trying the next key")
+            notes.append(f"{label} looked invalid")
             invalid_count += 1
             continue
         except openai.RateLimitError:
             logger.warning("%s rate limited", label)
-            notes.append(f"{label} was busy, trying the next key")
+            notes.append(f"{label} was busy")
             continue
         except openai.NotFoundError:
             logger.warning("%s model not available (404)", label)
@@ -351,19 +345,17 @@ def generate_json(
             continue
         except (openai.APITimeoutError, openai.APIConnectionError):
             logger.warning("%s timed out or unreachable", label)
-            notes.append(f"{label} was busy, trying the next key")
+            notes.append(f"{label} was busy")
             continue
         except openai.APIStatusError as e:
             status = e.status_code or 0
             if status >= 500:
                 logger.warning("%s server error (%d)", label, status)
-                notes.append(f"{label} was busy, trying the next key")
+                notes.append(f"{label} was busy")
                 continue
             if status == 402:
                 logger.warning("%s no credit (402)", label)
-                notes.append(
-                    f"{label} has no credit for this model, trying the next key"
-                )
+                notes.append(f"{label} has no credit for this model")
                 continue
             logger.warning("%s failed (%d)", label, status)
             reason = clean_reason(str(e), api_key)
@@ -390,8 +382,12 @@ def generate_json(
             )
         logger.info("%s answered", label)
         if notes:
-            notes.append(f"Used {label}")
-        return result, index, notes
+            # One sentence, not a log: "Key 1 (Gemini) was busy, so Key 2
+            # (Groq) answered." The model id is left off — it is in the key
+            # panel, and it is not what this line is telling anyone.
+            answered = f"{_label(index, short)} answered."
+            notes = [", ".join(notes) + f", so {answered}"]
+        return result, index, asides + notes
 
     if attempted > 0 and invalid_count == attempted:
         raise InvalidKeyError(notes)

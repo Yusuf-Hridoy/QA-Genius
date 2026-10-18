@@ -80,7 +80,7 @@ def test_fake_duel_returns_duel_card(monkeypatch) -> None:
     assert "agreement" in body
     assert "Reader A" in body
     assert "Reader B" in body
-    assert "Apply rewrite" in body
+    assert "Use this wording" in body
     assert "Answered by" in body
 
 
@@ -88,9 +88,9 @@ def test_load_example_includes_duel_without_key() -> None:
     response = client.get("/requirements/story/example")
     assert response.status_code == 200
     body = response.text
-    assert "Ambiguity duel" in body
+    assert "Two-reader check" in body
     assert "fork-mark" in body
-    assert "Clarity score" in body
+    assert "How clear:" in body
 
 
 def test_duel_error_renders_error_card(monkeypatch) -> None:
@@ -141,7 +141,7 @@ def test_vague_rewrite_disables_apply(monkeypatch) -> None:
     body = client.post(
         "/requirements/story/duel", data=FORM, headers=KEYS_HEADER
     ).text
-    assert "still vague: quickly" in body
+    assert "still unclear: quickly" in body
     assert re.search(r"<button[^>]*apply-rewrite[^>]*disabled", body)
 
 
@@ -155,7 +155,7 @@ def test_removed_claims_line(monkeypatch) -> None:
     body = client.post(
         "/requirements/story/duel", data=FORM, headers=KEYS_HEADER
     ).text
-    assert "Removed 2 claim(s)" in body
+    assert "Dropped 2 things neither reader actually said" in body
 
 
 def test_sample_duel_is_clean() -> None:
@@ -224,12 +224,12 @@ def test_values_table_rendered(monkeypatch) -> None:
     body = client.post(
         "/requirements/story/duel", data=FORM, headers=KEYS_HEADER
     ).text
-    assert "Values compared by code" in body
+    assert "Numbers, compared by code" in body
     assert "1 second" in body
     assert "3 seconds" in body
     assert '<span class="pill bad">different</span>' in body
     assert '<span class="pill ok">same</span>' in body
-    assert "Matched by unit and name, not by AI." in body
+    assert "Matched up by name and unit in code, not by the AI." in body
 
 
 def test_values_table_hidden_when_empty(monkeypatch) -> None:
@@ -240,11 +240,11 @@ def test_values_table_hidden_when_empty(monkeypatch) -> None:
         "/requirements/story/duel", data=FORM, headers=KEYS_HEADER
     ).text
     assert "Values compared by code" not in body
-    assert "Matched by unit and name, not by AI." not in body
+    assert "Matched up by name and unit in code, not by the AI." not in body
 
 
 def test_load_example_has_values_table() -> None:
     body = client.get("/requirements/story/example").text
-    assert "Values compared by code" in body
+    assert "Numbers, compared by code" in body
     assert '<span class="pill ok">same</span>' in body
     assert '<span class="pill bad">different</span>' in body

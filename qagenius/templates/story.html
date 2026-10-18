@@ -7,9 +7,8 @@
 <div class="page-head">
   <span class="eyebrow">Step 1 of 4</span>
   <h1>Is this story ready to test?</h1>
-  <p class="lede">Paste a user story. QA-Genius scores its clarity, runs the INVEST check,
-    names the vague words that will cost you a bug later, and drafts acceptance criteria
-    you can carry into step 2.</p>
+  <p class="lede">Paste a user story. QA-Genius says how clear it is and names the words
+    that will cost you a bug later. It also writes acceptance criteria for step 2.</p>
 </div>
 <div class="card card-form" id="story-card" data-input-card="Your story">
   <form id="story-form" hx-post="/requirements/story/run" hx-target="#story-output" hx-swap="innerHTML" hx-indicator="#check-btn">
@@ -25,15 +24,15 @@
         <option value="Spike/Research">Spike/Research</option>
       </select>
       {% endcall %}
-      {% call field("story-context", "Context", optional=true, hint="The page, the role, anything the story leaves out.", counter_max=1000) %}
+      {% call field("story-context", "Anything else we should know", optional=true, hint="The page, who uses it, anything the story leaves out.", counter_max=1000) %}
       <textarea id="story-context" name="context" class="short" maxlength="1000" placeholder="Login page, shoppers sign in with email and password…"></textarea>
       {% endcall %}
       <div class="form-actions">
         <button id="check-btn" type="submit" class="btn btn-primary" data-busy-label="Checking…"><span class="btn-label">Check story</span></button>
         <button id="load-example" type="button" class="btn" hx-get="/requirements/story/example" hx-target="#story-output" hx-swap="innerHTML">Load example</button>
-        <button id="duel-btn" type="button" class="btn" hx-post="/requirements/story/duel" hx-target="#duel-output" hx-swap="innerHTML" hx-include="#story-form" hx-indicator="#duel-progress">Run ambiguity duel</button>
+        <button id="duel-btn" type="button" class="btn" hx-post="/requirements/story/duel" hx-target="#duel-output" hx-swap="innerHTML" hx-include="#story-form" hx-indicator="#duel-progress">Run the two-reader check</button>
       </div>
-      <p class="form-note">Ambiguity duel uses 3 AI calls with your key.</p>
+      <p class="form-note">The two-reader check uses 3 AI calls with your key.</p>
       <p id="duel-progress" class="htmx-indicator working"><span class="spin"></span>Reader A and Reader B are reading your story…</p>
     </div>
   </form>

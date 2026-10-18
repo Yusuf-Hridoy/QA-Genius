@@ -64,7 +64,7 @@ def test_the_readme_carries_the_checks() -> None:
     assert "1 of 2 selected test cases have a matching test." in readme
     assert "No test mentions TC-004" in readme
     assert "tests/login.spec.ts — basic check passed" in readme
-    assert "Fixed wait" in readme
+    assert "Fixed pause" in readme
     assert "not a full compile" in readme
 
 

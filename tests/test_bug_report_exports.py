@@ -57,7 +57,7 @@ def test_markdown_reports_what_is_still_missing() -> None:
     report, checks = _sample()
     text = to_markdown(report, checks)
     assert "### Still missing" in text
-    assert "- Evidence attached — Ask for a screenshot or screen recording." in text
+    assert "- A picture is attached — Ask for a screenshot or screen recording." in text
 
 
 def test_markdown_leaves_empty_sections_out() -> None:

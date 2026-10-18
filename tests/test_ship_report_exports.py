@@ -20,7 +20,7 @@ def item(check_id, title, status, summary, details=None, note="") -> ShipCheckIt
     )
 
 
-def small_report(*items, verdict="dont_ship", reason="1 check failed: Risk coverage.") -> ShipReport:
+def small_report(*items, verdict="dont_ship", reason="1 check failed: Risks with a test.") -> ShipReport:
     items = list(items)
     return ShipReport(
         verdict=verdict,
@@ -49,8 +49,8 @@ def test_the_header_and_the_table():
     text = to_markdown(small_report(PASS, FAIL, NOT_RUN), STORY)
     head, rest = text.split("\n## Details", 1)
     assert head.rstrip("\n").split("\n") == [
-        "# Ship check — Don't ship",
-        "1 check failed: Risk coverage.",
+        "# Ship check — Not ready",
+        "1 check failed: Risks with a test.",
         "",
         f"**Story:** {STORY}",
         f"**Checked:** 2 of 3 · {date.today().isoformat()}",
@@ -66,9 +66,9 @@ def test_the_header_and_the_table():
 
 def test_each_verdict_gets_its_own_title():
     for verdict, label in (
-        ("ship", "Ship"),
-        ("ship_with_risks", "Ship with risks"),
-        ("dont_ship", "Don't ship"),
+        ("ship", "Ready to release"),
+        ("ship_with_risks", "Release with known risks"),
+        ("dont_ship", "Not ready"),
     ):
         text = to_markdown(small_report(PASS, verdict=verdict, reason="x"), STORY)
         assert text.startswith(f"# Ship check — {label}\n")

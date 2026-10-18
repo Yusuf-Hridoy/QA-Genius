@@ -1,30 +1,30 @@
 {% import "_principal_qa.html" as pq %}
 <div class="stat-row">
   <div class="stat"><div class="num">{{ report.files | length }}</div><div class="lbl">Files</div></div>
-  <div class="stat"><div class="num">{{ report.traced | length }} / {{ traced_total }}</div><div class="lbl">Tests traced</div></div>
-  <div class="stat"><div class="num">{{ syntax_label }}</div><div class="lbl">Syntax</div></div>
+  <div class="stat"><div class="num">{{ report.traced | length }} / {{ traced_total }}</div><div class="lbl">Tests linked</div></div>
+  <div class="stat"><div class="num">{{ syntax_label }}</div><div class="lbl">Code check</div></div>
   <div class="stat"><div class="num">{{ warnings | length }}</div><div class="lbl">Warnings</div></div>
   <div class="stat{% if principal_findings %} stat-accent{% endif %}">
-    <div class="num">{{ principal_findings | length }}</div><div class="lbl">Principal QA</div>
+    <div class="num">{{ principal_findings | length }}</div><div class="lbl">Senior tester</div>
   </div>
 </div>
 <div class="card">
   <h2>Checks</h2>
-  <p>{{ report.traced | length }} of {{ traced_total }} selected test cases have a matching test</p>
+  <p>{{ report.traced | length }} of {{ traced_total }} test cases you picked have a test that names them</p>
   <p class="row">
     {% for case_id in report.traced %}<span class="pill ok">{{ case_id }}</span>{% endfor %}
     {% for case_id in report.missing %}<span class="pill bad">No test mentions {{ case_id }}</span>{% endfor %}
   </p>
   <table class="grid">
-    <tr><th>File</th><th>Syntax</th></tr>
+    <tr><th>File</th><th>Code check</th></tr>
     {% for file in report.files %}
     {% set status = report.syntax.get(file.name, "not checked") %}
     <tr>
       <td class="mono small">{{ file.name }}</td>
       <td>
         {% if status == "error" %}<span class="pill bad">error</span>
-        {% elif status == "not checked" %}<span class="pill neutral">not checked</span>
-        {% else %}<span class="pill ok">{{ status }}</span>{% endif %}
+        {% elif status == "not checked" %}<span class="pill neutral">not done yet</span>
+        {% else %}<span class="pill ok">{{ syntax_words.get(status, status) }}</span>{% endif %}
       </td>
     </tr>
     {% endfor %}
@@ -40,7 +40,8 @@
     {% endfor %}
   </ul>
   {% endif %}
-  <p class="muted small">Python is parsed; TypeScript/JavaScript get a basic bracket and quote check, not a full compile.</p>
+  <p class="muted small">Python is read by a real parser. TypeScript and JavaScript only get a
+    quick check that brackets and quotes match. That is not a compile.</p>
 </div>
 <div class="card">
   <h2>Files</h2>

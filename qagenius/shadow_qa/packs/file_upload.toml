@@ -9,7 +9,7 @@ exclude = []
 id = "size_limit"
 title = "Exactly at the size limit and one byte over"
 severity = "high"
-why = "The limit is where this breaks: a file of exactly the stated size is usually rejected by accident."
+why = "A file of exactly the stated size is usually refused by mistake."
 covered_if = ["size limit", "exactly", "1 byte", "one byte", "just over", "just under", "boundary", "too large"]
   [checks.test]
   title = "A file at the size limit uploads and one byte over is refused"
@@ -24,7 +24,7 @@ covered_if = ["size limit", "exactly", "1 byte", "one byte", "just over", "just 
 id = "renamed_file"
 title = "A renamed file is judged by its content, not its extension"
 severity = "high"
-why = "Anyone can rename a file; an extension check is a check an attacker performs on themselves."
+why = "Anyone can rename a file. Trusting the file name means the attacker checks their own file."
 covered_if = ["renamed", "extension", "magic bytes", "content type", "mime", "actual type", "disguised", "disguise"]
   [checks.test]
   title = "An executable renamed to .jpg is refused"
@@ -39,7 +39,7 @@ covered_if = ["renamed", "extension", "magic bytes", "content type", "mime", "ac
 id = "empty_file"
 title = "An empty (0-byte) file"
 severity = "medium"
-why = "A 0-byte file passes every 'under the limit' check and then breaks whatever reads it."
+why = "An empty file is under every size limit. It then breaks whatever tries to read it."
 covered_if = ["empty file", "0 byte", "zero byte", "0-byte", "no content"]
   [checks.test]
   title = "A 0-byte file is refused with a readable message"
@@ -54,8 +54,9 @@ covered_if = ["empty file", "0 byte", "zero byte", "0-byte", "no content"]
 id = "huge_dimensions"
 title = "An image with very large dimensions"
 severity = "medium"
-why = "A small file can decode to an enormous bitmap, and the server runs out of memory resizing it."
+why = "A small image file can open into a huge one. The server runs out of memory resizing it."
 covered_if = ["dimensions", "pixels", "resolution", "very large image", "width", "height", "decompressed", "decompression", "pixel bomb"]
+only_if = ["image", "images", "photo", "photos", "avatar", "jpeg", "png", "webp", "dimensions", "resolution", "crop"]
   [checks.test]
   title = "A small file with enormous pixel dimensions is handled, not crashed on"
   category = "Edge Case"
@@ -69,7 +70,7 @@ covered_if = ["dimensions", "pixels", "resolution", "very large image", "width",
 id = "cancel_upload"
 title = "Cancelling during the upload"
 severity = "low"
-why = "People change their mind mid-upload, and a half-written file left behind is a support ticket."
+why = "People stop an upload half way. A half-written file left behind becomes a support ticket."
 covered_if = ["cancel", "cancelled", "abort", "stop the upload", "during the upload"]
   [checks.test]
   title = "Cancelling a running upload leaves the old avatar in place"
@@ -84,7 +85,7 @@ covered_if = ["cancel", "cancelled", "abort", "stop the upload", "during the upl
 id = "network_drop"
 title = "The network drops during the upload"
 severity = "medium"
-why = "Mobile uploads fail half way as a matter of course; the page must say so rather than appear to succeed."
+why = "Uploads from a phone often stop half way. The page must say so, not look finished."
 covered_if = ["network", "offline", "connection lost", "interrupted", "retry", "timeout"]
   [checks.test]
   title = "An upload interrupted by a lost connection reports the failure"
@@ -103,7 +104,7 @@ likelihood = 3
 detectability = 3
 effect = "A handful of maximum-size uploads at once make the server unresponsive for everyone."
 cause = "The whole file is read into memory and decoded before the size or dimensions are checked."
-covered_if = ["memory", "streamed", "at the limit", "concurrent uploads", "out of memory"]
+covered_if = ["memory", "memory exhaustion", "streamed", "streaming", "concurrent uploads", "several uploads at once", "out of memory"]
 
 [[risks]]
 title = "An uploaded file is served back with its original content type"
@@ -113,4 +114,4 @@ likelihood = 3
 detectability = 4
 effect = "An uploaded HTML or SVG file runs script in the browser of everyone who views it."
 cause = "The stored file is served from the application's own origin with the type the uploader supplied."
-covered_if = ["content type", "svg", "served", "separate domain", "content-disposition"]
+covered_if = ["content type", "mime type", "svg", "served back", "separate domain", "content-disposition", "stored file is opened"]

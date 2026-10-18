@@ -9,7 +9,7 @@ exclude = []
 id = "needs_password"
 title = "Deletion needs the password again"
 severity = "high"
-why = "This is the one action nobody can undo, so a borrowed signed-in tab must not be enough."
+why = "Nobody can undo this. A tab someone left open must not be enough to do it."
 covered_if = ["re-enter", "reauthenticate", "re-authenticate", "reauthentication", "re-authentication", "confirm password", "password again", "type delete"]
   [checks.test]
   title = "Deleting the account asks for the password before it starts"
@@ -24,8 +24,9 @@ covered_if = ["re-enter", "reauthenticate", "re-authenticate", "reauthentication
 id = "grace_cancel"
 title = "Cancelling during the grace period restores the account"
 severity = "medium"
-why = "A grace period that does not actually restore everything is worse than none at all."
+why = "People undo a deletion and expect everything back. Half of it back is worse than none."
 covered_if = ["grace period", "cancel", "restore", "undo", "within 30 days", "reactivat", "recover"]
+only_if = ["grace", "grace period", "restore", "reactivate", "undo", "cancel the deletion"]
   [checks.test]
   title = "An account cancelled inside the grace period comes back whole"
   category = "Functional"
@@ -39,7 +40,7 @@ covered_if = ["grace period", "cancel", "restore", "undo", "within 30 days", "re
 id = "signin_refused"
 title = "Signing in after deletion is refused"
 severity = "high"
-why = "If the old credentials still work, nothing was deleted."
+why = "If the old email and password still work, nothing was really deleted."
 covered_if = ["after deletion", "cannot sign in", "refused", "no longer exists", "deleted account"]
   [checks.test]
   title = "The deleted account's password no longer signs anyone in"
@@ -54,8 +55,9 @@ covered_if = ["after deletion", "cannot sign in", "refused", "no longer exists",
 id = "export_offered"
 title = "A data export is offered before deletion"
 severity = "low"
-why = "People delete accounts and then ask for their data; the offer has to come before the point of no return."
+why = "People ask for their data after deleting. Offer it before the delete, not after."
 covered_if = ["export", "download your data", "copy of your data", "portability", "before you delete"]
+only_if = ["export", "gdpr", "download your data", "portability", "copy of your data"]
   [checks.test]
   title = "The deletion flow offers a data export before the final step"
   category = "Functional"
@@ -69,7 +71,7 @@ covered_if = ["export", "download your data", "copy of your data", "portability"
 id = "tokens_revoked"
 title = "All sessions and tokens are revoked"
 severity = "high"
-why = "A deleted account whose token still answers is an account that is not deleted."
+why = "If the old sign-in still works after deletion, the account was not deleted."
 covered_if = ["revoke", "all sessions", "tokens", "signed out", "api refuses", "401"]
   [checks.test]
   title = "Every session and API token of a deleted account stops working"
@@ -88,4 +90,4 @@ likelihood = 4
 detectability = 4
 effect = "Uploaded files, audit rows and cached copies survive a deletion the user was told was complete."
 cause = "Only the account row is removed; related records and object storage are never swept."
-covered_if = ["orphan", "related data", "uploaded files", "cascade", "audit", "fully removed"]
+covered_if = ["orphan", "orphaned", "left behind", "related data", "uploaded files", "cascade", "fully removed", "nothing is left"]

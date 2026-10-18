@@ -7,6 +7,7 @@ standard set with a note the user can read.
 """
 
 from qagenius.models import MatrixProposal
+from qagenius.shadow_qa.detect import mentions
 from qagenius.pairwise import (
     MAX_VALUES,
     MIN_VALUES,
@@ -19,6 +20,26 @@ from qagenius.test_matrix_defaults import STANDARD_FACTORS, STANDARD_RULES
 MAX_PROPOSED_FACTORS = 6
 MAX_PROPOSED_VALUES = 5
 FALLBACK_NOTE = "The suggested factors didn't work, so the standard set is used."
+# What a screen is tested on. A real run dropped both for a sign-in story and
+# proposed Signed in / Role / Language, which is a matrix nobody can run.
+SCREEN_FACTORS = ("Browser", "Device")
+ADDED_NOTE = "Added Browser and Device — they matter for almost every screen."
+ADDED_ONE_NOTE = "Added {name} — it matters for almost every screen."
+# A story about an API has no browser and no screen to put it on.
+BACKEND_WORDS = (
+    "api",
+    "apis",
+    "endpoint",
+    "endpoints",
+    "backend",
+    "back-end",
+    "webhook",
+    "webhooks",
+    "service-to-service",
+    "server-to-server",
+    "cron",
+    "batch job",
+)
 
 
 def _clean(text: str) -> str:
@@ -48,10 +69,49 @@ def _reasons(proposal: MatrixProposal) -> dict[str, str]:
     }
 
 
+def is_backend_only(text: str) -> bool:
+    """Is this story about something with no screen to test it on?"""
+    return any(mentions(text, word) for word in BACKEND_WORDS)
+
+
+def _with_screen_factors(
+    factors: list[Factor], text: str
+) -> tuple[list[Factor], list[str]]:
+    """Put Browser and Device back when the AI forgot them.
+
+    Almost every story is a screen, and a matrix without the two things a
+    screen is actually opened on is a matrix nobody would run: a real run
+    proposed Signed in / Role / Language for a sign-in story. A story about an
+    API has no browser and no device, so it is left as the AI wrote it.
+
+    Nothing is added to a proposal with no usable factor in it: that one falls
+    back to the standard set whole, which already has both.
+    """
+    if not factors or is_backend_only(text):
+        return factors, []
+    have = {factor.name.strip().lower() for factor in factors}
+    missing = [
+        standard
+        for standard in STANDARD_FACTORS
+        if standard.name in SCREEN_FACTORS and standard.name.lower() not in have
+    ]
+    if not missing:
+        return factors, []
+    note = ADDED_NOTE if len(missing) == 2 else ADDED_ONE_NOTE.format(name=missing[0].name)
+    # The AI's own factors keep their order; the cap counts them all, so the
+    # last suggestion gives way rather than the matrix growing.
+    room = max(1, MAX_PROPOSED_FACTORS - len(missing))
+    return factors[:room] + missing, [note]
+
+
 def clean_proposal(
-    proposal: MatrixProposal,
+    proposal: MatrixProposal, text: str = ""
 ) -> tuple[list[Factor], list[Rule], list[str]]:
-    """(factors, rules, notes). Always returns something the engine can build."""
+    """(factors, rules, notes). Always returns something the engine can build.
+
+    `text` is the story and its criteria: it only decides whether a story is
+    about an API, which is the one case with no browser and no device.
+    """
     notes: list[str] = []
 
     factors: list[Factor] = []
@@ -74,6 +134,9 @@ def clean_proposal(
             f"Dropped {thin} suggested factor{'' if thin == 1 else 's'} "
             "with fewer than two values."
         )
+
+    factors, screen_notes = _with_screen_factors(factors, text)
+    notes.extend(screen_notes)
 
     known = {factor.name.lower(): factor for factor in factors}
 
@@ -143,11 +206,15 @@ def reasons_for(proposal: MatrixProposal | None) -> dict[str, str]:
 
 
 __all__ = [
+    "ADDED_NOTE",
+    "ADDED_ONE_NOTE",
+    "BACKEND_WORDS",
     "FALLBACK_NOTE",
     "MAX_PROPOSED_FACTORS",
     "MAX_PROPOSED_VALUES",
     "MAX_VALUES",
     "clean_proposal",
+    "is_backend_only",
     "reasons_for",
     "standard_set",
 ]

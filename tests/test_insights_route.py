@@ -90,8 +90,8 @@ def test_analyze_reads_both_sample_runs_without_an_ai_call(monkeypatch) -> None:
     assert "passed in one run, failed in another" in response.text
     assert "nightly-chromium" in response.text
     # The promise that no AI touched these numbers is still on the page.
-    assert "computed from your files" in response.text
-    assert "nothing was sent to an AI" in response.text
+    assert "worked out every number here from your own" in response.text.lower()
+    assert "Nothing was sent to an AI" in response.text
 
 
 def test_analyze_needs_no_key() -> None:

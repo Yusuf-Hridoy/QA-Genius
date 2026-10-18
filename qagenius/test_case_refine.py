@@ -4,7 +4,7 @@ import re
 
 from qagenius.models import TestCaseList
 from qagenius.risk_radar import RISK_TAG, ScoredRisk
-from qagenius.test_case_depth import DepthReport
+from qagenius.test_case_depth import NO_KIND, NOT_COVERED, ONLY_ONE, DepthReport
 from qagenius.test_case_diff import TITLE_MATCH, title_score
 from qagenius.test_cases import Criterion, traced_ids
 
@@ -21,11 +21,12 @@ _COVER_LINE = (
     "cover this criterion with at least one positive, one negative "
     "and one boundary case"
 )
-# A thin reason becomes the words asking for the case that is missing.
+# A reason becomes the words asking for the case that is missing. The screen
+# says "no test for wrong input"; the prompt keeps the QA words the AI knows.
 _REASON_PHRASES = (
-    ("no negative case", "a negative case"),
-    ("no boundary case", "a boundary case"),
-    ("only 1 case", "at least one more case"),
+    (NO_KIND["Negative"], "a negative case"),
+    (NO_KIND["Boundary"], "a boundary case"),
+    (ONLY_ONE, "at least one more case"),
 )
 _ID_NUMBER = re.compile(r"(\d+)")
 
@@ -67,7 +68,7 @@ def strengthen_instruction(depth: DepthReport) -> str:
     for row in depth.rows:
         if not row.thin:
             continue
-        if "not covered" in row.reasons:
+        if NOT_COVERED in row.reasons:
             lines.append(f"For {row.id}: {_COVER_LINE}.")
             continue
         phrases = [

@@ -9,6 +9,7 @@ import re
 from dataclasses import dataclass
 
 from qagenius.models import RISK_CATEGORIES, FailureMode, RiskAnalysis, TestCase
+from qagenius.shadow_qa.detect import mentions
 from qagenius.test_case_diff import STOPWORDS
 from qagenius.test_cases import Criterion
 
@@ -23,6 +24,8 @@ MATCH_FLOOR = 0.12
 MAX_MATCHED_WORDS = 6
 # A test case carries "risk:R1" once someone has written it for that risk.
 RISK_TAG = "risk:"
+# Risks the rule packs added know the words that mean a test reaches them.
+PRINCIPAL_SOURCE = "principal-qa"
 
 _WORDS = re.compile(r"[^a-z0-9]+")
 _ID_NUMBER = re.compile(r"(\d+)")
@@ -87,6 +90,35 @@ def _tagged_for(risk_id: str, cases: list[TestCase]) -> list[TestCase]:
     ]
 
 
+def _case_words(case: TestCase) -> str:
+    """Everything of a case a risk's own words could turn up in."""
+    return " ".join(
+        [
+            str(case.title or ""),
+            " ".join(case.steps or []),
+            str(case.expected_result or ""),
+            str(case.test_data or ""),
+        ]
+    )
+
+
+def _by_words(risk: FailureMode, cases: list[TestCase]) -> list[TestCase]:
+    """Cases a senior-tester risk names its own words in.
+
+    The AI guesses which test covers which risk and is checked on shared
+    words. A risk from the rule packs does not guess: it was written with the
+    words that mean the test exists, so finding one of them is the match.
+    """
+    if str(risk.source or "") != PRINCIPAL_SOURCE or not risk.covered_if:
+        return []
+    found = []
+    for case in cases:
+        text = _case_words(case)
+        if any(mentions(text, word) for word in risk.covered_if):
+            found.append(case)
+    return found
+
+
 def _claimed(risk: FailureMode, cases: list[TestCase]) -> list[TestCase]:
     """The cases the AI named, in the order it named them. Unknown ids drop out."""
     by_id = {str(case.id or "").strip().lower(): case for case in cases}
@@ -106,14 +138,23 @@ def _coverage(
     tagged_ids = {str(case.id or "").strip().lower() for case in tagged}
     # A tagged case was written for this risk, so there is nothing to evidence.
     rows = [(case.id, case.title, 1.0, []) for case in tagged]
+    named = [
+        (case.id, case.title, 1.0, [])
+        for case in _by_words(risk, cases)
+        if str(case.id or "").strip().lower() not in tagged_ids
+    ]
+    named_ids = {str(case_id or "").strip().lower() for case_id, _, _, _ in named}
+    rows.extend(named)
     scored = [
         (case.id, case.title, *match_score(risk, case))
         for case in _claimed(risk, cases)
-        if str(case.id or "").strip().lower() not in tagged_ids
+        if str(case.id or "").strip().lower() not in tagged_ids | named_ids
     ]
     rows.extend(scored)
     if tagged:
         return "verified", rows
+    if named:
+        return "covered", rows
     if not scored:
         return "none", rows
     if any(score >= MATCH_FLOOR for _, _, score, _ in scored):

@@ -13,7 +13,11 @@ from qagenius.numbers import (
     match_numbers,
     name_score,
 )
-from qagenius.prompts import duel_compare_prompt, duel_reader_prompt
+from qagenius.prompts import (
+    duel_compare_prompt,
+    duel_reader_prompt,
+    with_plain_words,
+)
 from qagenius.providers import get_provider
 from qagenius.vague import find_vague_words
 
@@ -223,6 +227,7 @@ def run_duel(
     system_b, user_b = duel_reader_prompt(
         user_story, story_type=story_type, context=context, persona="B"
     )
+    user_a, user_b = with_plain_words(user_a), with_plain_words(user_b)
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
         future_a = pool.submit(generate, keys, system_a, user_a, Interpretation)
@@ -238,7 +243,7 @@ def run_duel(
         number_facts=format_number_facts(matches),
     )
     comparison, used_c, notes_c = generate(
-        keys, system_c, user_c, DuelComparison
+        keys, system_c, with_plain_words(user_c), DuelComparison
     )
 
     comparison, removed, guard_notes = ground_forks(comparison, reading_a, reading_b)

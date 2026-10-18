@@ -1,26 +1,26 @@
 {% if provider_name == "saved example" %}
-{% with caption = "Add a key and press Run ambiguity duel to read your own story twice." %}
+{% with caption = "Add a key and press Run the two-reader check to read your own story twice." %}
 {% include "_example_flag.html" %}
 {% endwith %}
 {% endif %}
 <div class="card card-section" id="duel-card">
-  <h2>Ambiguity duel</h2>
-  <p class="muted small">Two readers read the same story independently. Where they disagree,
-    the story is ambiguous.</p>
+  <h2>Two-reader check</h2>
+  <p class="muted small">Two readers read the same story on their own. Where they read it
+    differently, the story is unclear.</p>
   <p>
-    <span class="pill {{ forks_pill }}">{{ forks | length }} forks</span>
-    <span class="pill warn">{{ vague_count }} vague phrases</span>
-    <span class="pill {{ agreement_pill }}">agreement {{ agreement_pct }}%</span>
+    <span class="pill {{ forks_pill }}">{{ forks | length }} place{{ "" if forks | length == 1 else "s" }} they disagree</span>
+    <span class="pill warn">{{ vague_count }} unclear word{{ "" if vague_count == 1 else "s" }}</span>
+    <span class="pill {{ agreement_pill }}">they agree {{ agreement_pct }}% of the time</span>
   </p>
   {% if result.removed_claims > 0 %}
-  <p class="muted small">Removed {{ result.removed_claims }} claim(s) the readers didn't make.</p>
+  <p class="muted small">Dropped {{ result.removed_claims }} thing{{ "" if result.removed_claims == 1 else "s" }} neither reader actually said.</p>
   {% endif %}
-  <h3>Disputed story</h3>
+  <h3>Your story, with the unclear parts marked</h3>
   <p>{{ highlighted_story }}</p>
   <div class="duel-readers">
     <div class="duel-col">
-      <h3>Reader A — strict</h3>
-      <h4>Rules</h4>
+      <h3>Reader A — reads it strictly</h3>
+      <h4>What they think the rules are</h4>
       {% if result.reading_a.rules %}
       <ul>
         {% for r in result.reading_a.rules %}
@@ -42,8 +42,8 @@
       {% endif %}
     </div>
     <div class="duel-col">
-      <h3>Reader B — relaxed</h3>
-      <h4>Rules</h4>
+      <h3>Reader B — reads it loosely</h3>
+      <h4>What they think the rules are</h4>
       {% if result.reading_b.rules %}
       <ul>
         {% for r in result.reading_b.rules %}
@@ -66,7 +66,7 @@
     </div>
   </div>
   {% if result.number_matches %}
-  <h3>Values compared by code</h3>
+  <h3>Numbers, compared by code</h3>
   <table class="grid">
     <tr><th>Value</th><th>Reader A</th><th>Reader B</th><th></th></tr>
     {% for m in result.number_matches %}
@@ -78,27 +78,27 @@
     </tr>
     {% endfor %}
   </table>
-  <p class="muted small">Matched by unit and name, not by AI.</p>
+  <p class="muted small">Matched up by name and unit in code, not by the AI.</p>
   {% endif %}
-  <h3>Forks</h3>
+  <h3>Places they disagree</h3>
   {% if forks %}
   <table class="grid">
-    <tr><th>Topic</th><th>Severity</th><th>A vs B</th><th>Suggested rewrite</th><th></th></tr>
+    <tr><th>About</th><th>How bad</th><th>A vs B</th><th>Better wording</th><th></th></tr>
     {% for fork in forks %}
     <tr>
       <td>{{ fork.topic }}</td>
       <td><span class="pill {{ severity_pill(fork.severity) }}">{{ fork.severity }}</span></td>
       <td>A: {% if fork.reading_a in not_stated_values %}<em class="muted">{{ fork.reading_a }}</em>{% else %}{{ fork.reading_a }}{% endif %}<br>B: {% if fork.reading_b in not_stated_values %}<em class="muted">{{ fork.reading_b }}</em>{% else %}{{ fork.reading_b }}{% endif %}</td>
-      <td>{{ fork.suggested_rewrite }}{% if loop.index0 in vague_rewrites %} <span class="pill warn">still vague: {{ vague_rewrites[loop.index0] | join(", ") }}</span>{% endif %}</td>
-      <td><button type="button" class="btn btn-small apply-rewrite" data-phrase="{{ fork.source_phrase | e }}" data-rewrite="{{ fork.suggested_rewrite | e }}"{% if loop.index0 in vague_rewrites %} disabled aria-disabled="true" title="This rewrite is still vague — edit it yourself."{% endif %}>Apply rewrite</button></td>
+      <td>{{ fork.suggested_rewrite }}{% if loop.index0 in vague_rewrites %} <span class="pill warn">still unclear: {{ vague_rewrites[loop.index0] | join(", ") }}</span>{% endif %}</td>
+      <td><button type="button" class="btn btn-small apply-rewrite" data-phrase="{{ fork.source_phrase | e }}" data-rewrite="{{ fork.suggested_rewrite | e }}"{% if loop.index0 in vague_rewrites %} disabled aria-disabled="true" title="This wording is still unclear — write your own."{% endif %}>Use this wording</button></td>
     </tr>
     {% endfor %}
   </table>
   {% else %}
-  <p class="muted">No forks. Both readers agree.</p>
+  <p class="muted">Nothing to argue about. Both readers read it the same way.</p>
   {% endif %}
   {% if comparison.agreements %}
-  <h3>Agreements</h3>
+  <h3>What they both agree on</h3>
   <ul>
     {% for item in comparison.agreements %}
     <li>{{ item }}</li>

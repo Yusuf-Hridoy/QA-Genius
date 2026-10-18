@@ -114,13 +114,13 @@ def test_run_renders_chips_and_coverage(monkeypatch) -> None:
     body = client.post("/requirements/test-cases/run", data=FORM, headers=KEYS_HEADER).text
     assert '<span class="pill accent"' in body
     assert "AC-1" in body and "AC-2" in body
-    assert "Coverage 100%" in body
+    assert "100% tested" in body
     assert "meter-fill" in body
 
 
 def test_run_reports_uncovered_criteria(monkeypatch) -> None:
     # Only AC-1 is traced, so AC-2 must be reported as uncovered. The story is
-    # one no rule pack recognises, so Principal QA adds nothing and the only
+    # one no rule pack recognises, so the senior tester adds nothing and the only
     # coverage on the page is the AI's own.
     monkeypatch.setattr(
         llm, "generate_json", _fake_generate(suite=_suite(_case("TC-001", "Functional", "AC-1")))
@@ -131,8 +131,8 @@ def test_run_reports_uncovered_criteria(monkeypatch) -> None:
         criteria_json=json.dumps(["The wall is grey", "The wall is tall"]),
     )
     body = client.post("/requirements/test-cases/run", data=quiet, headers=KEYS_HEADER).text
-    assert "Coverage 50%" in body
-    assert "Not covered:" in body
+    assert "50% tested" in body
+    assert "No test yet:" in body
 
 
 def test_run_rejects_unknown_coverage_focus(monkeypatch) -> None:
@@ -183,12 +183,15 @@ def test_example_needs_no_key() -> None:
     response = client.get("/requirements/test-cases/example")
     assert response.status_code == 200
     body = response.text
-    # Principal QA fills the gap the saved suite left, so the example shows
-    # what a real run shows: full coverage and the cases that got it there.
-    assert "Coverage 100%" in body
+    # The example runs the reviewers too, so it shows what a real run shows:
+    # the saved suite plus the cases a senior tester would add. AC-5 is about
+    # support unlocking an account, which no rule pack has a check for, so it
+    # stays honestly uncovered.
+    assert "80% tested" in body
+    assert "No test yet:" in body
     assert "AC-5" in body
     assert "saved example" in body
-    assert "Principal QA" in body
+    assert "Added by senior tester" in body
 
 
 def test_export_csv_route() -> None:
@@ -234,7 +237,7 @@ def test_result_has_one_card_per_case(monkeypatch) -> None:
 
 def test_coverage_bar_width_matches_percent() -> None:
     body = client.get("/requirements/test-cases/example").text
-    percent = re.search(r"Coverage (\d+)%", body).group(1)
+    percent = re.search(r"(\d+)% tested", body).group(1)
     assert f'style="width:{percent}%"' in body
 
 

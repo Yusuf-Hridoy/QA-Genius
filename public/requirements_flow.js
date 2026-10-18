@@ -1089,7 +1089,7 @@
     };
   }
 
-  /* Remove a Principal QA case. The list before the removal goes on the undo
+  /* Remove a case the senior tester added. The list before the removal goes on the undo
    * stack, so the Undo button brings it straight back. */
   function removePrincipalCase(caseId) {
     var run = readRun() || {};

@@ -50,6 +50,9 @@ KEYS = [
 
 FIRST_LABEL = "Key 1 (Gemini, gemini-test-model)"
 SECOND_LABEL = "Key 2 (Groq, groq-test-model)"
+# The sentence a user reads leaves the model id off: it is in the key panel,
+# and it is not what the line is telling them.
+ANSWERED = "Key 2 (Groq) answered."
 
 
 def test_rate_limit_moves_to_next_key() -> None:
@@ -66,10 +69,7 @@ def test_rate_limit_moves_to_next_key() -> None:
     )
     assert result.ok is True
     assert used == 1
-    assert notes == [
-        f"{FIRST_LABEL} was busy, trying the next key",
-        f"Used {SECOND_LABEL}",
-    ]
+    assert notes == [f"{FIRST_LABEL} was busy, so {ANSWERED}"]
 
 
 def test_auth_error_marks_key_invalid_and_moves_on() -> None:
@@ -82,8 +82,7 @@ def test_auth_error_marks_key_invalid_and_moves_on() -> None:
         KEYS, "system", "user", OkSchema, client_factory=factory
     )
     assert used == 1
-    assert notes[0] == f"{FIRST_LABEL} looked invalid, trying the next key"
-    assert notes[-1] == f"Used {SECOND_LABEL}"
+    assert notes == [f"{FIRST_LABEL} looked invalid, so {ANSWERED}"]
 
 
 def test_all_keys_failing_raises_all_keys_busy() -> None:
@@ -103,7 +102,7 @@ def test_final_note_names_answering_key() -> None:
     _, _, notes = llm.generate_json(
         KEYS, "system", "user", OkSchema, client_factory=factory
     )
-    assert notes[-1] == f"Used {SECOND_LABEL}"
+    assert notes == [f"{FIRST_LABEL} was busy, so {ANSWERED}"]
 
 
 def test_first_key_success_leaves_notes_empty() -> None:
@@ -213,7 +212,7 @@ def test_model_not_available_moves_to_next_key() -> None:
     assert used == 1
     assert "not available" in notes[0]
     assert "gemini-test-model" in notes[0]
-    assert notes[-1] == f"Used {SECOND_LABEL}"
+    assert notes[0].endswith(f"so {ANSWERED}")
 
 
 def test_all_models_unavailable_raises_model_unavailable() -> None:
@@ -331,7 +330,4 @@ def test_no_credit_moves_to_next_key() -> None:
     )
     assert result.ok is True
     assert used == 1
-    assert notes == [
-        f"{FIRST_LABEL} has no credit for this model, trying the next key",
-        f"Used {SECOND_LABEL}",
-    ]
+    assert notes == [f"{FIRST_LABEL} has no credit for this model, so {ANSWERED}"]

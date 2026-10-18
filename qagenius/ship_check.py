@@ -36,11 +36,11 @@ CHECK_IDS = (
 CORE_CHECKS = ("coverage", "risks")      # Ship is impossible while these are not checked
 
 TITLES = {
-    "clarity": "Story clarity",
-    "duel": "Ambiguity duel",
-    "coverage": "Criteria coverage",
-    "depth": "Test depth",
-    "risks": "Risk coverage",
+    "clarity": "How clear the story is",
+    "duel": "Two-reader check",
+    "coverage": "Criteria with a test",
+    "depth": "How well tested",
+    "risks": "Risks with a test",
     "automation": "Automation",
     "matrix": "Test matrix",
 }
@@ -58,7 +58,7 @@ LINKS = {
 # The name a reader would use for the desk a check came from.
 TOOLS = {
     "clarity": "Story check",
-    "duel": "Ambiguity duel",
+    "duel": "Two-reader check",
     "coverage": "Test cases",
     "depth": "Test cases",
     "risks": "Risk radar",
@@ -67,9 +67,9 @@ TOOLS = {
 }
 
 VERDICT_LABELS = {
-    "ship": "Ship",
-    "ship_with_risks": "Ship with risks",
-    "dont_ship": "Don't ship",
+    "ship": "Ready to release",
+    "ship_with_risks": "Release with known risks",
+    "dont_ship": "Not ready",
 }
 
 # A row of details is a glance, not a report. Everything past this is a count.
@@ -214,9 +214,9 @@ def _clarity(inputs: ShipInputs, criteria: list[Criterion]) -> ShipCheckItem:
         status = "fail"
 
     vague = analysis.vague_phrases
-    summary = f"Clarity {clarity}"
+    summary = f"How clear: {clarity} of 100"
     if vague:
-        summary += f", {_plural(len(vague), 'vague phrase')}"
+        summary += f", {_plural(len(vague), 'unclear word')}"
     details = [f"{phrase.phrase} — {phrase.severity}" for phrase in vague]
     missing = analysis.missing_elements
     # The story page hides the same lines, so the two desks agree.
@@ -236,7 +236,7 @@ def _clarity(inputs: ShipInputs, criteria: list[Criterion]) -> ShipCheckItem:
                 if count == 1
                 else f"{count} acceptance criteria pin it down"
             )
-            summary = f"Clarity {clarity} — vague story, but {pinned}"
+            summary = f"How clear: {clarity} of 100 — unclear, but {pinned}"
 
     details += [f"Missing: {item}" for item in missing]
 
@@ -244,7 +244,7 @@ def _clarity(inputs: ShipInputs, criteria: list[Criterion]) -> ShipCheckItem:
     # its clarity, whatever the score was.
     epic = epic_note(review_story(inputs.story, [item.text for item in criteria]))
     if epic is not None:
-        details.insert(0, f"Principal QA: {epic.title} — {epic.detail}")
+        details.insert(0, f"Senior tester: {epic.title} — {epic.detail}")
         if status == "pass":
             status = "warn"
     return _item("clarity", status, summary, details)
@@ -264,18 +264,18 @@ def _duel(inputs: ShipInputs) -> ShipCheckItem:
     else:
         status = "pass"
 
-    summary = f"Agreement {agreement}%"
+    summary = f"The two readers agree {agreement}% of the time"
     if duel.forks:
-        summary += f", {_plural(len(duel.forks), 'fork')}"
+        summary += f", {_plural(len(duel.forks), 'place')} they disagree"
         counted = []
         if high:
-            counted.append(f"{len(high)} high")
+            counted.append(f"{len(high)} bad")
         if medium:
             counted.append(f"{len(medium)} medium")
         if counted:
             summary += " (" + ", ".join(counted) + ")"
     else:
-        summary += ", no forks"
+        summary += ", and nothing they read differently"
     details = [f"{fork.topic} — {fork.severity}" for fork in duel.forks]
     return _item("duel", status, summary, details)
 
@@ -319,12 +319,15 @@ def _depth(inputs: ShipInputs, criteria: list[Criterion]) -> ShipCheckItem:
         return _item(
             "depth",
             "pass",
-            f"All {_criteria_count(total)} have a negative and a boundary case",
+            f"All {_criteria_count(total)} have a test for wrong input "
+            "and one at the limits",
             [],
         )
     # "More than half" is the point where the suite stops being a safety net.
     status = "fail" if len(thin) * 2 > total else "warn"
-    summary = f"{len(thin)} of {total} criteria thin ({_listed(thin)})"
+    # The grouped reasons are the detail lines; a summary stays glanceable.
+    needs = "needs" if len(thin) == 1 else "need"
+    summary = f"{len(thin)} of {total} criteria {needs} more tests ({_listed(thin)})"
     details = [
         f"{row.id} — {', '.join(row.reasons)}" for row in depth.rows if row.thin
     ]
@@ -512,14 +515,15 @@ def _verdict(items: list[ShipCheckItem]) -> tuple[str, str]:
     ]
     if missing_core:
         titles = ", ".join(item.title for item in missing_core)
-        return "ship_with_risks", f"Not enough evidence: {titles} not checked yet."
+        return "ship_with_risks", f"Not enough to go on: {titles} not done yet."
 
     attention = [item for item in items if item.status in ("warn", "accepted")]
     if attention:
         count = len(attention)
         return "ship_with_risks", (
-            f"No blockers, but {count} item{'' if count == 1 else 's'} "
-            f"need{'s' if count == 1 else ''} attention."
+            f"Nothing blocks the release, but {count} thing"
+            f"{'' if count == 1 else 's'} still need"
+            f"{'s' if count == 1 else ''} a look."
         )
     return "ship", "All checks passed."
 

@@ -9,7 +9,7 @@ exclude = []
 id = "empty_list"
 title = "The empty-list message"
 severity = "low"
-why = "A new account sees this screen first, and an empty table with headers tells them nothing."
+why = "A new user sees this screen first. An empty table with headings tells them nothing."
 covered_if = ["empty", "no items", "nothing yet", "empty state", "first time", "zero items"]
   [checks.test]
   title = "A list with no items explains itself and offers the next step"
@@ -24,7 +24,7 @@ covered_if = ["empty", "no items", "nothing yet", "empty state", "first time", "
 id = "page_boundary"
 title = "Exactly one page of items, and one page plus one"
 severity = "medium"
-why = "At exactly the page size a phantom second page usually appears, empty."
+why = "When the count matches the page size exactly, an empty second page usually appears."
 covered_if = ["exactly", "one page", "page size", "boundary", "page + 1", "second page"]
   [checks.test]
   title = "A list of exactly the page size shows no second page, and one more item does"
@@ -39,7 +39,7 @@ covered_if = ["exactly", "one page", "page size", "boundary", "page + 1", "secon
 id = "last_page"
 title = "The last page"
 severity = "low"
-why = "The last page is where the next button should stop and usually does not."
+why = "On the last page the Next button should stop working. Usually it does not."
 covered_if = ["last page", "final page", "end of list", "next disabled", "beyond the last"]
   [checks.test]
   title = "The last page ends the list cleanly"

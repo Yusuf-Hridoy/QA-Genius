@@ -9,7 +9,7 @@ exclude = []
 id = "max_length"
 title = "Each field at its limit and one character over"
 severity = "medium"
-why = "A limit enforced in the browser but not on the server turns into a truncated name or a 500."
+why = "If only the page checks the length, the server saves a cut-off value or fails."
 covered_if = ["max length", "maximum length", "character limit", "too long", "limit + 1", "truncated", "truncation", "cut off", "boundary"]
   [checks.test]
   title = "A field at its limit saves and one character over is refused"
@@ -24,8 +24,9 @@ covered_if = ["max length", "maximum length", "character limit", "too long", "li
 id = "unicode_names"
 title = "Names with accents, emoji and right-to-left text"
 severity = "medium"
-why = "Most people's names are not plain ASCII, and the ones that break are never in the sample data."
+why = "Most names in the world use letters the sample data never has. Those are the ones that break."
 covered_if = ["accent", "unicode", "emoji", "right-to-left", "rtl", "arabic", "non-ascii", "diacritics", "diacritic"]
+only_if = ["language", "languages", "international", "arabic", "rtl", "locale", "unicode"]
   [checks.test]
   title = "A name with accents, emoji and right-to-left characters saves and reads back"
   category = "Edge Case"
@@ -39,8 +40,9 @@ covered_if = ["accent", "unicode", "emoji", "right-to-left", "rtl", "arabic", "n
 id = "phone_formats"
 title = "Phone numbers with +, spaces, and one that is too short"
 severity = "medium"
-why = "Everyone writes a phone number differently; a strict field rejects real numbers and a loose one stores nonsense."
+why = "Everyone writes phone numbers differently. A strict field rejects real ones; a loose one keeps rubbish."
 covered_if = ["phone format", "country code", "plus", "too short", "digits only", "invalid phone"]
+only_if = ["phone", "phone number", "mobile number", "telephone", "sms"]
   [checks.test]
   title = "Phone numbers in several formats are handled consistently"
   category = "Boundary"
@@ -54,7 +56,7 @@ covered_if = ["phone format", "country code", "plus", "too short", "digits only"
 id = "unsaved_changes"
 title = "Leaving with unsaved changes warns first"
 severity = "low"
-why = "Typing a bio and losing it to a stray click is the complaint that reaches support."
+why = "Typing a long answer and losing it to one stray click is what people complain about."
 covered_if = ["unsaved", "leave the page", "discard", "navigate away", "are you sure"]
   [checks.test]
   title = "Navigating away with unsaved edits asks before discarding them"
@@ -69,7 +71,7 @@ covered_if = ["unsaved", "leave the page", "discard", "navigate away", "are you 
 id = "two_tabs"
 title = "The same profile edited in two tabs — the last save does not silently overwrite"
 severity = "medium"
-why = "Two tabs is normal behaviour, and losing the other tab's edit without a word is data loss."
+why = "People work in two tabs. Losing one tab's work without a word is lost data."
 covered_if = ["two tabs", "concurrent", "conflict", "stale", "overwrite", "last write", "another tab"]
   [checks.test]
   title = "A second tab saving an older copy does not silently discard the first save"
@@ -84,7 +86,7 @@ covered_if = ["two tabs", "concurrent", "conflict", "stale", "overwrite", "last 
 id = "bio_escaped"
 title = "HTML or script in the bio is shown as text"
 severity = "high"
-why = "A bio is shown to other people, so an unescaped tag runs in their browser, not the author's."
+why = "Other people see this text. If it is not escaped, their browser runs it."
 covered_if = ["script", "html", "escaped", "xss", "sanitised", "sanitized", "sanitise", "sanitize", "rendered as text"]
   [checks.test]
   title = "HTML typed into the bio is displayed as characters, not markup"
@@ -103,4 +105,4 @@ likelihood = 4
 detectability = 4
 effect = "An edit the user made and saw saved disappears without any message."
 cause = "The save sends every field from the form it was loaded with, so stale values replace newer ones."
-covered_if = ["two tabs", "conflict", "stale", "last write", "concurrent"]
+covered_if = ["two tabs", "second tab", "conflict", "stale", "last write", "last save wins", "concurrent", "overwrite"]

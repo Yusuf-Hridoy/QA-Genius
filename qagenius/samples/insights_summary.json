@@ -25,7 +25,7 @@
   "next_steps": [
     "Reproduce the cart total of 0.00 by hand and raise it as a blocking bug",
     "Check whether the pay button stays disabled for the same reason",
-    "Replace the fixed wait in the search suggestion test with a wait for the response",
+    "Stop pausing for a set time in the search suggestion test; wait for the response instead",
     "Re-run the nightly suite once the cart fix lands and compare the pass rate"
   ]
 }

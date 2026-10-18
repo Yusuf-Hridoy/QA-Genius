@@ -52,34 +52,34 @@ def check_report(report: BugReport, bug: BugInput) -> list[Check]:
             "Ask for a one-line summary of what breaks.",
         ),
         (
-            "Steps to reproduce",
+            "Steps to make it happen",
             _enough_steps(report),
             "Ask for the exact clicks or inputs before the bug.",
         ),
         (
-            "Actual vs expected differ",
+            "What happened is not what should have",
             _actual_differs(report),
             "Ask what they expected to happen instead.",
         ),
         (
-            "Environment given",
+            "Where it happened is given",
             environment_text(bug) != "Not provided",
             "Ask for device, OS, browser and app version.",
         ),
         (
-            "Reproducibility known",
+            "We know how often it happens",
             bug.total_attempts > 1,
             "Ask them to try again and count how often it happens.",
         ),
         (
-            "Evidence attached",
+            "A picture is attached",
             bug.has_screenshot,
             "Ask for a screenshot or screen recording.",
         ),
         (
-            "Severity set",
+            "How bad it is, agreed",
             _severity_set(report),
-            "Agree a severity with the reporter.",
+            "Agree with the reporter how bad this is.",
         ),
     )
     return [Check(label=label, ok=ok, hint="" if ok else hint) for label, ok, hint in rows]

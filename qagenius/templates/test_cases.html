@@ -5,8 +5,9 @@
 {% with step = 3 %}{% include "_steps.html" %}{% endwith %}
 <div class="page-head">
   <span class="eyebrow">Step 3 of 4</span>
-  <h1>Turn criteria into test cases</h1>
-  <p class="lede">Generate functional, negative, boundary and edge cases, see which criteria they cover, then strengthen the thin ones before you automate.</p>
+  <h1>Turn criteria into test cases<span data-explain="test-case"></span></h1>
+  <p class="lede">Write tests for the normal path, for wrong input, for the limits and for
+    unusual cases<span data-explain="edge-case"></span>. See which criteria they reach, then fill the gaps before you automate.</p>
 </div>
 {# The one component that says what this desk is built from and whether
    that is still current. run_state.js + source_card.js fill it. #}

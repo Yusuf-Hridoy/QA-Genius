@@ -1,7 +1,7 @@
-{# One place for everything Shadow QA draws, so the label reads the same on
-   every desk: same words, same colour, same size. #}
+{# One place for everything QA-Genius's own testing rules draw, so the label
+   reads the same on every desk: same words, same colour, same size. #}
 
-{% macro label() %}<span class="pill accent plain small pq-label">Principal QA</span>{% endmacro %}
+{% macro label() %}<span class="pill accent plain small pq-label">Added by senior tester</span>{% endmacro %}
 
 {# The epic warning. It sits above the score because a story that is really
    seven features is the first thing to say about it. #}
@@ -37,7 +37,7 @@
 {% endif %}
 {% else %}
 <div class="card card-section">
-  <h2>Principal QA notes</h2>
+  <h2>Notes from the senior tester</h2>
   <ul class="pq-notes">
     {% for note in items %}
     <li class="pq-note {{ note.level }}">
@@ -47,7 +47,7 @@
     </li>
     {% endfor %}
   </ul>
-  <p class="muted small">Written by QA-Genius's own rules, not by the AI. No key needed.</p>
+  <p class="muted small">Written by QA-Genius's own testing rules, not by the AI. No key needed.</p>
 </div>
 {% endif %}
 {% endmacro %}

@@ -85,17 +85,17 @@ def test_the_footer_appears_once_and_says_who_chose_the_factors(monkeypatch) -> 
     text = client.post(
         "/requirements/matrix/suggest", data=FORM, headers=KEYS_HEADER
     ).text
-    assert text.count("computed by code") == 1
-    assert "Factors suggested by AI from your story" in text
-    assert "Standard factors" not in text
+    assert text.count("Code works out the runs") == 1
+    assert "The AI read your story and suggested what to vary" in text
+    assert "The usual things to vary" not in text
 
 
 def test_without_a_key_the_footer_does_not_claim_the_ai_chose(monkeypatch) -> None:
     monkeypatch.setattr(llm, "generate_json", _never)
     text = client.post("/requirements/matrix/suggest", data=FORM).text
-    assert text.count("computed by code") == 1
-    assert "Standard factors" in text
-    assert "suggested by AI" not in text
+    assert text.count("Code works out the runs") == 1
+    assert "The usual things to vary" in text
+    assert "The AI read your story" not in text
 
 
 def test_the_keys_header_reaches_the_ai_path(monkeypatch) -> None:
@@ -113,7 +113,7 @@ def test_the_keys_header_reaches_the_ai_path(monkeypatch) -> None:
     assert response.status_code == 200
     assert [one["provider"] for one in seen["keys"]] == ["gemini"]
     assert seen["keys"][0]["key"] == KEY
-    assert "Factors suggested by AI from your story" in response.text
+    assert "The AI read your story and suggested what to vary" in response.text
 
 
 def test_reopening_keeps_the_footer_the_factors_were_born_with(monkeypatch) -> None:
@@ -125,7 +125,7 @@ def test_reopening_keeps_the_footer_the_factors_were_born_with(monkeypatch) -> N
         "/requirements/matrix/suggest",
         data={**FORM, "saved_json": json.dumps(saved)},
     ).text
-    assert "Factors suggested by AI from your story" in text
+    assert "The AI read your story and suggested what to vary" in text
 
 
 # ------------------------------------------------------------------ suggest
@@ -136,9 +136,9 @@ def test_without_a_key_the_standard_set_arrives_and_no_ai_is_called(monkeypatch)
     response = client.post("/requirements/matrix/suggest", data=FORM)
     assert response.status_code == 200
     text = response.text
-    assert "Using the standard set. Add an AI key" in text
+    assert "These are the usual things to vary. Add an AI key" in text
     assert "Browser" in text and "Device" in text and "Signed in" in text
-    assert "Runs needed" in text
+    assert "Runs you need" in text
 
 
 def test_with_a_key_the_suggested_factors_are_used(monkeypatch) -> None:
@@ -148,7 +148,7 @@ def test_with_a_key_the_suggested_factors_are_used(monkeypatch) -> None:
     ).text
     assert "Language" in text
     assert "Right to left." in text  # the reason is shown with the factor
-    assert "Using the standard set" not in text
+    assert "These are the usual things to vary" not in text
 
 
 def test_a_key_problem_still_leaves_a_working_matrix(monkeypatch) -> None:
@@ -159,15 +159,15 @@ def test_a_key_problem_still_leaves_a_working_matrix(monkeypatch) -> None:
     text = client.post(
         "/requirements/matrix/suggest", data=FORM, headers=KEYS_HEADER
     ).text
-    assert "Using the standard set" in text
-    assert "Runs needed" in text
+    assert "These are the usual things to vary" in text
+    assert "Runs you need" in text
 
 
 def test_a_story_that_is_far_too_long_is_refused(monkeypatch) -> None:
     monkeypatch.setattr(llm, "generate_json", _never)
     data = dict(FORM, user_story="x" * 20000)
     text = client.post("/requirements/matrix/suggest", data=data).text
-    assert "didn&#39;t arrive in one piece" in text
+    assert "Some of that run did not reach the server" in text
 
 
 def test_the_key_is_never_written_to_a_log(monkeypatch, caplog) -> None:
@@ -188,9 +188,9 @@ def test_build_returns_the_rows_and_the_proof(monkeypatch) -> None:
     response = client.post("/requirements/matrix/build", json=STANDARD_BODY)
     assert response.status_code == 200
     text = response.text
-    assert "Runs needed" in text
+    assert "Runs you need" in text
     assert "4<span class=\"unit\"> / 4</span> ✓" in text
-    assert "Every pair of values appears in at least one run." in text
+    assert "Every two options are tested together at least once." in text
 
 
 def test_build_respects_a_rule(monkeypatch) -> None:
@@ -206,8 +206,8 @@ def test_build_respects_a_rule(monkeypatch) -> None:
         }],
     )
     text = client.post("/requirements/matrix/build", json=payload).text
-    assert "Impossible pairs:" in text
-    assert "Safari · Phone (rule)" in text
+    assert "These two never go together:" in text
+    assert "Safari · Phone" in text
 
 
 def test_build_keeps_a_pinned_run_first(monkeypatch) -> None:
@@ -295,7 +295,7 @@ def test_the_example_needs_no_key_and_no_network(monkeypatch) -> None:
     assert response.status_code == 200
     text = response.text
     assert "<s>216</s>" in text
-    assert "Runs needed" in text
+    assert "Runs you need" in text
     assert "This is a saved example" in text
 
 

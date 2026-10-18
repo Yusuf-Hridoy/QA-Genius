@@ -9,7 +9,7 @@ exclude = []
 id = "attempt_boundary"
 title = "One below the limit, exactly the limit, one over"
 severity = "high"
-why = "Off-by-one here either locks people out a try early or gives an attacker a free extra guess."
+why = "One try out and you either lock people out early or give an attacker a free guess."
 covered_if = ["one below", "exactly", "boundary", "nth attempt", "attempt limit", "limit + 1", "limit - 1"]
   [checks.test]
   title = "The account locks on the stated attempt and not before it"
@@ -24,7 +24,7 @@ covered_if = ["one below", "exactly", "boundary", "nth attempt", "attempt limit"
 id = "window_resets"
 title = "The window resets after the stated time"
 severity = "high"
-why = "A counter that never resets locks out honest people who mistype twice a week."
+why = "If the count never resets, people who mistype twice a week get locked out."
 covered_if = ["window", "resets", "reset", "within", "rolling", "counter", "after the"]
   [checks.test]
   title = "Failed attempts stop counting once the window has passed"
@@ -39,7 +39,7 @@ covered_if = ["window", "resets", "reset", "within", "rolling", "counter", "afte
 id = "lock_duration"
 title = "The lock lasts exactly the stated duration"
 severity = "medium"
-why = "A lock that never lifts is a support queue; one that lifts early is not a lock."
+why = "A lock that never lifts fills the support queue. One that lifts early is not a lock."
 covered_if = ["lock lasts", "lock duration", "for 30", "minutes", "unlocks after", "still locked"]
   [checks.test]
   title = "A locked account stays locked for the stated time and then works again"
@@ -54,7 +54,7 @@ covered_if = ["lock lasts", "lock duration", "for 30", "minutes", "unlocks after
 id = "per_account"
 title = "The limit applies per account, even from different IPs and devices"
 severity = "medium"
-why = "A limit counted per IP is bypassed by anyone with more than one IP, which is everyone."
+why = "Counting per network address stops nobody. Anyone can use a second phone or network."
 covered_if = ["per account", "different ip", "different device", "across devices", "per ip", "distributed"]
   [checks.test]
   title = "Attempts from two devices count against the same account"
@@ -73,4 +73,4 @@ likelihood = 3
 detectability = 4
 effect = "An attacker spreading guesses over several addresses is never locked out."
 cause = "The counter key is the client address, which costs an attacker nothing to change."
-covered_if = ["per account", "per ip", "different ip", "distributed"]
+covered_if = ["per account", "per ip", "ip address", "different ip", "different addresses", "distributed", "two devices", "multiple devices", "different devices", "across devices", "same account"]

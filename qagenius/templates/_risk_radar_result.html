@@ -7,29 +7,29 @@
 <div class="verdict" style="--pct:{{ (covered / report.counts.total * 100) | round | int if report.counts.total else 0 }};--ring-color:var(--{{ 'ok' if not report.counts.untested_high else 'bad' }}-line)">
   <div class="score-ring">
     <span class="score-num">{{ (covered / report.counts.total * 100) | round | int if report.counts.total else 0 }}<span style="font-size:16px">%</span></span>
-    <span class="score-of">covered</span>
+    <span class="score-of">tested</span>
   </div>
   <div>
     <span class="pill {{ 'ok' if not report.counts.untested_high else 'bad' }}">
       {% if report.counts.untested_high %}{{ report.counts.untested_high }} high risk{{ "" if report.counts.untested_high == 1 else "s" }} with no test{% else %}Every high risk has a test{% endif %}</span>
-    <h2>{{ report.counts.total }} ways this can fail</h2>
-    <p>{{ covered }} of {{ report.counts.total }} are matched to a test case you already
-      have. RPN = severity × likelihood × detectability, computed by code — not guessed
-      by the AI.</p>
+    <h2>{{ report.counts.total }} ways this can break<span data-explain="risk-score"></span></h2>
+    <p>{{ covered }} of {{ report.counts.total }} are matched to a test you already have.
+      Risk score = how bad × how likely × how hard to notice. Code works it out —
+      the AI does not.</p>
   </div>
 </div>
 <div class="stat-row">
-  <div class="stat"><div class="num">{{ report.counts.total }}</div><div class="lbl">Failure modes</div></div>
+  <div class="stat"><div class="num">{{ report.counts.total }}</div><div class="lbl">Ways this can break</div></div>
   <div class="stat"><div class="num">{{ report.counts.high }}</div><div class="lbl">High risk</div></div>
-  <div class="stat"><div class="num">{{ covered }}<span class="unit"> / {{ report.counts.total }}</span></div><div class="lbl">Covered by a test</div></div>
+  <div class="stat"><div class="num">{{ covered }}<span class="unit"> / {{ report.counts.total }}</span></div><div class="lbl">Tested</div></div>
   <div class="stat{% if report.counts.untested_high %} stat-bad{% endif %}">
-    <div class="num">{{ report.counts.untested_high }}</div><div class="lbl">High risk, untested</div>
+    <div class="num">{{ report.counts.untested_high }}</div><div class="lbl">High risk, no test</div>
   </div>
 </div>
 <div class="risk-split">
   <div class="card risk-heat">
-    <h3>Heat map</h3>
-    <p class="muted small">Severity down, likelihood across. Click a cell to see those risks.</p>
+    <h3>Risk map</h3>
+    <p class="muted small">How bad goes down, how likely goes across. Click a square to see those risks.</p>
     <table class="heat">
       <tbody>
         {% for row in heat_rows %}
@@ -39,7 +39,7 @@
           <td class="heat-cell {{ cell.tone }}{% if cell.ids %} has-risk{% endif %}"
               data-cell="{{ cell.severity }}-{{ cell.likelihood }}"
               data-ids="{{ cell.ids | join(',') }}"
-              title="Severity {{ cell.severity }} · likelihood {{ cell.likelihood }}{% if cell.ids | length > 3 %} · {{ cell.ids | join(', ') }}{% endif %}">
+              title="How bad {{ cell.severity }} · how likely {{ cell.likelihood }}{% if cell.ids | length > 3 %} · {{ cell.ids | join(', ') }}{% endif %}">
             {# Two ids in one cell used to run together as "R1R6". Each id is
                its own pill in a wrapping row now, and a crowded cell keeps
                three and counts the rest. #}
@@ -59,7 +59,7 @@
         </tr>
       </tbody>
     </table>
-    <p class="heat-labels"><span>Low severity</span><span>High likelihood →</span></p>
+    <p class="heat-labels"><span>Not so bad</span><span>More likely →</span></p>
     <p class="heat-key"><span>Lower risk</span>
       <span class="ramp" aria-hidden="true"><i style="background:var(--seq-1)"></i><i style="background:var(--seq-2)"></i><i style="background:var(--seq-3)"></i><i style="background:var(--seq-4)"></i><i style="background:var(--seq-5)"></i><i style="background:var(--seq-6)"></i></span>
       <span>Higher</span></p>
@@ -76,35 +76,35 @@
     <div class="card risk-card" data-risk-id="{{ item.risk.id }}">
       <h3>{{ item.risk.id }} · {{ item.risk.title }}</h3>
       <p class="row">
-        <span class="pill {{ level_pill[item.level] }}">RPN {{ item.rpn }} · {{ item.level }}</span>
+        <span class="pill {{ level_pill[item.level] }}">Risk score {{ item.rpn }} of 125 · {{ item.level }}</span>
         <span class="pill neutral">{{ item.risk.category }}</span>
         {% if item.risk.source == principal_source %}{{ pq.label() }}{% endif %}
-        <span class="muted small">S{{ item.risk.severity }} L{{ item.risk.likelihood }} D{{ item.risk.detectability }}</span>
+        <span class="muted small">Bad {{ item.risk.severity }} · Likely {{ item.risk.likelihood }} · Hidden {{ item.risk.detectability }}</span>
       </p>
       <p><strong>Effect:</strong> {{ item.risk.effect }}</p>
       <p class="muted"><strong>Cause:</strong> {{ item.risk.cause }}</p>
       {% if item.risk.source == principal_source %}
-      <p class="pq-why">The AI did not raise this one. It is a classic for this kind of
-        feature, scored by the same rules as every other risk here.</p>
+      <p class="pq-why">The AI did not raise this one. It goes wrong on most builds of
+        this kind of feature, and it is scored by the same rules as the rest.</p>
       {% endif %}
       {# "Covered" is the AI's claim, checked only against shared words, so the
          words are shown and the reader is told to confirm it. A tagged case was
          written for the risk, so it needs no evidence. #}
       <p class="small coverage {{ coverage_tone[item.coverage] }}">
         {% if item.coverage == "verified" %}
-        Verified by {{ item.covered_tests[0][0] }} (tagged risk:{{ item.risk.id }})
+        Tested by {{ item.covered_tests[0][0] }} (tagged risk:{{ item.risk.id }})
         {% elif item.coverage == "covered" %}
-        Likely covered by {{ item.covered_tests[0][0] }} — {{ item.covered_tests[0][1] }}{%
-          if item.covered_tests[0][3] %} · matched on: {{ item.covered_tests[0][3] | join(", ") }}{% endif %}
+        Probably tested by {{ item.covered_tests[0][0] }} — {{ item.covered_tests[0][1] }}{%
+          if item.covered_tests[0][3] %} · both say: {{ item.covered_tests[0][3] | join(", ") }}{% endif %}
         {% elif item.coverage == "weak" %}
-        AI says {{ item.covered_tests[0][0] }} covers this, but the test doesn't seem to match
+        The AI thinks {{ item.covered_tests[0][0] }} tests this, but it doesn't look like it.
         {% else %}
-        No test covers this risk
+        No test for this yet
         {% endif %}
       </p>
       {% if item.coverage == "covered" %}
-      <p class="muted small">Check that this test really exercises the risk, or tag it
-        <span class="mono">risk:{{ item.risk.id }}</span> to mark it verified.</p>
+      <p class="muted small">Read the test and check it really covers this. Tag it
+        <span class="mono">risk:{{ item.risk.id }}</span> and it counts for sure.</p>
       {% endif %}
       {% if item.risk.related_criteria %}
       <p class="row">
@@ -115,23 +115,23 @@
       {% endif %}
       <details>
         <summary>Why these scores</summary>
-        <p class="small"><strong>Severity {{ item.risk.severity }}</strong> — {{ item.risk.severity_reason or "no reason given" }}</p>
-        <p class="small"><strong>Likelihood {{ item.risk.likelihood }}</strong> — {{ item.risk.likelihood_reason or "no reason given" }}</p>
-        <p class="small"><strong>Detectability {{ item.risk.detectability }}</strong> — {{ item.risk.detectability_reason or "no reason given" }}</p>
+        <p class="small"><strong>How bad {{ item.risk.severity }}</strong> — {{ item.risk.severity_reason or "no reason given" }}</p>
+        <p class="small"><strong>How likely {{ item.risk.likelihood }}</strong> — {{ item.risk.likelihood_reason or "no reason given" }}</p>
+        <p class="small"><strong>How hard to notice {{ item.risk.detectability }}</strong> — {{ item.risk.detectability_reason or "no reason given" }}</p>
         {% if item.risk.test_idea %}
         <p class="small"><strong>Test idea:</strong> {{ item.risk.test_idea }}</p>
         {% endif %}
         <div class="field">
           <div class="row score-row">
-            {% for field, value in [("severity", item.risk.severity), ("likelihood", item.risk.likelihood), ("detectability", item.risk.detectability)] %}
-            <label class="score-field">{{ field | capitalize }}
+            {% for field, label, value in [("severity", "How bad", item.risk.severity), ("likelihood", "How likely", item.risk.likelihood), ("detectability", "How hard to notice", item.risk.detectability)] %}
+            <label class="score-field">{{ label }}
               <input type="number" min="1" max="5" step="1" value="{{ value }}"
                      class="score-input" data-risk-id="{{ item.risk.id }}" data-field="{{ field }}">
             </label>
             {% endfor %}
           </div>
         </div>
-        <p class="muted small">Scores are the AI's proposal — adjust them with your own judgement.</p>
+        <p class="muted small">These scores are the AI's guess. Change any of them to your own.</p>
       </details>
     </div>
     {% endfor %}
@@ -142,7 +142,7 @@
   <div class="row">
     <button type="button" class="btn" id="risk-write-tests"
             data-risk-ids="{{ untested | map(attribute='id') | join(',') }}"{% if not untested %} hidden{% endif %}>
-      Write tests for {{ untested | length }} untested high risk{% if untested | length != 1 %}s{% endif %}
+      Write tests for {{ untested | length }} high risk{% if untested | length != 1 %}s{% endif %} with no test
     </button>
     <button type="button" class="btn" id="risk-download-csv">Download CSV</button>
     <button type="button" class="btn" id="risk-download-xlsx">Download Excel</button>

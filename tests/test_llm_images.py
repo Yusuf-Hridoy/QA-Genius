@@ -117,9 +117,9 @@ def test_a_model_that_cannot_read_images_retries_without_it(status, message) -> 
     assert len(client.sent) == 2
     assert isinstance(_user_content(client, 0), list)
     assert _user_content(client, 1) == "user text"
+    # The key answered, so there is no rotation sentence — only the aside.
     assert notes == [
         "Key 1 (Gemini, test-model) can't read images — the screenshot was not used.",
-        "Used Key 1 (Gemini, test-model)",
     ]
 
 

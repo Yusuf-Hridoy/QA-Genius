@@ -1,5 +1,5 @@
 <div class="card proposal">
-  <h2>Proposed changes</h2>
+  <h2>What would change</h2>
   <p class="row">
     <span class="pill ok">+{{ diff.added }} added</span>
     <span class="pill warn">~{{ diff.changed }} changed</span>
@@ -11,9 +11,9 @@
     <span class="delta {{ row.tone }}">{{ row.before }} → {{ row.after }}</span>{% endfor %}
   </p>
   {% if mode == "strengthen" %}
-  <p class="muted small">Strengthen only adds cases. Any edits the AI made to existing cases were ignored.</p>
+  <p class="muted small">This only adds tests. Any change the AI made to an existing test was dropped.</p>
   {% elif mode == "risks" %}
-  <p class="muted small">This run only adds cases for the risks you picked. Any edits the AI made to existing cases were ignored.</p>
+  <p class="muted small">This only adds tests for the risks you picked. Any change to an existing test was dropped.</p>
   {% endif %}
 </div>
 {% for entry in items %}
@@ -58,7 +58,7 @@
 <script type="application/json" id="tc-proposed">{{ proposal | tojson }}</script>
 <div class="card">
   {% if diff.removed and mode == "instruction" %}
-  <p class="pill bad">This removes {{ diff.removed }} test cases. Accept only if that's intended.</p>
+  <p class="pill bad">This deletes {{ diff.removed }} test cases. Only accept if you meant that.</p>
   {% endif %}
   <div class="row">
     <button type="button" class="btn btn-primary" id="accept-changes">Accept changes</button>

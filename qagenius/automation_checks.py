@@ -23,7 +23,10 @@ _WAIT_PATTERNS = (
     re.compile(r"\bcy\.wait\s*\(\s*\d"),
     re.compile(r"Thread\.sleep\s*\("),
 )
-WAIT_MESSAGE = "Fixed wait — prefer waiting for an element or response"
+WAIT_MESSAGE = (
+    "Fixed pause (waitForTimeout) — it makes tests slow and flaky. Wait for the "
+    "thing you need instead."
+)
 
 _CLOSERS = {")": "(", "]": "[", "}": "{"}
 

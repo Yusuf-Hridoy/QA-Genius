@@ -9,7 +9,7 @@ exclude = []
 id = "revoked_token_refused"
 title = "A revoked session's token is refused by the API immediately"
 severity = "high"
-why = "Revoking in the list and still accepting the token is the difference between a feature and a picture of one."
+why = "If the list says signed out but the device still works, nothing was signed out."
 covered_if = ["revoked token", "token is rejected", "api refuses", "401", "immediately", "no longer accepted"]
   [checks.test]
   title = "The API refuses the token of a session that was just revoked"
@@ -24,7 +24,7 @@ covered_if = ["revoked token", "token is rejected", "api refuses", "401", "immed
 id = "current_vs_other"
 title = "Revoking the current session behaves differently from revoking another, and says so"
 severity = "medium"
-why = "Signing yourself out while trying to remove an old laptop is a surprise people report as a bug."
+why = "Signing yourself out while removing an old laptop surprises people. They report it as a bug."
 covered_if = ["current session", "this device", "your current", "own session", "signed out of this"]
   [checks.test]
   title = "Revoking this device signs the user out, revoking another device does not"
@@ -39,8 +39,9 @@ covered_if = ["current session", "this device", "your current", "own session", "
 id = "sign_out_everywhere"
 title = "Sign out everywhere ends every session"
 severity = "medium"
-why = "If one session survives, the person who clicked it believes they are safe and is not."
+why = "If one device stays signed in, the user thinks they are safe when they are not."
 covered_if = ["sign out everywhere", "log out everywhere", "all sessions", "all devices", "every session"]
+only_if = ["sign out everywhere", "log out everywhere", "all devices", "every session", "all sessions", "sign out of all"]
   [checks.test]
   title = "Sign out everywhere ends all sessions, including the one that clicked it"
   category = "Functional"
@@ -54,8 +55,9 @@ covered_if = ["sign out everywhere", "log out everywhere", "all sessions", "all 
 id = "list_shows_device"
 title = "The session list shows the device and when it was last active"
 severity = "low"
-why = "A list of identical rows gives nobody the confidence to revoke anything."
+why = "If every row looks the same, nobody knows which one to sign out."
 covered_if = ["device", "browser name", "last active", "last used", "location", "ip address"]
+only_if = ["device", "devices", "session list", "active sessions", "last active", "list of sessions"]
   [checks.test]
   title = "Each session row names a device and a last-active time"
   category = "Functional"
@@ -73,4 +75,4 @@ likelihood = 3
 detectability = 4
 effect = "A session the user believes is gone keeps working on some servers for as long as the cache lives."
 cause = "Revocation writes to the database but each server keeps its own in-memory session cache."
-covered_if = ["cache", "every server", "all servers", "immediately", "propagated", "propagation", "propagates"]
+covered_if = ["cache", "cached", "every server", "all servers", "other servers", "immediately", "propagated", "propagation", "propagates", "still accepted", "token is rejected"]

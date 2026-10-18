@@ -9,7 +9,7 @@ exclude = []
 id = "sent_once"
 title = "The email is sent once and never duplicated on a retry"
 severity = "medium"
-why = "A retried job sends the same message again, and the recipient acts on it twice."
+why = "If the job runs twice, the same email goes out twice, and people act on it twice."
 covered_if = ["once", "duplicate", "twice", "idempotent", "idempotency", "idempotency key", "retry", "only one email"]
   [checks.test]
   title = "A retried send does not produce a second email"
@@ -24,8 +24,9 @@ covered_if = ["once", "duplicate", "twice", "idempotent", "idempotency", "idempo
 id = "links_work_expire"
 title = "Links in the email work and expire as stated"
 severity = "medium"
-why = "A link that never expires sits in an inbox forever, and one that expires early sends people to support."
+why = "A link that never dies sits in an inbox for years. One that dies too soon sends people to support."
 covered_if = ["link", "expires", "expiry", "token", "valid for", "no longer valid", "single use"]
+only_if = ["link", "links", "url", "click the", "verify", "verification", "confirm", "reset"]
   [checks.test]
   title = "An emailed link works once and stops working after its stated lifetime"
   category = "Boundary"
@@ -39,8 +40,9 @@ covered_if = ["link", "expires", "expiry", "token", "valid for", "no longer vali
 id = "user_language"
 title = "The content is in the user's language"
 severity = "low"
-why = "The email is sent by a background job that has no idea who asked for it."
+why = "The email is sent later by a job that does not know who asked for it."
 covered_if = ["language", "locale", "translated", "translation", "localised", "localized", "user's language"]
+only_if = ["language", "languages", "locale", "translation", "translated", "multilingual"]
   [checks.test]
   title = "An email sent by a background job uses the recipient's language"
   category = "Functional"

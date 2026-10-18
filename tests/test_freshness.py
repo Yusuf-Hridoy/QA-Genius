@@ -91,8 +91,8 @@ def test_the_three_states_never_rest_on_colour_alone() -> None:
     card = (ROOT / "public" / "source_card.js").read_text(encoding="utf-8")
     for state in ("none", "stale", "fresh"):
         assert f"{state}:" in card or f'"{state}"' in card
-    assert "Out of date." in card
-    assert "Up to date with your latest story" in card
+    assert "Old — your work changed." in card
+    assert "Matches your latest story" in card
     assert "Your latest work" in card
 
 
@@ -181,8 +181,8 @@ def test_an_out_of_date_answer_stays_on_screen_dimmed() -> None:
     assert ".stale-result{opacity:.6}" in css
     assert ".stale-result button" in css  # read-only while it is out of date
     card = (ROOT / "public" / "source_card.js").read_text(encoding="utf-8")
-    assert "From your previous criteria — update to refresh" in card
-    assert "From your previous story — update to refresh" in card
+    assert "Built from older criteria — press update" in card
+    assert "Built from an older story — press update" in card
 
 
 def test_a_loaded_sample_is_marked_in_the_html() -> None:

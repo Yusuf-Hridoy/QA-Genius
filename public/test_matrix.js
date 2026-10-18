@@ -216,7 +216,7 @@
         if (!root) return;
         root.textContent = "";
         var card = el("div", "card error-card");
-        card.appendChild(el("p", null, "Could not suggest factors. Reload and try again."));
+        card.appendChild(el("p", null, "Could not suggest what to vary. Reload the page and try again."));
         root.appendChild(card);
       });
   }
@@ -278,7 +278,7 @@
         if (status) status.textContent = "";
       })
       .catch(function () {
-        if (status) status.textContent = "Could not build the file. Fix the factors first.";
+        if (status) status.textContent = "Could not build the file. Check what you are varying first.";
       });
   }
 
@@ -290,11 +290,11 @@
     var block = el("div", "matrix-factor");
     var head = el("div", "row matrix-factor-head");
     var name = el("input", "ctl matrix-factor-name");
-    name.setAttribute("aria-label", "Factor name");
+    name.setAttribute("aria-label", "Name of the thing to vary");
     name.setAttribute("maxlength", "40");
-    name.value = "New factor";
+    name.value = "Something new";
     head.appendChild(name);
-    var remove = el("button", "btn btn-small btn-danger matrix-remove-factor", "Remove factor");
+    var remove = el("button", "btn btn-small btn-danger matrix-remove-factor", "Remove this");
     remove.type = "button";
     head.appendChild(remove);
     block.appendChild(head);
@@ -353,7 +353,7 @@
 
   function pickers(factors, side) {
     var factor = el("select", "ctl matrix-rule-" + side + "-factor");
-    factor.setAttribute("aria-label", side === "if" ? "First factor" : "Second factor");
+    factor.setAttribute("aria-label", side === "if" ? "The first one" : "The second one");
     var value = el("select", "ctl matrix-rule-" + side + "-value");
     value.setAttribute("aria-label", side === "if" ? "First value" : "Second value");
     factors.forEach(function (one) {

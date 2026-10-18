@@ -9,7 +9,7 @@ exclude = []
 id = "ui_and_api"
 title = "A user without permission sees no button AND the API refuses"
 severity = "high"
-why = "Hiding the button is not a permission check; the request is one line away in any browser console."
+why = "Hiding a button is not a check. Anyone can still send the request by hand."
 covered_if = ["403", "api refuses", "server side", "forbidden", "hidden button", "both", "endpoint"]
   [checks.test]
   title = "The API refuses an action whose button is hidden for this role"
@@ -24,7 +24,7 @@ covered_if = ["403", "api refuses", "server side", "forbidden", "hidden button",
 id = "direct_url"
 title = "A direct URL to a forbidden page is refused"
 severity = "high"
-why = "Links get shared and bookmarks survive role changes."
+why = "People share links and keep bookmarks long after their rights change."
 covered_if = ["direct url", "deep link", "forbidden page", "403", "redirect", "not authorized", "not authorised"]
   [checks.test]
   title = "Typing the URL of an admin page as a non-admin is refused"
@@ -39,7 +39,7 @@ covered_if = ["direct url", "deep link", "forbidden page", "403", "redirect", "n
 id = "role_change_live"
 title = "A role change takes effect without signing out"
 severity = "medium"
-why = "A permission cached in the session means a removed admin stays an admin until they feel like leaving."
+why = "If rights are only read at sign-in, someone keeps their old rights until they sign out."
 covered_if = ["role change", "takes effect", "without re-login", "immediately", "cached permission", "revoked role"]
   [checks.test]
   title = "Removing a role stops the user's access in their current session"
@@ -58,4 +58,4 @@ likelihood = 3
 detectability = 4
 effect = "Any signed-in user can perform an admin action by calling the endpoint directly."
 cause = "The role decides which controls are rendered, and the endpoint trusts whoever reaches it."
-covered_if = ["403", "api refuses", "server side", "endpoint", "direct call"]
+covered_if = ["403", "api refuses", "api rejects", "server side", "server-side check", "endpoint directly", "direct call", "hidden button is not a check"]

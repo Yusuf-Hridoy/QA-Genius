@@ -10,7 +10,7 @@ exclude = []
 id = "email_case"                  # full id becomes "login.email_case"
 title = "Email is not case-sensitive"
 severity = "high"                  # high | medium | low
-why = "Users type capitals on phones; a case-sensitive lookup locks them out or creates duplicate accounts."
+why = "People type capitals on phones. If email is case-sensitive, they get locked out."
 covered_if = ["uppercase", "upper case", "capital", "case-insensitive", "case insensitive", "USER@"]
   [checks.test]
   title = "Sign in with the email typed in capital letters"
@@ -25,7 +25,7 @@ covered_if = ["uppercase", "upper case", "capital", "case-insensitive", "case in
 id = "email_trim"
 title = "Spaces around the email are trimmed"
 severity = "medium"
-why = "Copy-paste and phone keyboards add a leading or trailing space, and the sign-in fails for no visible reason."
+why = "Copy and paste adds a space at the start or end. Sign-in then fails for no visible reason."
 covered_if = ["trim", "trailing space", "leading space", "whitespace", "space around"]
   [checks.test]
   title = "Sign in with a leading and trailing space in the email"
@@ -40,7 +40,7 @@ covered_if = ["trim", "trailing space", "leading space", "whitespace", "space ar
 id = "enumeration"
 title = "Same error for unknown email and wrong password"
 severity = "high"
-why = "Two different messages let anyone test which addresses have an account here."
+why = "Two different messages let anyone check which email addresses have an account."
 covered_if = ["enumeration", "same message", "same error", "does not reveal", "generic error", "identical message"]
   [checks.test]
   title = "Unknown email and wrong password give the same message"
@@ -55,7 +55,7 @@ covered_if = ["enumeration", "same message", "same error", "does not reveal", "g
 id = "enter_key"
 title = "The form submits with the Enter key"
 severity = "low"
-why = "Most people sign in from the keyboard and never reach for the button."
+why = "Most people press Enter to sign in and never touch the button."
 covered_if = ["enter key", "press enter", "keyboard submit", "submit with enter"]
   [checks.test]
   title = "Submit the sign-in form with the Enter key"
@@ -70,7 +70,7 @@ covered_if = ["enter key", "press enter", "keyboard submit", "submit with enter"
 id = "injection_safe"
 title = "Script and SQL-like input is rejected safely and shown escaped"
 severity = "high"
-why = "A sign-in form is the first thing anyone pastes a payload into, and the error page echoes it straight back."
+why = "Attackers paste code into sign-in forms first. The error page often shows it right back."
 covered_if = ["script", "sql", "injection", "xss", "escaped", "sanitised", "sanitized", "sanitise", "sanitize", "drop table"]
   [checks.test]
   title = "Script-like text in the email field is escaped, not executed"
@@ -85,8 +85,9 @@ covered_if = ["script", "sql", "injection", "xss", "escaped", "sanitised", "sani
 id = "session_timeout"
 title = "The session expires after inactivity"
 severity = "medium"
-why = "A session that never ends is a signed-in account on every shared and stolen device."
+why = "A sign-in that never ends stays live on every shared, lost or stolen device."
 covered_if = ["inactivity", "idle", "session expire", "session timeout", "times out", "expires after"]
+only_if = ["session", "sessions", "inactivity", "idle", "timeout", "times out", "expires", "sign out", "signed out"]
   [checks.test]
   title = "An idle session is signed out and asks for the password again"
   category = "Boundary"
@@ -104,7 +105,7 @@ likelihood = 4
 detectability = 3
 effect = "Attackers can list which emails have accounts."
 cause = "Different messages for unknown email and wrong password."
-covered_if = ["enumeration", "same message", "does not reveal", "generic error"]
+covered_if = ["enumeration", "enumerate", "same message", "same error", "does not reveal", "generic error", "identical message", "different message", "reveals whether"]
 
 [[risks]]
 title = "Response time differs between a known and an unknown email"
@@ -114,4 +115,4 @@ likelihood = 3
 detectability = 4
 effect = "The timing alone tells an attacker which addresses have accounts, even when the message is identical."
 cause = "The password hash is only computed when the account exists, so the unknown-email path returns sooner."
-covered_if = ["timing", "response time", "constant time", "same duration"]
+covered_if = ["timing", "timing attack", "response time", "side-channel", "side channel", "constant time", "same duration", "how long the response takes"]

@@ -49,7 +49,7 @@ def test_the_script_is_served():
 
 @pytest.mark.parametrize(
     "tone,label",
-    [("bad", "Don&#39;t ship"), ("warn", "Ship with risks"), ("ok", "Ship")],
+    [("bad", "Not ready"), ("warn", "Release with known risks"), ("ok", "Ready to release")],
 )
 def test_the_banner_tone_matches_the_verdict(tone, label):
     body = sample()
@@ -77,20 +77,20 @@ def test_a_pass_row_carries_no_accept_button():
     rows = client.get("/ship/example").text.split('class="card ship-row"')
     passing = [row for row in rows if 'data-status="pass"' in row]
     assert passing
-    assert all("Accept with reason" not in row for row in passing)
+    assert all("Accept this risk and say why" not in row for row in passing)
 
 
 def test_a_warn_row_carries_no_accept_button():
     rows = client.get("/ship/example").text.split('class="card ship-row"')
     warning = [row for row in rows if 'data-status="warn"' in row]
     assert warning
-    assert all("Accept with reason" not in row for row in warning)
+    assert all("Accept this risk and say why" not in row for row in warning)
 
 
 def test_a_fail_row_carries_the_accept_form():
     rows = client.get("/ship/example").text.split('class="card ship-row"')
     failing = [row for row in rows if 'data-status="fail"' in row][0]
-    assert "Accept with reason" in failing
+    assert "Accept this risk and say why" in failing
     assert 'class="ship-accept-form"' in failing
     assert 'minlength="10"' in failing and 'maxlength="300"' in failing
 
@@ -100,7 +100,7 @@ def test_an_accepted_row_shows_the_note_and_a_way_back():
     body["acceptances"] = {"risks": REASON}
     text = post(body)
     assert f"<em>Accepted: {REASON}</em>" in text
-    assert "Remove acceptance" in text
+    assert "Undo accept" in text
 
 
 def test_a_script_tag_in_a_reason_shows_as_text():

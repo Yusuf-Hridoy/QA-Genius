@@ -50,6 +50,9 @@ class Check:
     severity: str
     why: str
     covered_if: tuple[str, ...]
+    # A narrow check: used only when the story or criteria mention one of
+    # these. Empty means the check applies whenever its pack is active.
+    only_if: tuple[str, ...]
     test: CheckTest
 
 
@@ -169,6 +172,7 @@ def _check(raw: object, pack_id: str, file_name: str, index: int) -> Check:
         severity=severity,
         why=_text(raw.get("why"), file_name, f"{where}.why"),
         covered_if=_words(raw.get("covered_if"), file_name, f"{where}.covered_if"),
+        only_if=_words(raw.get("only_if"), file_name, f"{where}.only_if", required=False),
         test=_check_test(raw.get("test"), file_name, where),
     )
 

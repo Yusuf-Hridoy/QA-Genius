@@ -8,7 +8,7 @@ exclude = []
 id = "dst_day"
 title = "The daylight-saving change day"
 severity = "medium"
-why = "Twice a year an hour repeats or vanishes, and anything counted in hours is wrong for a day."
+why = "Twice a year the clocks change. Anything counted in hours is wrong for a day."
 covered_if = ["daylight", "dst", "summer time", "clocks change", "clock change", "repeated hour"]
   [checks.test]
   title = "A scheduled time behaves correctly across the clock change"
@@ -23,7 +23,7 @@ covered_if = ["daylight", "dst", "summer time", "clocks change", "clock change",
 id = "utc_storage"
 title = "Shown in the user's timezone, stored in UTC"
 severity = "high"
-why = "Storing local time means every report, export and reminder is wrong for everyone else."
+why = "Save the local time and every report, export and reminder is wrong for everyone else."
 covered_if = ["utc", "timezone", "time zone", "user's local", "converted", "offset"]
   [checks.test]
   title = "The same moment reads correctly for two users in different timezones"
@@ -38,7 +38,7 @@ covered_if = ["utc", "timezone", "time zone", "user's local", "converted", "offs
 id = "midnight_boundary"
 title = "The midnight and end-of-day boundary"
 severity = "medium"
-why = "Whether a deadline at 00:00 belongs to yesterday or today decides who missed it."
+why = "Midnight belongs to one day or the other. Which one decides who missed the deadline."
 covered_if = ["midnight", "end of day", "00:00", "23:59", "inclusive", "same day", "boundary"]
   [checks.test]
   title = "An item at the edge of a day falls on the right side of the boundary"

@@ -9,7 +9,7 @@ exclude = []
 id = "user_cancels"
 title = "The user cancels at the provider's consent screen"
 severity = "medium"
-why = "Pressing Cancel is the most common thing that happens on that screen, and it usually lands on a blank error page."
+why = "Cancel is the most pressed button on that screen, and it usually lands on an error page."
 covered_if = ["cancel", "cancels", "denies", "declines", "consent screen", "goes back"]
   [checks.test]
   title = "Cancelling at the provider returns to sign-in with a readable message"
@@ -24,7 +24,7 @@ covered_if = ["cancel", "cancels", "denies", "declines", "consent screen", "goes
 id = "email_collision"
 title = "The provider's email already belongs to another account"
 severity = "high"
-why = "Guessing wrong here either merges two people's data or silently creates a second account nobody can find."
+why = "Get this wrong and you either mix up two people's data or make a second account nobody can find."
 covered_if = ["already exists", "existing account", "same email", "collision", "merge", "already registered"]
   [checks.test]
   title = "Signing in with a provider whose email matches an existing password account"
@@ -39,7 +39,7 @@ covered_if = ["already exists", "existing account", "same email", "collision", "
 id = "unlink_last_method"
 title = "Unlinking the last sign-in method is blocked"
 severity = "high"
-why = "Removing the only way in locks the owner out of their own account with one click."
+why = "Removing the last way to sign in locks the owner out with one click."
 covered_if = ["last method", "only method", "locked out", "at least one", "cannot unlink", "set a password first"]
   [checks.test]
   title = "Unlinking the only sign-in method is refused"
@@ -54,7 +54,7 @@ covered_if = ["last method", "only method", "locked out", "at least one", "canno
 id = "provider_error"
 title = "A provider error or timeout is handled"
 severity = "medium"
-why = "The provider is someone else's server; when it is slow or returns an error the user must still land somewhere sensible."
+why = "That server belongs to someone else. When it is slow or fails, the user still needs somewhere to land."
 covered_if = ["provider error", "timeout", "times out", "unavailable", "fails to respond", "5xx", "try again"]
   [checks.test]
   title = "A failed provider callback shows a readable message and a way to retry"
@@ -73,4 +73,4 @@ likelihood = 3
 detectability = 4
 effect = "Anyone who can create a provider account with a known email reaches that user's data."
 cause = "The callback matches on the email address alone and signs the visitor into the existing account."
-covered_if = ["collision", "same email", "already exists", "verified email", "takeover"]
+covered_if = ["collision", "same email", "same address", "already exists", "existing account", "verified email", "takeover", "take over", "merge"]

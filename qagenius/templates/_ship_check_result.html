@@ -1,10 +1,10 @@
-{# The verdict, then one row per check. Every number on this page was computed
+{# The decision, then one row per check. Every number on this page was computed
    by qagenius/ship_check.py; no AI text reaches it, so nothing is marked safe. #}
 {% from "_form_fields.html" import field %}
 <div class="ship-report">
   <div class="verdict ship-verdict ship-{{ verdict_tone }}">
     <div>
-      <span class="pill {{ verdict_tone }}">Verdict</span>
+      <span class="pill {{ verdict_tone }}">Decision</span>
       <h2 class="ship-verdict-label">{{ verdict_label }}</h2>
       <p>{{ report.verdict_reason }}</p>
       <p class="muted small">{{ report.checked }} of {{ total_checks }} checks ran</p>
@@ -12,7 +12,7 @@
   </div>
 
   {% if ignored %}
-  <p class="muted small">Ignored invalid data for: {{ ignored | join(", ") }}</p>
+  <p class="muted small">Some saved data could not be read, so these were skipped: {{ ignored | join(", ") }}</p>
   {% endif %}
 
   <div class="ship-checks">
@@ -32,7 +32,7 @@
       {% if item.status == "accepted" and item.accepted_note %}
       <p class="ship-accepted-note"><em>Accepted: {{ item.accepted_note }}</em></p>
       <div class="row">
-        <button type="button" class="btn btn-small btn-danger ship-unaccept" data-check="{{ item.id }}">Remove acceptance</button>
+        <button type="button" class="btn btn-small btn-danger ship-unaccept" data-check="{{ item.id }}">Undo accept</button>
       </div>
       {% endif %}
 
@@ -47,10 +47,10 @@
 
       {% if item.status == "fail" %}
       <div class="row ship-accept-row">
-        <button type="button" class="btn btn-small ship-accept" data-check="{{ item.id }}">Accept with reason</button>
+        <button type="button" class="btn btn-small ship-accept" data-check="{{ item.id }}">Accept this risk and say why</button>
       </div>
       <div class="ship-accept-form" data-check="{{ item.id }}" hidden>
-        {% call field("ship-reason-" ~ item.id, "Why are you shipping with this?",
+        {% call field("ship-reason-" ~ item.id, "Why are you releasing with this?",
                       help="At least " ~ min_reason ~ " characters.", counter_max=max_reason) %}
         <textarea id="ship-reason-{{ item.id }}" class="ship-reason short" rows="3"
                   minlength="{{ min_reason }}" maxlength="{{ max_reason }}"
@@ -74,7 +74,7 @@
       <button type="button" class="btn" id="ship-print">Print / save as PDF</button>
       <span class="muted small" id="ship-copy-status" aria-live="polite"></span>
     </div>
-    <p class="muted small">Every status here was computed by code from your own results.
-      Nothing was sent to an AI and nothing is stored on the server.</p>
+    <p class="muted small">Code worked out every line here from your own results.
+      Nothing was sent to an AI and nothing is kept on the server.</p>
   </div>
 </div>

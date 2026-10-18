@@ -22,13 +22,13 @@
       {% endcall %}
 
       <div class="form-actions">
-        <button id="insights-run" type="submit" class="btn btn-primary" data-busy-label="Reading…"><span class="btn-label">Analyze</span></button>
+        <button id="insights-run" type="submit" class="btn btn-primary" data-busy-label="Reading…"><span class="btn-label">Read the reports</span></button>
         <button id="insights-example" type="button" class="btn" hx-get="/insights/example"
                 hx-target="#insights-output" hx-swap="innerHTML">Load example</button>
       </div>
       <p id="insights-progress" class="htmx-indicator working"><span class="spin"></span>Reading your reports…</p>
-      <p class="form-note">Files are read on our server for this request only and never stored.
-        Nothing is sent to an AI unless you click Explain with AI.</p>
+      <p class="form-note">Your files are read for this one request and never kept.
+        Nothing goes to an AI unless you press Explain with AI.</p>
     </div>
   </form>
 </div>

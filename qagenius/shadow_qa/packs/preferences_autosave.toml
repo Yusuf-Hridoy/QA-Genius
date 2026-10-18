@@ -9,7 +9,7 @@ exclude = []
 id = "rapid_toggles"
 title = "Rapid toggles end on the last chosen value"
 severity = "medium"
-why = "Auto-save fires a request per click, and the answers come back in whatever order they like."
+why = "Auto-save sends one request per click. The answers come back in any order."
 covered_if = ["rapid", "quickly", "several times", "race", "out of order", "last value", "debounce"]
   [checks.test]
   title = "Toggling a preference five times quickly leaves it on the last value"
@@ -24,7 +24,7 @@ covered_if = ["rapid", "quickly", "several times", "race", "out of order", "last
 id = "save_failure"
 title = "A failed save shows an error and puts the toggle back"
 severity = "medium"
-why = "A toggle that stays on after the save failed tells the user a lie they will act on."
+why = "If the save failed but the switch stays on, the user believes something that is not true."
 covered_if = ["save fails", "failure", "error", "reverts", "rolls back", "offline", "retry"]
   [checks.test]
   title = "A preference whose save fails reverts and says so"
@@ -39,7 +39,7 @@ covered_if = ["save fails", "failure", "error", "reverts", "rolls back", "offlin
 id = "persists"
 title = "The setting survives a reload and appears on another device"
 severity = "medium"
-why = "A preference kept only in the browser looks saved and is gone on the next laptop."
+why = "A setting saved only in this browser looks saved. It is gone on the next computer."
 covered_if = ["persist", "after reload", "another device", "second browser", "stored", "survives"]
   [checks.test]
   title = "A saved preference is still set after a reload and on a second device"
@@ -54,8 +54,9 @@ covered_if = ["persist", "after reload", "another device", "second browser", "st
 id = "theme_no_reload"
 title = "The theme applies without a page reload and reads in both modes"
 severity = "low"
-why = "A theme that needs a reload, or that leaves grey text on a grey card, is the part people see first."
+why = "People see the theme first. Needing a reload, or grey on grey, is the first thing they notice."
 covered_if = ["without reload", "immediately", "contrast", "readable", "light and dark", "both modes"]
+only_if = ["theme", "themes", "dark mode", "light mode", "colour scheme", "color scheme"]
   [checks.test]
   title = "Switching the theme repaints the page at once and every element stays readable"
   category = "Functional"
@@ -73,4 +74,4 @@ likelihood = 4
 detectability = 5
 effect = "The setting the user sees is not the one that was stored, and it flips back on the next page load."
 cause = "Each toggle fires its own request and a slower earlier save lands after a faster later one."
-covered_if = ["out of order", "race", "rapid", "last write", "debounce"]
+covered_if = ["out of order", "race", "race condition", "rapid", "quick succession", "last write", "last value wins", "debounce"]
