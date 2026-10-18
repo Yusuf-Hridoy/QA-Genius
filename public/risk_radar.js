@@ -18,11 +18,21 @@
     }
   }
 
+  /* Set while this desk is the one writing. Saving our own result tells
+   * every card the run moved on, and that echo used to start a second
+   * recheck - which relabelled a hand-adjusted score as a code recheck. */
+  var writingOurOwn = false;
+
   /* One writer for the whole app: run_state.js stamps the fingerprints and
    * tells every card and the sidebar that the run moved on. */
   function writeRun(run) {
     if (typeof window !== "undefined" && window.QAGRun) {
-      window.QAGRun.write(run);
+      writingOurOwn = true;
+      try {
+        window.QAGRun.write(run);
+      } finally {
+        writingOurOwn = false;
+      }
       return;
     }
     try {
@@ -342,18 +352,23 @@
      * page shows what you had (dimmed, when it is out of date) and leaves the
      * decision to rebuild to you. */
     if (status.state !== "fresh" || !status.auto) {
-      rescore(analysis, null, true);
+      rescore(analysis, null, true, "code");
       return;
     }
-    rescore(analysis, function () {
-      var latest = window.QAGRun.read();
-      latest.risk_analysis_rechecked = {
-        at: new Date().toISOString(),
-        cases: currentCases(latest).length
-      };
-      window.QAGRun.markBuilt(latest, "risk_analysis");
-      window.QAGRun.write(latest);
-    });
+    rescore(
+      analysis,
+      function () {
+        var latest = window.QAGRun.read();
+        latest.risk_analysis_rechecked = {
+          at: new Date().toISOString(),
+          cases: currentCases(latest).length
+        };
+        window.QAGRun.markBuilt(latest, "risk_analysis");
+        writeRun(latest);
+      },
+      false,
+      "code"
+    );
   }
 
   /* A loaded sample is kept so the page keeps working, but flagged so the
@@ -400,12 +415,14 @@
     if (window.QAGRun) window.QAGRun.announceResult();
   }
 
-  function rescore(analysis, done, quiet) {
+  /* `by` is what the footer will say: "code" for the automatic recheck,
+   * "scores" when someone moved a score themselves. */
+  function rescore(analysis, done, quiet, by) {
     var body = rescoreBody(analysis);
     if (!body.analysis.failure_modes || !body.analysis.failure_modes.length) {
       return;
     }
-    fetch("/risks/rescore", {
+    fetch("/risks/rescore?by=" + (by || "scores"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body)
@@ -572,8 +589,12 @@
     autoRecheck();
   });
 
-  /* Another tab, or step 3 in this one, moved the run on. */
+  /* Another tab, or step 3 in this one, moved the run on. Our own saves
+   * are not news, so they do not start a recheck. */
   if (window.QAGRun) {
-    window.addEventListener(window.QAGRun.CHANGED_EVENT, autoRecheck);
+    window.addEventListener(window.QAGRun.CHANGED_EVENT, function () {
+      if (writingOurOwn) return;
+      autoRecheck();
+    });
   }
 })();

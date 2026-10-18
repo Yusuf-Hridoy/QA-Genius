@@ -71,3 +71,9 @@
 <div id="matrix-output">
 {% include "_test_matrix_result.html" %}
 </div>
+
+{# Said once, here: an edit re-renders only #matrix-output, so this stays
+   put and never doubles up. #}
+<p class="form-note">{% if from_ai %}Factors suggested by AI from your story;
+  runs and coverage computed by code.{% else %}Standard factors; runs and
+  coverage computed by code.{% endif %}</p>

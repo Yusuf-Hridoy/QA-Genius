@@ -1,3 +1,4 @@
+{% import "_confidence.html" as conf %}
 {% if is_example %}
 {% with caption = "Add a key and press Check story to run this on your own story." %}
 {% include "_example_flag.html" %}
@@ -13,7 +14,7 @@
     <span class="score-of">/ 100</span>
   </div>
   <div>
-    <span class="pill {{ score_tone }}">{{ result.clarity_label }}</span>
+    <span class="pill {{ score_tone }}">{{ (result.clarity_label | confidence).text }}</span>
     <h2>Clarity score {{ clarity_score }}</h2>
     <p>{{ invest_passes }} of 6 INVEST dimensions pass and
       {{ result.vague_phrases | length }} vague
@@ -51,7 +52,7 @@
     <pre class="code" id="ac-block">{{ acceptance_criteria }}</pre>
     <script type="application/json" id="story-criteria">{{ criteria_list | tojson }}</script>
     {# Ship check reads the whole analysis back out of the run. #}
-    <script type="application/json" id="story-analysis-data">{{ result.model_dump() | tojson }}</script>
+    <script type="application/json" id="story-analysis-data">{{ analysis_data | tojson }}</script>
     <div class="row">
       <button type="button" class="btn btn-primary" id="use-criteria">Use these criteria
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button>
@@ -82,7 +83,7 @@
     {% endfor %}
     </tbody>
   </table>
-  <p class="muted">{{ result.invest_overall }}</p>
+  <p class="muted">{{ conf.said(result.invest_overall) }}</p>
 </div>
 
 <div class="card card-section">
@@ -95,8 +96,8 @@
     <tr>
       <td><code class="mono">{{ vp.phrase }}</code></td>
       <td><span class="pill {{ 'bad' if vp.severity == 'High' else ('warn' if vp.severity == 'Medium' else 'info') }}">{{ vp.severity }}</span></td>
-      <td>{{ vp.suggestion }}</td>
-      <td>{{ vp.replacement }}</td>
+      <td>{{ conf.said(vp.suggestion) }}</td>
+      <td>{{ conf.said(vp.replacement) }}</td>
     </tr>
     {% endfor %}
     </tbody>
@@ -110,30 +111,31 @@
   <h2>Suggested rewrites</h2>
   <ul>
     {% for rewrite in result.suggested_rewrites %}
-    <li>{{ rewrite }}</li>
+    <li>{{ conf.said(rewrite) }}</li>
     {% endfor %}
   </ul>
 </div>
 
-{% if result.missing_elements or result.risks or result.recommended_split %}
+{% if missing_elements or result.risks or result.recommended_split %}
 <div class="card card-section">
   <h2>What is still missing</h2>
-  {% if result.missing_elements %}
+  {% if missing_elements %}
   <h3>Missing elements</h3>
   <ul>
-    {% for item in result.missing_elements %}<li>{{ item }}</li>{% endfor %}
+    {# Criteria have been drafted, so lines about them are already answered. #}
+    {% for item in missing_elements %}<li>{{ conf.said(item) }}</li>{% endfor %}
   </ul>
   {% endif %}
   {% if result.risks %}
   <h3>Risks if built as-is</h3>
   <ul>
-    {% for risk in result.risks %}<li>{{ risk }}</li>{% endfor %}
+    {% for risk in result.risks %}<li>{{ conf.said(risk) }}</li>{% endfor %}
   </ul>
   {% endif %}
   {% if result.recommended_split %}
   <h3>Recommended split</h3>
   <ul>
-    {% for split in result.recommended_split %}<li>{{ split }}</li>{% endfor %}
+    {% for split in result.recommended_split %}<li>{{ conf.said(split) }}</li>{% endfor %}
   </ul>
   {% endif %}
 </div>

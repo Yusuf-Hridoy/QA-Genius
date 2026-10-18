@@ -74,9 +74,58 @@ def test_the_page_renders() -> None:
     assert "/test_matrix.js" in response.text
 
 
-def test_the_page_promises_code_computes_the_runs() -> None:
+def test_the_page_leaves_the_footer_to_the_editor() -> None:
+    """Said once, where the source is known - not twice on the shell."""
     body_text = client.get("/requirements/matrix").text
-    assert "computed by code" in body_text
+    assert "computed by code" not in body_text
+
+
+def test_the_footer_appears_once_and_says_who_chose_the_factors(monkeypatch) -> None:
+    monkeypatch.setattr(llm, "generate_json", _fake())
+    text = client.post(
+        "/requirements/matrix/suggest", data=FORM, headers=KEYS_HEADER
+    ).text
+    assert text.count("computed by code") == 1
+    assert "Factors suggested by AI from your story" in text
+    assert "Standard factors" not in text
+
+
+def test_without_a_key_the_footer_does_not_claim_the_ai_chose(monkeypatch) -> None:
+    monkeypatch.setattr(llm, "generate_json", _never)
+    text = client.post("/requirements/matrix/suggest", data=FORM).text
+    assert text.count("computed by code") == 1
+    assert "Standard factors" in text
+    assert "suggested by AI" not in text
+
+
+def test_the_keys_header_reaches_the_ai_path(monkeypatch) -> None:
+    """The bug: the browser never sent the header, so the key was unused."""
+    seen: dict[str, object] = {}
+
+    def _generate(keys, system, user, schema):
+        seen["keys"] = keys
+        return SUGGESTED, 0, []
+
+    monkeypatch.setattr(llm, "generate_json", _generate)
+    response = client.post(
+        "/requirements/matrix/suggest", data=FORM, headers=KEYS_HEADER
+    )
+    assert response.status_code == 200
+    assert [one["provider"] for one in seen["keys"]] == ["gemini"]
+    assert seen["keys"][0]["key"] == KEY
+    assert "Factors suggested by AI from your story" in response.text
+
+
+def test_reopening_keeps_the_footer_the_factors_were_born_with(monkeypatch) -> None:
+    """Saved factors come back with their provenance, so the words hold."""
+    monkeypatch.setattr(llm, "generate_json", _never)
+    saved = dict(STANDARD_BODY)
+    saved["from_ai"] = True
+    text = client.post(
+        "/requirements/matrix/suggest",
+        data={**FORM, "saved_json": json.dumps(saved)},
+    ).text
+    assert "Factors suggested by AI from your story" in text
 
 
 # ------------------------------------------------------------------ suggest

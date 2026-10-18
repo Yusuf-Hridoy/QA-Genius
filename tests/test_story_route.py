@@ -200,3 +200,69 @@ def test_story_criteria_json_is_escaped_not_safe() -> None:
     body = client.get("/requirements/story/example").text
     block = body.split('id="story-criteria">')[1].split("</script>")[0]
     assert "</script" not in block
+
+
+# -------------------------------------------- confidence tags and Missing
+
+
+def _tagged_result() -> AmbiguityAnalysis:
+    """The sample, with the tags a real model kept appending."""
+    data = json.loads(json.dumps(SAMPLE["result"]))
+    data["missing_elements"] = [
+        "No acceptance criteria defined [HIGH CONFIDENCE]",
+        "No rate limit on sign-in attempts [MEDIUM CONFIDENCE]",
+    ]
+    data["risks"] = ["Developers will guess at the limit [LOW CONFIDENCE]"]
+    data["suggested_rewrites"] = ["Name the lockout threshold [high confidence]"]
+    return AmbiguityAnalysis.model_validate(data)
+
+
+def _missing_card(body: str) -> str:
+    """Just the visible Missing elements list.
+
+    The whole analysis is also embedded as JSON for Ship check, which keeps
+    every line and applies its own rule, so the page has to be read on its own.
+    """
+    after = body.split("<h3>Missing elements</h3>")
+    return "" if len(after) == 1 else after[1].split("</ul>")[0]
+
+
+def _run_with(result: AmbiguityAnalysis, monkeypatch) -> str:
+    monkeypatch.setattr(
+        llm, "generate_json", lambda keys, system, user, schema: (result, 0, [])
+    )
+    response = client.post(
+        "/requirements/story/run", data=FORM, headers=KEYS_HEADER
+    )
+    assert response.status_code == 200
+    return response.text
+
+
+def test_confidence_tags_leave_the_sentences(monkeypatch) -> None:
+    body = _run_with(_tagged_result(), monkeypatch)
+    assert "CONFIDENCE]" not in body.upper()
+    assert "No rate limit on sign-in attempts" in body
+    assert "Developers will guess at the limit" in body
+
+
+def test_the_confidence_level_becomes_a_pill(monkeypatch) -> None:
+    body = _run_with(_tagged_result(), monkeypatch)
+    assert "Medium confidence</span>" in body
+    assert "Low confidence</span>" in body
+    assert "confidence-pill" in body
+
+
+def test_criteria_lines_leave_the_missing_list(monkeypatch) -> None:
+    """Criteria were drafted, so "no acceptance criteria" is answered."""
+    result = _tagged_result()
+    assert result.generated_acceptance_criteria  # the sample drafts some
+    shown = _missing_card(_run_with(result, monkeypatch))
+    assert "No acceptance criteria defined" not in shown
+    assert "No rate limit on sign-in attempts" in shown
+
+
+def test_without_drafted_criteria_the_missing_line_stays(monkeypatch) -> None:
+    data = json.loads(_tagged_result().model_dump_json())
+    data["generated_acceptance_criteria"] = []
+    body = _run_with(AmbiguityAnalysis.model_validate(data), monkeypatch)
+    assert "No acceptance criteria defined" in _missing_card(body)

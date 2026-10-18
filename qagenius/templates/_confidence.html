@@ -1,0 +1,6 @@
+{# One place that knows what to do with a model's "[HIGH CONFIDENCE]" tag:
+   the words stay in the sentence, the level becomes a small neutral pill. #}
+{% macro said(value) %}
+{%- set part = value | confidence -%}
+{{ part.text }}{% if part.level %} <span class="pill neutral plain small confidence-pill">{{ part.level }} confidence</span>{% endif %}
+{%- endmacro %}

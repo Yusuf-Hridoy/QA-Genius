@@ -5,7 +5,7 @@ import logging
 from dataclasses import replace
 from pathlib import Path
 
-from fastapi import FastAPI, Form, HTTPException, Request
+from fastapi import FastAPI, Form, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -73,6 +73,11 @@ from qagenius.prompts import (
 )
 from qagenius.providers import PROVIDERS, get_provider, pick_default
 from qagenius.report_parsers import ReportError, RunReport, parse_report
+from qagenius.story_text import (
+    split_confidence,
+    strip_confidence_deep,
+    without_criteria_lines,
+)
 from qagenius.ship_check import (
     CHECK_IDS,
     MAX_DETAILS,
@@ -164,6 +169,9 @@ app = FastAPI(title="QA-Genius v2")
 templates = Jinja2Templates(directory=BASE_DIR / "templates")
 # Drawer + key panel live in base.html, rendered by every page.
 templates.env.globals["providers"] = PROVIDERS
+# Every template that shows model text uses this to take the confidence
+# tag off the end of a line and show it as a pill instead.
+templates.env.filters["confidence"] = split_confidence
 
 
 @app.get("/health")
@@ -426,6 +434,14 @@ def _story_result_context(
         ),
         "acceptance_criteria": "\n\n".join(result.generated_acceptance_criteria),
         "criteria_list": result.generated_acceptance_criteria,
+        # Ship check and Risk radar read this back and have nowhere to put
+        # a confidence pill, so the tags come off before it is stored.
+        "analysis_data": strip_confidence_deep(result.model_dump()),
+        # Criteria were drafted, so "no acceptance criteria" is no longer
+        # true. Ship check drops the same lines.
+        "missing_elements": without_criteria_lines(
+            result.missing_elements, bool(result.generated_acceptance_criteria)
+        ),
         "notes": notes,
         "provider_name": provider_name,
     }
@@ -2027,6 +2043,7 @@ def _risk_result_context(
     notes: list[str],
     provider_name: str,
     is_example: bool = False,
+    answered_line: str = "",
 ) -> dict:
     """Every number here is computed from the analysis, never read back from it."""
     report = score_risks(analysis, cases)
@@ -2050,6 +2067,7 @@ def _risk_result_context(
         "is_example": is_example,
         "notes": notes,
         "provider_name": provider_name,
+        "answered_line": answered_line,
     }
 
 
@@ -2149,16 +2167,28 @@ def risks_run(
     )
 
 
+RECHECKED_BY_CODE = "Rechecked by code — no AI."
+ADJUSTED_SCORES = "Updated with your adjusted scores."
+
+
 @app.post("/risks/rescore", response_class=HTMLResponse)
-def risks_rescore(request: Request, payload: RiskBody) -> HTMLResponse:
-    """Re-draw the card after someone adjusted a score. No AI call."""
+def risks_rescore(
+    request: Request, payload: RiskBody, by: str = Query(default="scores")
+) -> HTMLResponse:
+    """Re-draw the card. No AI call either way, but say which way it was.
+
+    `by=code` is the automatic recheck when new test cases arrive;
+    anything else is someone having moved a score by hand.
+    """
+    automatic = by == "code"
     return _risk_result(
         request,
         analysis=payload.analysis,
         cases=payload.cases,
         criteria=number_criteria(payload.criteria),
         notes=[],
-        provider_name="your adjusted scores",
+        provider_name="code" if automatic else "your adjusted scores",
+        answered_line=RECHECKED_BY_CODE if automatic else ADJUSTED_SCORES,
     )
 
 
@@ -2467,6 +2497,9 @@ class MatrixBody(BaseModel):
     factors: list[MatrixFactorBody] = []
     rules: list[MatrixRuleBody] = []
     pinned: list[dict[str, str]] = []
+    # Whether a model proposed these factors, so the footer stays honest
+    # when the page is reopened from what the browser saved.
+    from_ai: bool = False
 
     @field_validator("factors")
     @classmethod
@@ -2506,7 +2539,7 @@ class MatrixBody(BaseModel):
         return factors, rules
 
 
-def _saved_matrix(raw: str) -> tuple[list[Factor], list[Rule]] | None:
+def _saved_matrix(raw: str) -> tuple[list[Factor], list[Rule], bool] | None:
     """The factors the browser already has, or None to suggest fresh ones."""
     if not (raw or '').strip():
         return None
@@ -2517,7 +2550,7 @@ def _saved_matrix(raw: str) -> tuple[list[Factor], list[Rule]] | None:
     factors, rules = body.as_engine()
     if validate(factors, rules):
         return None
-    return factors, rules
+    return factors, rules, body.from_ai
 
 
 def _matrix_context(
@@ -2526,6 +2559,7 @@ def _matrix_context(
     matrix,
     notes: list[str],
     reasons: dict[str, str] | None = None,
+    from_ai: bool = False,
 ) -> dict:
     manual = manual_only_count(matrix)
     return {
@@ -2536,6 +2570,7 @@ def _matrix_context(
         "reasons": reasons or {},
         "manual_only": manual,
         "automated": len(matrix.rows) - manual,
+        "from_ai": from_ai,
         "run_ids": [f"M{index:02d}" for index in range(1, len(matrix.rows) + 1)],
         "row_is_manual": [
             bool(project.get("manual_only")) for project in projects(matrix)
@@ -2563,6 +2598,7 @@ def _matrix_context(
             "valid_pairs": matrix.valid_pairs,
             "covered_pairs": matrix.covered_pairs,
             "manual_only": manual,
+            "from_ai": from_ai,
         },
     }
 
@@ -2608,17 +2644,18 @@ def matrix_suggest(
     # factors they edited by hand.
     saved = _saved_matrix(saved_json)
     if saved is not None:
-        factors, rules = saved
+        factors, rules, from_ai = saved
         matrix = build_matrix(factors, rules)
         return templates.TemplateResponse(
             request,
             "_test_matrix_editor.html",
-            _matrix_context(factors, rules, matrix, []),
+            _matrix_context(factors, rules, matrix, [], from_ai=from_ai),
         )
 
     keys = _request_keys(request)
     reasons: dict[str, str] = {}
     notes: list[str] = []
+    from_ai = False
     if not keys or not story:
         factors, rules = standard_set()
         notes.append(MATRIX_NO_KEY_NOTE)
@@ -2638,6 +2675,7 @@ def matrix_suggest(
             notes.append(MATRIX_NO_KEY_NOTE)
         else:
             factors, rules, guard_notes = clean_proposal(result)
+            from_ai = True
             reasons = reasons_for(result)
             notes = call_notes + guard_notes
 
@@ -2645,7 +2683,7 @@ def matrix_suggest(
     return templates.TemplateResponse(
         request,
         "_test_matrix_editor.html",
-        _matrix_context(factors, rules, matrix, notes, reasons),
+        _matrix_context(factors, rules, matrix, notes, reasons, from_ai),
     )
 
 

@@ -342,3 +342,35 @@ def test_a_crowded_cell_keeps_three_ids_and_counts_the_rest(monkeypatch) -> None
     # Nothing is lost: the full list stays in the title and in data-ids.
     assert "R1,R2,R3,R4,R5" in cell
     assert "R4, R5" in cell
+
+
+# ---------- the footer says which kind of recheck this was ----------
+
+
+def test_an_automatic_recheck_says_code_did_it(monkeypatch) -> None:
+    monkeypatch.setattr(llm, "generate_json", _never)
+    body = client.post("/risks/rescore?by=code", json=_body(_analysis(mode("R1")))).text
+    assert "Rechecked by code — no AI." in body
+    assert "adjusted scores" not in body
+
+
+def test_an_edited_score_says_the_scores_were_yours(monkeypatch) -> None:
+    monkeypatch.setattr(llm, "generate_json", _never)
+    body = client.post(
+        "/risks/rescore?by=scores", json=_body(_analysis(mode("R1")))
+    ).text
+    assert "Updated with your adjusted scores." in body
+    assert "no AI" not in body
+
+
+def test_an_unlabelled_rescore_is_treated_as_a_score_edit(monkeypatch) -> None:
+    """Older markup, or a reload mid-edit, must not claim code did the work."""
+    monkeypatch.setattr(llm, "generate_json", _never)
+    body = client.post("/risks/rescore", json=_body(_analysis(mode("R1")))).text
+    assert "Updated with your adjusted scores." in body
+
+
+def test_a_real_analysis_still_names_the_provider() -> None:
+    body = client.get("/risks/example").text
+    assert "Answered by saved example." in body
+    assert "Rechecked by code" not in body

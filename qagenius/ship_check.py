@@ -18,6 +18,7 @@ from qagenius.models import (
     TestCaseList,
 )
 from qagenius.risk_radar import score_risks
+from qagenius.story_text import without_criteria_lines
 from qagenius.test_case_depth import compute_depth
 from qagenius.test_cases import Criterion, compute_coverage, number_criteria
 from qagenius.test_run_metrics import Insights
@@ -215,6 +216,8 @@ def _clarity(inputs: ShipInputs, criteria: list[Criterion]) -> ShipCheckItem:
         summary += f", {_plural(len(vague), 'vague phrase')}"
     details = [f"{phrase.phrase} — {phrase.severity}" for phrase in vague]
     missing = analysis.missing_elements
+    # The story page hides the same lines, so the two desks agree.
+    missing = without_criteria_lines(missing, bool(criteria))
 
     # A real run scored a story 42 and refused to ship it, while four concrete
     # criteria (200 ms, 768 px, focus rings) already pinned the behaviour down.
@@ -231,9 +234,6 @@ def _clarity(inputs: ShipInputs, criteria: list[Criterion]) -> ShipCheckItem:
                 else f"{count} acceptance criteria pin it down"
             )
             summary = f"Clarity {clarity} — vague story, but {pinned}"
-        missing = [
-            item for item in missing if "acceptance criteria" not in str(item).lower()
-        ]
 
     details += [f"Missing: {item}" for item in missing]
     return _item("clarity", status, summary, details)

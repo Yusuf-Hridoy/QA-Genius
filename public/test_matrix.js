@@ -110,6 +110,17 @@
 
   /* ---------- talking to the server ---------- */
 
+  /* Suggesting factors is an AI call, so it needs the browser's keys the
+   * same way every HTMX request gets them. Without this the server saw no
+   * key and quietly handed back the standard factors. */
+  function keyHeader(headers) {
+    var into = headers || {};
+    if (window.QAG && window.QAG.headerKeys) {
+      into["X-QAG-Keys"] = JSON.stringify(window.QAG.headerKeys());
+    }
+    return into;
+  }
+
   function post(path, payload) {
     return fetch(path, {
       method: "POST",
@@ -191,7 +202,11 @@
     } else {
       pinned = [];
     }
-    fetch("/requirements/matrix/suggest", { method: "POST", body: form })
+    fetch("/requirements/matrix/suggest", {
+      method: "POST",
+      headers: keyHeader(),
+      body: form
+    })
       .then(function (response) {
         return response.text();
       })
