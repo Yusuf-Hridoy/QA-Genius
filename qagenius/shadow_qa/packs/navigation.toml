@@ -1,7 +1,8 @@
 id = "navigation"
 name = "Navigation"
 short = "Navigation"
-triggers = ["navigation", "navigate", "navbar", "nav bar", "menu", "menus", "sidebar", "route", "routes", "routing", "deep link", "tab bar", "breadcrumb", "breadcrumbs"]
+triggers = ["navigation", "navigate", "navbar", "nav bar", "sidebar", "breadcrumb", "breadcrumbs", "deep link", "tab bar", "routing"]
+weak_triggers = ["menu", "menus", "route", "routes"]
 exclude = []
 
 [[checks]]

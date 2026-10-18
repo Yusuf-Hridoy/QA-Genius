@@ -1,7 +1,8 @@
 id = "search"
 name = "Search and filter"
 short = "Search"
-triggers = ["search", "searches", "searching", "filter", "filters", "filtering", "find", "query", "queries", "lookup", "autocomplete"]
+triggers = ["search", "searches", "searching", "filter", "filters", "filtering", "query", "queries", "autocomplete", "lookup"]
+weak_triggers = ["find", "results"]
 exclude = []
 
 [[checks]]

@@ -388,3 +388,95 @@ def test_every_reviewer_is_under_fifty_milliseconds_on_the_profile_story():
         ("review_automation", automation_ms),
     ):
         assert elapsed < BUDGET_MS, f"{name} took {elapsed:.1f} ms"
+
+
+# ── the story outranks the criteria ───────────────────────────────────────────
+
+UPLOAD_STORY = "As a user, I want to upload an avatar so that my profile looks right."
+UPLOAD_CRITERIA = number_criteria(
+    ["The account locks after 5 failed sign-in attempts", "The avatar must be under 5MB"]
+)
+
+
+def _pack_of(one) -> str:
+    return next(tag[5:] for tag in one.tags if tag.startswith("pack:"))
+
+
+def test_a_pack_the_story_named_is_added_before_one_only_a_criterion_named():
+    review = review_test_cases(UPLOAD_STORY, UPLOAD_CRITERIA, suite(case()))
+    packs = [_pack_of(one) for one in review.added]
+    assert "file_upload" in packs
+    # login and rate_limiting live in AC-1 only, so they queue behind the
+    # feature the story is actually about.
+    assert packs.index("file_upload") < min(
+        [packs.index(name) for name in ("login", "rate_limiting") if name in packs]
+        or [len(packs)]
+    )
+
+
+def test_the_checklist_asks_for_the_story_s_own_packs_first():
+    _, ids = checklist_block(UPLOAD_STORY, UPLOAD_CRITERIA)
+    upload = [index for index, one in enumerate(ids) if one.startswith("file_upload.")]
+    login = [index for index, one in enumerate(ids) if one.startswith("login.")]
+    assert upload and login
+    assert min(upload) < min(login)
+
+
+def test_severity_still_wins_over_where_the_pack_was_found():
+    _, ids = checklist_block(UPLOAD_STORY, UPLOAD_CRITERIA)
+    from qagenius.shadow_qa.packs import SEVERITY_RANK, check_by_id
+
+    ranks = [
+        SEVERITY_RANK[check_by_id(one).severity]
+        for one in ids
+        if not one.startswith("boundary:")
+    ]
+    assert ranks == sorted(ranks)
+
+
+# ── brittle selectors ─────────────────────────────────────────────────────────
+
+
+def _selector_messages(code: str) -> str:
+    return " ".join(
+        one.message for one in review_automation(script(), [_file("a.ts", code)])
+    )
+
+
+def test_a_five_element_tag_chain_is_flagged():
+    code = "await page.locator('div > ul > li > a > span').click();"
+    assert "levels deep" in _selector_messages(code)
+
+
+def test_four_descendant_spaces_are_four_combinators():
+    code = "await page.locator('div ul li a span').click();"
+    assert "levels deep" in _selector_messages(code)
+
+
+def test_sibling_combinators_count_too():
+    code = "await page.locator('.a + .b ~ .c > .d .e').click();"
+    assert "levels deep" in _selector_messages(code)
+
+
+def test_three_combinators_are_not_flagged():
+    code = "await page.locator('.app > .main > .card > .btn').click();"
+    assert "levels deep" not in _selector_messages(code)
+
+
+def test_a_sentence_in_quotes_is_not_a_selector():
+    code = (
+        "test('the shopper signs in and sees the basket', async () => {\n"
+        "  await expect(page).toHaveTitle('Account locked. Try again in 15 minutes.');\n"
+        "});\n"
+    )
+    assert "levels deep" not in _selector_messages(code)
+
+
+def test_a_role_selector_is_never_called_brittle():
+    code = (
+        "test('TC-001', async ({ page }) => {\n"
+        "  await page.getByRole('button', { name: 'Sign in and continue now' }).click();\n"
+        "  await expect(page.getByLabel('Email or user name goes here')).toBeVisible();\n"
+        "});\n"
+    )
+    assert "levels deep" not in _selector_messages(code)

@@ -7,9 +7,13 @@ found inside `USER@EXAMPLE.COM`.
 """
 
 import re
+from dataclasses import dataclass
 from functools import lru_cache
 
 from qagenius.shadow_qa.packs import Pack, load_packs
+
+# One weak trigger is a coincidence; two different ones are a feature.
+MIN_WEAK = 2
 
 
 @lru_cache(maxsize=4096)
@@ -45,20 +49,45 @@ def story_text(story: str, criteria) -> str:
     return "\n".join(parts)
 
 
-def detect_packs(text: str) -> list[tuple[Pack, list[str]]]:
-    """The active packs and the trigger words that activated each, in pack order.
+@dataclass(frozen=True)
+class PackHit:
+    pack: Pack
+    triggers: list[str]  # the words that matched, strong ones first
+    in_story: bool  # at least one of them is in the story, not only a criterion
 
-    A pack is active when any trigger matches and no excluded word does.
+
+def detect_hits(text: str, story: str | None = None) -> list[PackHit]:
+    """The active packs, in pack order, with the words that activated each.
+
+    A pack activates on one strong trigger, on two different weak triggers, or
+    on a single weak trigger that appears in the story itself. A word like
+    "email" or "list" turns up in almost every set of acceptance criteria, so
+    on its own and buried in a criterion it says nothing; said in the story, or
+    said twice, it is the user telling you what the feature is.
     """
-    found: list[tuple[Pack, list[str]]] = []
+    whole = text or ""
+    # A bare call has no criteria to tell apart, so all of it counts as story.
+    spoken = whole if story is None else (story or "")
+    found: list[PackHit] = []
     for pack in load_packs():
-        if any(mentions(text, word) for word in pack.exclude):
+        if any(mentions(whole, word) for word in pack.exclude):
             continue
-        hits = matching(text, pack.triggers)
-        if hits:
-            found.append((pack, hits))
+        strong = matching(whole, pack.triggers)
+        weak = matching(whole, pack.weak_triggers)
+        if not strong and not weak:
+            continue
+        hits = strong + weak
+        in_story = any(mentions(spoken, word) for word in hits)
+        weak_in_story = not strong and any(mentions(spoken, word) for word in weak)
+        if strong or len(weak) >= MIN_WEAK or weak_in_story:
+            found.append(PackHit(pack=pack, triggers=hits, in_story=in_story))
     return found
 
 
-def active_packs(text: str) -> list[Pack]:
-    return [pack for pack, _ in detect_packs(text)]
+def detect_packs(text: str, story: str | None = None) -> list[tuple[Pack, list[str]]]:
+    """The active packs and the trigger words that activated each, in pack order."""
+    return [(hit.pack, hit.triggers) for hit in detect_hits(text, story)]
+
+
+def active_packs(text: str, story: str | None = None) -> list[Pack]:
+    return [hit.pack for hit in detect_hits(text, story)]

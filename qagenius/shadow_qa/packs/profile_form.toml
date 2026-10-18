@@ -1,7 +1,8 @@
 id = "profile_form"
 name = "Profile form"
 short = "Profile"
-triggers = ["profile", "profiles", "full name", "display name", "bio", "phone", "phone number", "personal information", "personal details", "edit details"]
+triggers = ["profile", "profiles", "full name", "display name", "bio", "phone number", "personal information", "personal details", "edit details"]
+weak_triggers = ["phone", "name field", "about me"]
 exclude = []
 
 [[checks]]

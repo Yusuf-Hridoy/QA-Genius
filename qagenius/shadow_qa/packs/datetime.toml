@@ -1,7 +1,7 @@
 id = "datetime"
 name = "Dates, times and timezones"
 short = "Dates"
-triggers = ["timezone", "timezones", "time zone", "time zones", "date", "dates", "schedule", "scheduled", "deadline", "deadlines", "expiry", "expires", "minute", "minutes", "hour", "hours", "utc"]
+triggers = ["timezone", "timezones", "time zone", "time zones", "utc", "daylight saving", "daylight savings", "dst", "calendar", "schedule", "scheduled", "deadline", "deadlines", "due date", "expiry date"]
 exclude = []
 
 [[checks]]

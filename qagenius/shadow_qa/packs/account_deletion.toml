@@ -1,7 +1,8 @@
 id = "account_deletion"
 name = "Account deletion"
 short = "Deletion"
-triggers = ["delete account", "deletes account", "deleting the account", "delete my account", "account deletion", "deletion", "deleted", "gdpr", "erase", "erasure", "anonymise", "anonymize", "anonymised", "anonymized", "close my account"]
+triggers = ["delete account", "deletes account", "deleting the account", "delete my account", "account deletion", "deletion", "gdpr", "erase", "erasure", "anonymise", "anonymize", "anonymised", "anonymized", "close my account"]
+weak_triggers = ["deleted", "delete", "remove my data"]
 exclude = []
 
 [[checks]]

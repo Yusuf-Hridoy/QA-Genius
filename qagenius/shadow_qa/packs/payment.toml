@@ -1,7 +1,8 @@
 id = "payment"
 name = "Payment and checkout"
 short = "Payment"
-triggers = ["payment", "payments", "checkout", "card", "cards", "billing", "invoice", "invoices", "refund", "refunds", "subscription", "pay"]
+triggers = ["payment", "payments", "checkout", "billing", "invoice", "invoices", "refund", "refunds", "subscription", "pay", "3-d secure", "3ds"]
+weak_triggers = ["card", "cards", "charge", "charged"]
 exclude = []
 
 [[checks]]

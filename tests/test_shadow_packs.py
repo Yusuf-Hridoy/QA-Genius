@@ -182,3 +182,72 @@ covered_if = ["something"]
 """
     message = _bad(tmp_path, body)
     assert "severity" in message and "1-5" in message
+
+
+# ── strong and weak triggers ──────────────────────────────────────────────────
+
+
+def test_a_pack_may_declare_weak_triggers(tmp_path):
+    body = GOOD_PACK.replace(
+        'triggers = ["demo feature"]',
+        'triggers = ["demo feature"]\nweak_triggers = ["demo", "thing"]',
+    )
+    pack = read_pack(_write(tmp_path, body))
+    assert pack.triggers == ("demo feature",)
+    assert pack.weak_triggers == ("demo", "thing")
+
+
+def test_weak_triggers_default_to_none(tmp_path):
+    assert read_pack(_write(tmp_path, GOOD_PACK)).weak_triggers == ()
+
+
+def test_a_pack_with_only_weak_triggers_is_allowed(tmp_path):
+    body = GOOD_PACK.replace(
+        'triggers = ["demo feature"]', 'weak_triggers = ["demo", "thing"]'
+    )
+    pack = read_pack(_write(tmp_path, body))
+    assert pack.triggers == () and len(pack.weak_triggers) == 2
+
+
+def test_a_pack_with_no_trigger_at_all_names_the_file(tmp_path):
+    message = _bad(tmp_path, GOOD_PACK.replace('triggers = ["demo feature"]', ""))
+    assert "trigger" in message
+
+
+def test_a_word_cannot_be_both_strong_and_weak(tmp_path):
+    body = GOOD_PACK.replace(
+        'triggers = ["demo feature"]',
+        'triggers = ["demo feature"]\nweak_triggers = ["Demo Feature"]',
+    )
+    message = _bad(tmp_path, body)
+    assert "both a trigger and a weak_trigger" in message
+
+
+def test_the_over_common_words_are_weak_everywhere():
+    """The words half the stories in the world contain must never be strong."""
+    too_common = {
+        "email", "emails", "list", "lists", "page", "link", "links", "file",
+        "files", "image", "images", "card", "cards", "device", "devices",
+        "settings", "admin", "role", "roles", "find", "table", "token",
+    }
+    for pack in load_packs():
+        strong = {word.lower() for word in pack.triggers}
+        assert not (strong & too_common), f"{pack.id}: {sorted(strong & too_common)}"
+
+
+def test_durations_are_not_date_triggers():
+    """Durations belong to the boundary rules; the date pack must leave them alone."""
+    date_pack = next(pack for pack in load_packs() if pack.id == "datetime")
+    words = {one.lower() for one in date_pack.triggers + date_pack.weak_triggers}
+    assert not (words & {"minute", "minutes", "hour", "hours", "date", "dates", "expires"})
+    for expected in ("timezone", "utc", "dst", "calendar", "deadline", "due date"):
+        assert expected in words
+
+
+def test_the_permissions_pack_splits_its_triggers_as_the_brief_says():
+    pack = next(one for one in load_packs() if one.id == "permissions")
+    assert set(pack.triggers) == {
+        "permission", "permissions", "unauthorized", "unauthorised",
+        "forbidden", "access control", "privileges",
+    }
+    assert set(pack.weak_triggers) == {"admin", "admins", "role", "roles"}

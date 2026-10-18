@@ -1,7 +1,8 @@
 id = "preferences_autosave"
 name = "Preferences and auto-save"
 short = "Preferences"
-triggers = ["auto-save", "auto-saves", "auto-saving", "autosave", "autosaves", "autosaving", "auto save", "toggle", "toggles", "toggling", "preference", "preferences", "theme", "themes", "dark mode", "light mode", "settings"]
+triggers = ["auto-save", "auto-saves", "auto-saving", "autosave", "autosaves", "autosaving", "auto save", "toggle", "toggles", "toggling", "preference", "preferences", "dark mode", "light mode"]
+weak_triggers = ["theme", "themes", "settings"]
 exclude = []
 
 [[checks]]

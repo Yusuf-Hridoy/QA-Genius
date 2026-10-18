@@ -17,7 +17,7 @@ from qagenius.models import (
     TestCaseList,
 )
 from qagenius.shadow_qa.boundaries import Boundary, case_text, find_boundaries, missing_values
-from qagenius.shadow_qa.detect import detect_packs, mentions, story_text
+from qagenius.shadow_qa.detect import PackHit, detect_hits, mentions, story_text
 from qagenius.shadow_qa.packs import SEVERITY_RANK, Check, PackRisk
 from qagenius.test_case_diff import STOPWORDS, title_score
 from qagenius.test_case_refine import next_case_id
@@ -79,13 +79,21 @@ class CaseReview:
 # ──────────────────────────────────────────────────────────────────────────────
 
 
-def _ordered_checks(active: list[tuple]) -> list[Check]:
-    """Every active pack's checks, highest severity first, then pack order."""
-    order = {pack.id: index for index, (pack, _) in enumerate(active)}
-    checks = [check for pack, _ in active for check in pack.checks]
+def _ordered_checks(active: list[PackHit]) -> list[Check]:
+    """Every active pack's checks, worst first.
+
+    Severity decides first. Then a pack the story named out loud comes before
+    one found only in a criterion: "upload an avatar" in the story is the
+    feature, "the file name is shown" in AC-7 is a detail of something else.
+    """
+    rank = {
+        hit.pack.id: (0 if hit.in_story else 1, index)
+        for index, hit in enumerate(active)
+    }
+    checks = [check for hit in active for check in hit.pack.checks]
     return sorted(
         checks,
-        key=lambda check: (SEVERITY_RANK[check.severity], order[check.pack_id]),
+        key=lambda check: (SEVERITY_RANK[check.severity], *rank[check.pack_id]),
     )
 
 
@@ -96,7 +104,7 @@ def checklist_block(story: str, criteria: list[Criterion]) -> tuple[str, list[st
     room = MAX_CHECKLIST_LINES - len(boundaries)
     lines: list[str] = []
     ids: list[str] = []
-    for check in _ordered_checks(detect_packs(text)):
+    for check in _ordered_checks(detect_hits(text, story)):
         if len(lines) >= room:
             break
         lines.append(f"- [{check.id}] {check.title}")
@@ -142,24 +150,26 @@ def _jaccard(left: str, right: str) -> float:
     return len(a & b) / len(a | b)
 
 
-def _traceability(subject: str, pack_id: str, criteria: list[Criterion], text: str) -> str:
+def _traceability(
+    subject: str, pack_id: str, criteria: list[Criterion], hits: list[PackHit]
+) -> str:
     """The criterion this case belongs to: most shared words, else the pack's own."""
     if not criteria:
         return ""
     best = max(criteria, key=lambda item: _jaccard(subject, item.text))
     if _jaccard(subject, best.text) > 0:
         return best.id
-    for pack, triggers in detect_packs(text):
-        if pack.id != pack_id:
+    for hit in hits:
+        if hit.pack.id != pack_id:
             continue
         for criterion in criteria:
-            if any(mentions(criterion.text, word) for word in triggers):
+            if any(mentions(criterion.text, word) for word in hit.triggers):
                 return criterion.id
     return criteria[0].id
 
 
 def _case_from_check(
-    check: Check, case_id: str, criteria: list[Criterion], text: str
+    check: Check, case_id: str, criteria: list[Criterion], hits: list[PackHit]
 ) -> TestCase:
     template = check.test
     return TestCase(
@@ -176,7 +186,7 @@ def _case_from_check(
         automation_effort="Medium",
         tags=[PRINCIPAL_TAG, CHECK_TAG + check.id, PACK_TAG + check.pack_id],
         traceability=_traceability(
-            f"{check.title} {check.test.title}", check.pack_id, criteria, text
+            f"{check.title} {check.test.title}", check.pack_id, criteria, hits
         ),
     )
 
@@ -267,12 +277,13 @@ def review_test_cases(
 ) -> CaseReview:
     """What a principal QA would add to the AI's suite, and what is weak in it."""
     text = story_text(story, criteria)
+    hits = detect_hits(text, story)
     cases = list(result.test_cases)
     texts = [case_text(case) for case in cases]
 
     covered: list[str] = []
     gaps: list[tuple[Gap, Check]] = []
-    for check in _ordered_checks(detect_packs(text)):
+    for check in _ordered_checks(hits):
         if _check_covered(check, cases, texts):
             covered.append(check.id)
             continue
@@ -311,7 +322,7 @@ def review_test_cases(
             continue
         case_id = next_case_id(taken)
         taken.append(case_id)
-        added.append(_case_from_check(check, case_id, criteria, text))
+        added.append(_case_from_check(check, case_id, criteria, hits))
     for gap, boundary, missing in boundary_gaps:
         if len(added) >= MAX_ADDED:
             more.append(gap)
@@ -384,9 +395,28 @@ _BRITTLE = (
     (re.compile(r":nth-of-type", re.IGNORECASE), "nth-of-type selector — breaks when the markup changes"),
     (re.compile(r"/html/body", re.IGNORECASE), "absolute XPath — breaks on any layout change"),
 )
-_SELECTOR_LITERAL = re.compile(r"[\"'`]([.#\[][^\"'`\n]{3,160})[\"'`]")
+# Any quoted string could be a selector or could be a sentence, so a literal
+# only counts when every part of it is selector-shaped (see _is_selector).
+_SELECTOR_LITERAL = re.compile(r"[\"'`]([A-Za-z.#\[][^\"'`\n]{3,160})[\"'`]")
+# > + ~ and a plain space are all combinators; four of them is three levels
+# too many to survive a change to the markup.
 _COMBINATOR = re.compile(r"\s*[>+~]\s*|\s+")
 MIN_COMBINATORS = 4
+# A part that carries one of these is unambiguously CSS, not a word.
+_MARKED_PART = re.compile(r"^[A-Za-z][\w-]*(?=[.#\[:])|^[.#\[:]")
+# A bare part is only CSS if it is the name of an element.
+_HTML_TAGS = frozenset(
+    """html body head div span p a ul ol li dl dt dd table thead tbody tfoot tr
+    td th caption form input button label select option optgroup textarea
+    fieldset legend h1 h2 h3 h4 h5 h6 img picture source figure figcaption
+    section article nav header footer main aside svg path g rect circle iframe
+    video audio canvas pre code strong em small b i u br hr details summary
+    dialog template slot menu output progress meter time mark""".split()
+)
+_SIMPLE_PART = re.compile(
+    r"^(?:[A-Za-z][\w-]*)?"  # optional element name
+    r"(?:[.#][\w-]+|\[[^\]\s]*\]|::?[\w-]+(?:\([^)]*\))?)*$"
+)
 
 PRINCIPAL_PREFIX = "Principal QA: "
 
@@ -455,6 +485,23 @@ def _secret_findings(file: ProjectFile) -> list[Finding]:
     return findings
 
 
+def _is_selector(parts: list[str]) -> bool:
+    """Is this chain CSS, or is it an English sentence in quotes?
+
+    Every part has to be selector-shaped, and each one has to either carry a
+    class, id, attribute or pseudo marker or be the name of an HTML element.
+    Five ordinary words in a row never pass.
+    """
+    for part in parts:
+        if not _SIMPLE_PART.match(part):
+            return False
+        if _MARKED_PART.search(part):
+            continue
+        if part.lower() not in _HTML_TAGS:
+            return False
+    return True
+
+
 def _selector_findings(file: ProjectFile) -> list[Finding]:
     findings = []
     for pattern, message in _BRITTLE:
@@ -463,7 +510,7 @@ def _selector_findings(file: ProjectFile) -> list[Finding]:
     for match in _SELECTOR_LITERAL.finditer(file.code):
         selector = match.group(1).strip()
         parts = [part for part in _COMBINATOR.split(selector) if part]
-        if len(parts) - 1 >= MIN_COMBINATORS:
+        if len(parts) - 1 >= MIN_COMBINATORS and _is_selector(parts):
             findings.append(
                 _finding(
                     file,
@@ -495,16 +542,24 @@ def review_automation(script: AutomationScript, files: list[ProjectFile]) -> lis
 PRINCIPAL_SOURCE = "principal-qa"
 
 
-def pack_risks(text: str) -> list[PackRisk]:
-    """Every active pack's typical failure modes, worst first."""
-    risks = [risk for pack, _ in detect_packs(text) for risk in pack.risks]
-    risks.sort(key=lambda risk: -risk.rpn)
-    return risks
+def pack_risks(text: str, story: str | None = None) -> list[PackRisk]:
+    """Every active pack's typical failure modes, worst first.
+
+    A pack the story named out loud wins a tie, for the same reason its
+    checks do.
+    """
+    risks = [
+        (0 if hit.in_story else 1, risk)
+        for hit in detect_hits(text, story)
+        for risk in hit.pack.risks
+    ]
+    risks.sort(key=lambda item: (-item[1].rpn, item[0]))
+    return [risk for _, risk in risks]
 
 
 def risk_titles(story: str, criteria: list[str], limit: int = 6) -> list[str]:
     """The titles that go into the Risk radar prompt, worst first."""
-    return [risk.title for risk in pack_risks(story_text(story, criteria))][:limit]
+    return [risk.title for risk in pack_risks(story_text(story, criteria), story)][:limit]
 
 
 def review_risks(
@@ -513,7 +568,7 @@ def review_risks(
     """The classic failure modes this analysis is missing. Never edits the AI's."""
     existing = list(analysis.failure_modes)
     added: list[FailureMode] = []
-    for risk in pack_risks(story_text(story, criteria)):
+    for risk in pack_risks(story_text(story, criteria), story):
         if len(added) >= MAX_ADDED_RISKS:
             break
         twins = existing + added

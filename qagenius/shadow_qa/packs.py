@@ -77,7 +77,13 @@ class Pack:
     id: str
     name: str
     short: str  # two words at most: what the epic banner shows as a pill
+    # A strong trigger is a word that only this kind of feature uses, so one
+    # is enough. A weak trigger is a word half the stories in the world
+    # contain -- "email", "list", "file" -- so it needs company: two different
+    # weak triggers, or one in the story itself rather than only in a
+    # criterion. See detect.py.
     triggers: tuple[str, ...]
+    weak_triggers: tuple[str, ...]
     exclude: tuple[str, ...]
     checks: tuple[Check, ...]
     risks: tuple[PackRisk, ...]
@@ -206,11 +212,19 @@ def _pack(data: dict, file_name: str) -> Pack:
     risks = [_risk(raw, pack_id, file_name, index) for index, raw in enumerate(raw_risks)]
 
     name = _text(data.get("name"), file_name, "name")
+    strong = _words(data.get("triggers"), file_name, "triggers", required=False)
+    weak = _words(data.get("weak_triggers"), file_name, "weak_triggers", required=False)
+    if not strong and not weak:
+        _fail(file_name, "a pack needs at least one trigger or weak_trigger")
+    shared = {one.lower() for one in strong} & {one.lower() for one in weak}
+    if shared:
+        _fail(file_name, f"{sorted(shared)[0]!r} is both a trigger and a weak_trigger")
     return Pack(
         id=pack_id,
         name=name,
         short=_text(data.get("short"), file_name, "short") if data.get("short") else name,
-        triggers=_words(data.get("triggers"), file_name, "triggers"),
+        triggers=strong,
+        weak_triggers=weak,
         exclude=_words(data.get("exclude"), file_name, "exclude", required=False),
         checks=tuple(checks),
         risks=tuple(risks),

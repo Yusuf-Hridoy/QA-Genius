@@ -1,7 +1,8 @@
 id = "sessions"
 name = "Sessions and devices"
 short = "Sessions"
-triggers = ["session", "sessions", "sign out", "signs out", "signing out", "sign-out", "log out", "logout", "revoke", "revokes", "revoking", "revoked", "device", "devices", "active logins"]
+triggers = ["session", "sessions", "sign out", "signs out", "signing out", "sign-out", "log out", "logout", "revoke", "revokes", "revoking", "revoked", "active logins"]
+weak_triggers = ["device", "devices", "token", "tokens"]
 exclude = []
 
 [[checks]]

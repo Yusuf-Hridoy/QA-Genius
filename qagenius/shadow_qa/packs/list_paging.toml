@@ -1,7 +1,8 @@
 id = "list_paging"
 name = "Lists and paging"
 short = "Lists"
-triggers = ["list", "lists", "listing", "table", "tables", "page size", "pagination", "paginated", "paging", "load more", "infinite scroll"]
+triggers = ["page size", "pagination", "paginated", "paging", "load more", "infinite scroll", "per page"]
+weak_triggers = ["list", "lists", "listing", "table", "tables"]
 exclude = []
 
 [[checks]]

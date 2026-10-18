@@ -134,13 +134,20 @@ removable, with Undo. All of it is plain Python over rule packs, so it runs on
 **Load example** with no key at all.
 
 The rules live in `qagenius/shadow_qa/packs/*.toml`, one file per kind of
-feature, and you can add your own — drop a file in and it is picked up:
+feature, and you can add your own — drop a file in and it is picked up. A pack
+wakes up on one `trigger`, a word only its kind of feature uses. Words half the
+stories in the world contain — *email*, *list*, *file*, *admin* — go in
+`weak_triggers` instead: two different ones, or one said in the story rather
+than buried in a criterion, and the pack wakes up; a single one in AC-7 is
+ignored. Packs your story names out loud are also offered before packs found
+only in the criteria.
 
 ```toml
 id = "coupons"
 name = "Coupon codes"
 short = "Coupons"
 triggers = ["coupon", "coupons", "promo code", "discount code"]
+weak_triggers = ["voucher", "discount"]
 
 [[checks]]
 id = "expired"

@@ -1,7 +1,8 @@
 id = "rate_limiting"
 name = "Rate limiting and lockout"
 short = "Rate limit"
-triggers = ["rate limit", "rate limiting", "attempt", "attempts", "too many", "lockout", "lock", "locks", "locked", "throttle", "throttling", "brute force", "brute"]
+triggers = ["rate limit", "rate limiting", "too many", "lockout", "lock", "locks", "locked", "throttle", "throttling", "brute force", "brute"]
+weak_triggers = ["attempt", "attempts", "retry", "retries"]
 exclude = []
 
 [[checks]]

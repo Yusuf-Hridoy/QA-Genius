@@ -1,7 +1,8 @@
 id = "file_upload"
 name = "File upload"
 short = "Upload"
-triggers = ["upload", "uploads", "uploading", "avatar", "avatars", "attachment", "attachments", "image", "images", "file", "files", "photo", "photos", "crop", "jpeg", "png", "webp"]
+triggers = ["upload", "uploads", "uploading", "uploaded", "avatar", "avatars", "attachment", "attachments", "crop", "jpeg", "png", "webp"]
+weak_triggers = ["file", "files", "image", "images", "photo", "photos"]
 exclude = []
 
 [[checks]]

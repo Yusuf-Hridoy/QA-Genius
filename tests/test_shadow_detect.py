@@ -1,7 +1,11 @@
 """Pack detection, boundary values and the story rules. No AI, no network."""
 
+import json
+from pathlib import Path
+
 from tests.factories import (
     LOCKOUT_CRITERIA,
+    NAVBAR_STORY,
     LOCKOUT_STORY,
     PROFILE_CRITERIA,
     PROFILE_STORY,
@@ -14,13 +18,13 @@ from qagenius.shadow_qa.boundaries import (
     find_boundaries,
     missing_values,
 )
-from qagenius.shadow_qa.detect import detect_packs, mentions, story_text
+from qagenius.shadow_qa.detect import detect_hits, detect_packs, mentions, story_text
 from qagenius.shadow_qa.story_rules import count_capabilities, epic_note, review_story
 from qagenius.test_cases import number_criteria
 
 
-def _ids(text: str) -> list[str]:
-    return [pack.id for pack, _ in detect_packs(text)]
+def _ids(text: str, story: str | None = None) -> list[str]:
+    return [pack.id for pack, _ in detect_packs(text, story)]
 
 
 def _criteria(texts):
@@ -274,3 +278,82 @@ def test_capabilities_are_counted_after_want_to():
     )
     assert count_capabilities(story) >= 6
     assert epic_note(review_story(story, []))
+
+
+# ── strong and weak triggers ──────────────────────────────────────────────────
+
+
+def _lockout_sample() -> tuple[str, list[str]]:
+    sample = json.loads(
+        Path("qagenius/samples/test_cases.json").read_text(encoding="utf-8")
+    )
+    return sample["story"], sample["criteria"]
+
+
+def test_the_lockout_sample_activates_only_login_and_rate_limiting():
+    story, criteria = _lockout_sample()
+    # "admin console" sits in AC-5 and nowhere else, so one weak word buried
+    # in a criterion must not turn this into a permissions story.
+    assert _ids(story_text(story, criteria), story) == ["login", "rate_limiting"]
+
+
+def test_a_duration_on_its_own_activates_nothing():
+    # Durations are the boundary rules' job, not the date pack's.
+    assert _ids("Then the report loads within 2 minutes") == []
+    assert _ids("The job finishes within 3 hours") == []
+
+
+def test_one_weak_word_in_the_story_is_enough():
+    assert _ids("An email is sent within 1 hour") == ["notifications_email"]
+
+
+def test_one_weak_word_in_a_criterion_alone_is_not_enough():
+    story = "As a shopper, I want to buy a lamp so that my desk is lit."
+    criteria = ["The confirmation shows an email address"]
+    assert "notifications_email" not in _ids(story_text(story, criteria), story)
+
+
+def test_two_different_weak_words_in_the_criteria_are_enough():
+    story = "As a shopper, I want to buy a lamp so that my desk is lit."
+    criteria = ["The order list is shown", "The table holds one row per order"]
+    assert "list_paging" in _ids(story_text(story, criteria), story)
+
+
+def test_the_same_weak_word_twice_is_still_one_word():
+    story = "As a shopper, I want to buy a lamp so that my desk is lit."
+    criteria = ["The order list is shown", "The archive list is shown too"]
+    assert "list_paging" not in _ids(story_text(story, criteria), story)
+
+
+def test_a_strong_word_in_a_criterion_alone_is_enough():
+    story = "As a shopper, I want to buy a lamp so that my desk is lit."
+    criteria = ["The results are shown with pagination"]
+    assert "list_paging" in _ids(story_text(story, criteria), story)
+
+
+def test_the_navbar_story_activates_only_navigation():
+    assert _ids(NAVBAR_STORY) == ["navigation"]
+
+
+def test_a_date_pack_still_fires_on_the_words_that_matter():
+    assert "datetime" in _ids("The deadline is shown in the user's timezone")
+    assert "datetime" in _ids("Entries are scheduled against the calendar in UTC")
+
+
+def test_permissions_needs_more_than_the_word_admin_in_a_criterion():
+    story = "As a shopper, I want to buy a lamp so that my desk is lit."
+    assert "permissions" not in _ids(
+        story_text(story, ["Support staff unlock it from the admin console"]), story
+    )
+    assert "permissions" in _ids("Only the admin role may open this page")
+    assert "permissions" in _ids("The endpoint is forbidden without permission")
+
+
+def test_detection_says_whether_the_story_named_the_pack():
+    story = "As a user, I want to upload an avatar so that my profile looks right."
+    criteria = ["The account locks after 5 failed sign-in attempts"]
+    hits = {hit.pack.id: hit.in_story for hit in detect_hits(story_text(story, criteria), story)}
+    assert hits["file_upload"] is True
+    assert hits["profile_form"] is True
+    assert hits["rate_limiting"] is False
+    assert hits["login"] is False

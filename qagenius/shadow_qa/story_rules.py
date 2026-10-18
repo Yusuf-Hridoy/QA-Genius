@@ -102,7 +102,7 @@ def review_story(story: str, criteria: list[str]) -> list[StoryNote]:
     story = str(story or "")
     texts = [str(one or "") for one in (criteria or []) if str(one or "").strip()]
     whole = story_text(story, texts)
-    packs = [pack for pack, _ in detect_packs(whole)]
+    packs = [pack for pack, _ in detect_packs(whole, story)]
     features = [pack.short for pack in packs]
 
     notes: list[StoryNote] = []

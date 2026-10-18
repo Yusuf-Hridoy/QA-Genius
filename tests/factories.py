@@ -179,3 +179,9 @@ LOCKOUT_CRITERIA = [
     "The account locks after 5 failed sign-in attempts",
     "A locked account stays locked for 30 minutes",
 ]
+
+
+NAVBAR_STORY = (
+    "As a reader, I want a navigation bar with a sidebar menu and breadcrumbs "
+    "so that I can move around the site."
+)

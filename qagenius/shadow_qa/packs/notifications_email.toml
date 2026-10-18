@@ -1,7 +1,8 @@
 id = "notifications_email"
 name = "Email and notifications"
 short = "Email"
-triggers = ["email", "emails", "notification", "notifications", "notify", "notified", "confirmation email", "reminder", "reminders", "push"]
+triggers = ["confirmation email", "welcome email", "unsubscribe", "mailbox"]
+weak_triggers = ["email", "emails", "notification", "notifications", "notify", "notified", "reminder", "reminders", "push"]
 exclude = []
 
 [[checks]]

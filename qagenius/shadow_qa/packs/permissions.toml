@@ -1,7 +1,8 @@
 id = "permissions"
 name = "Roles and permissions"
 short = "Permissions"
-triggers = ["role", "roles", "admin", "admins", "permission", "permissions", "authorized", "unauthorized", "authorised", "unauthorised", "access control", "forbidden", "privileges"]
+triggers = ["permission", "permissions", "unauthorized", "unauthorised", "forbidden", "access control", "privileges"]
+weak_triggers = ["admin", "admins", "role", "roles"]
 exclude = []
 
 [[checks]]
