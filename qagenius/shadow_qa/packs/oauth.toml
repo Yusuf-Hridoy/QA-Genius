@@ -2,7 +2,7 @@ id = "oauth"
 name = "OAuth and social sign-in"
 short = "OAuth"
 triggers = ["oauth", "google", "github", "sso", "single sign-on", "social login", "social sign-in", "link account", "unlink", "unlinking", "consent screen"]
-weak_triggers = ["link", "links", "linking", "provider", "providers"]
+weak_triggers = ["linking", "provider", "providers"]
 exclude = []
 
 [[checks]]

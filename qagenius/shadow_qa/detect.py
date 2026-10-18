@@ -59,11 +59,14 @@ class PackHit:
 def detect_hits(text: str, story: str | None = None) -> list[PackHit]:
     """The active packs, in pack order, with the words that activated each.
 
-    A pack activates on one strong trigger, on two different weak triggers, or
-    on a single weak trigger that appears in the story itself. A word like
-    "email" or "list" turns up in almost every set of acceptance criteria, so
-    on its own and buried in a criterion it says nothing; said in the story, or
-    said twice, it is the user telling you what the feature is.
+    A pack activates on one strong trigger or on two different weak triggers,
+    said anywhere. A word like "email" or "list" turns up in almost every
+    story ever written, so one of them on its own says nothing about what the
+    feature is; two different ones do.
+
+    Where a trigger was said still matters, but only for order: `in_story`
+    says the story named this pack rather than a criterion mentioning it in
+    passing, and the reviewers offer those packs first.
     """
     whole = text or ""
     # A bare call has no criteria to tell apart, so all of it counts as story.
@@ -76,11 +79,16 @@ def detect_hits(text: str, story: str | None = None) -> list[PackHit]:
         weak = matching(whole, pack.weak_triggers)
         if not strong and not weak:
             continue
+        if not strong and len(weak) < MIN_WEAK:
+            continue
         hits = strong + weak
-        in_story = any(mentions(spoken, word) for word in hits)
-        weak_in_story = not strong and any(mentions(spoken, word) for word in weak)
-        if strong or len(weak) >= MIN_WEAK or weak_in_story:
-            found.append(PackHit(pack=pack, triggers=hits, in_story=in_story))
+        found.append(
+            PackHit(
+                pack=pack,
+                triggers=hits,
+                in_story=any(mentions(spoken, word) for word in hits),
+            )
+        )
     return found
 
 

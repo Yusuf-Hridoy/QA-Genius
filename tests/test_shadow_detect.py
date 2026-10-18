@@ -19,6 +19,7 @@ from qagenius.shadow_qa.boundaries import (
     missing_values,
 )
 from qagenius.shadow_qa.detect import detect_hits, detect_packs, mentions, story_text
+from qagenius.shadow_qa.packs import load_packs
 from qagenius.shadow_qa.story_rules import count_capabilities, epic_note, review_story
 from qagenius.test_cases import number_criteria
 
@@ -303,8 +304,11 @@ def test_a_duration_on_its_own_activates_nothing():
     assert _ids("The job finishes within 3 hours") == []
 
 
-def test_one_weak_word_in_the_story_is_enough():
-    assert _ids("An email is sent within 1 hour") == ["notifications_email"]
+def test_one_weak_word_is_never_enough_wherever_it_is_said():
+    # In the story, in a criterion, it makes no difference: one weak word is
+    # a coincidence.
+    assert _ids("An email is sent within 1 hour") == []
+    assert _ids("An admin can see the report") == []
 
 
 def test_one_weak_word_in_a_criterion_alone_is_not_enough():
@@ -317,6 +321,11 @@ def test_two_different_weak_words_in_the_criteria_are_enough():
     story = "As a shopper, I want to buy a lamp so that my desk is lit."
     criteria = ["The order list is shown", "The table holds one row per order"]
     assert "list_paging" in _ids(story_text(story, criteria), story)
+
+
+def test_two_weak_words_in_the_story_activate_the_pack():
+    assert _ids("An email reminder is sent within 1 hour") == ["notifications_email"]
+    assert _ids("The admin role can delete users") == ["permissions"]
 
 
 def test_the_same_weak_word_twice_is_still_one_word():
@@ -333,6 +342,19 @@ def test_a_strong_word_in_a_criterion_alone_is_enough():
 
 def test_the_navbar_story_activates_only_navigation():
     assert _ids(NAVBAR_STORY) == ["navigation"]
+
+
+def test_a_delete_in_passing_is_not_an_account_deletion_story():
+    # "delete" is one weak word; the sentence is about who may do it.
+    assert "account_deletion" not in _ids("The admin role can delete users")
+    assert "account_deletion" in _ids("The user can request account deletion")
+
+
+def test_the_word_link_no_longer_wakes_the_oauth_pack():
+    pack = next(one for one in load_packs() if one.id == "oauth")
+    assert "link" not in pack.weak_triggers and "links" not in pack.weak_triggers
+    assert set(pack.weak_triggers) == {"linking", "provider", "providers"}
+    assert "oauth" not in _ids("Each row has a link and a provider column")
 
 
 def test_a_date_pack_still_fires_on_the_words_that_matter():

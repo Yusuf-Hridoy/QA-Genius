@@ -137,9 +137,9 @@ The rules live in `qagenius/shadow_qa/packs/*.toml`, one file per kind of
 feature, and you can add your own — drop a file in and it is picked up. A pack
 wakes up on one `trigger`, a word only its kind of feature uses. Words half the
 stories in the world contain — *email*, *list*, *file*, *admin* — go in
-`weak_triggers` instead: two different ones, or one said in the story rather
-than buried in a criterion, and the pack wakes up; a single one in AC-7 is
-ignored. Packs your story names out loud are also offered before packs found
+`weak_triggers` instead, and it takes two different ones to wake the pack: one
+of them on its own, anywhere, is ignored. Where a word was said still counts
+for order, so packs your story names out loud are offered before packs found
 only in the criteria.
 
 ```toml
