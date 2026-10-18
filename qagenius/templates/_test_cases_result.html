@@ -53,7 +53,8 @@
       {# Each id is its own box, so a narrow column wraps between ids and
          never splits TC- from its number. #}
       <td>{{ row.case_ids | length }}{% if row.case_ids %} <span class="tc-ids">{% for case_id in row.case_ids %}<code class="tc-id">{{ case_id }}</code>{% endfor %}</span>{% endif %}</td>
-      <td>{% for kind in row.kinds %}<span class="pill neutral small plain">{{ kind }}</span> {% endfor %}</td>
+      {# The same plain names as the chips and the cards; the data keeps its own. #}
+      <td>{% for kind in row.kinds %}<span class="pill neutral small plain">{{ category_words.get(kind, kind) }}</span> {% endfor %}</td>
       <td class="tc-reasons">
         {% if row.thin %}<span class="pill warn">needs more tests</span> <span class="muted small">{{ row.reasons | join(", ") }}</span>
         {% else %}<span class="pill ok">well tested</span>{% endif %}

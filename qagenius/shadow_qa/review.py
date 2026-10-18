@@ -34,6 +34,9 @@ MAX_QUALITY_NOTES = 6
 MAX_ADDED_RISKS = 4
 # Two risks this alike are the same risk said twice.
 RISK_TITLE_MATCH = 0.4
+# How many of a pack risk's own words an AI risk has to say, in its effect or
+# its cause, before the two are treated as one risk. One word is a coincidence.
+MIN_SHARED_RISK_WORDS = 2
 # Two cases this alike are the same case written twice.
 DUPLICATE_TITLE_MATCH = 0.8
 
@@ -616,8 +619,8 @@ def risk_titles(story: str, criteria: list[str], limit: int = 6) -> list[str]:
 
 
 def _risk_words(risk: FailureMode) -> str:
-    """Where an already-named risk could be hiding under other words."""
-    return " ".join([str(risk.title or ""), str(risk.effect or ""), str(risk.cause or "")])
+    """What an already-named risk says it does, past its title."""
+    return " ".join([str(risk.effect or ""), str(risk.cause or "")])
 
 
 def _already_named(risk: PackRisk, others: list[FailureMode]) -> bool:
@@ -625,14 +628,21 @@ def _already_named(risk: PackRisk, others: list[FailureMode]) -> bool:
 
     The AI called one of these "Timing side-channel attack distinguishes valid
     vs invalid email addresses" and the pack calls it "Response time differs
-    between a known and an unknown email". Two names, one risk, so the words
-    that mean the risk decide it, not the title alone.
+    between a known and an unknown email". Two names, one risk, so a title is
+    not the only evidence: what the risk says it does counts too.
+
+    But one shared word is a coincidence, not a match. "…enumerate emails by
+    response times" is about timing and says "enumerate" in passing, which is
+    enough to swallow the quite separate risk that the error message names a
+    registered email. So the words in the effect and the cause have to agree
+    at least twice before a risk is dropped as a repeat.
     """
     for other in others:
         if title_score(risk.title, other.title) >= RISK_TITLE_MATCH:
             return True
         text = _risk_words(other)
-        if any(mentions(text, word) for word in risk.covered_if):
+        shared = sum(1 for word in risk.covered_if if mentions(text, word))
+        if shared >= MIN_SHARED_RISK_WORDS:
             return True
     return False
 

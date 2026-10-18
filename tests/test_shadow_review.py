@@ -487,10 +487,15 @@ def test_a_role_selector_is_never_called_brittle():
 
 def test_a_risk_the_ai_said_in_other_words_is_not_added_again():
     """The real run: the AI called it a timing side-channel, the pack calls it
-    a response time. Titles share almost nothing; the pack's own words match."""
+    a response time. The titles share almost nothing, so what the AI says the
+    risk does is what matches: two of the pack's own words, not one."""
     analysis = RiskAnalysis(
         failure_modes=[
-            _risk("Timing side-channel attack distinguishes valid vs invalid emails")
+            _risk(
+                "Timing side-channel attack distinguishes valid vs invalid emails",
+                effect="The response time alone tells an attacker which emails exist.",
+                cause="The sign-in path is not constant time for an unknown email.",
+            )
         ]
     )
     added = review_risks(LOCKOUT_STORY, LOCKOUT_CRITERIA, analysis)
@@ -503,12 +508,43 @@ def test_the_words_are_looked_for_in_the_effect_and_cause_too():
             _risk(
                 "Sign-in is not constant work",
                 effect="An attacker measures the response time to find real accounts.",
-                cause="Hashing only runs for a known email.",
+                cause="The timing differs because hashing only runs for a known email.",
             )
         ]
     )
     added = review_risks(LOCKOUT_STORY, LOCKOUT_CRITERIA, analysis)
     assert not any("Response time differs" in one.title for one in added)
+
+
+def test_one_shared_word_does_not_make_two_risks_one():
+    """The real run: an AI risk about timing said "enumerate" in passing, and
+    swallowed the quite separate risk that the error message names an account."""
+    analysis = RiskAnalysis(
+        failure_modes=[
+            _risk(
+                "Attackers enumerate emails by response times",
+                effect="An attacker can enumerate which emails are registered.",
+                cause="The sign-in path returns sooner for an unknown email.",
+            )
+        ]
+    )
+    added = review_risks(LOCKOUT_STORY, LOCKOUT_CRITERIA, analysis)
+    assert any("reveals whether an email is registered" in one.title for one in added)
+
+
+def test_a_word_in_the_ai_title_alone_is_not_a_match():
+    """A title is compared as a title. Its words do not stand in for the rest."""
+    analysis = RiskAnalysis(
+        failure_modes=[
+            _risk(
+                "Enumeration of registered emails",
+                effect="Something bad happens.",
+                cause="It was built that way.",
+            )
+        ]
+    )
+    added = review_risks(LOCKOUT_STORY, LOCKOUT_CRITERIA, analysis)
+    assert any("reveals whether an email is registered" in one.title for one in added)
 
 
 def test_a_genuinely_new_risk_is_still_added():
