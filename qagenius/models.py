@@ -421,6 +421,8 @@ class FailureMode(BaseModel):
     related_criteria: List[str] = []
     covered_by: List[str] = []
     test_idea: str = ""
+    # "ai" or "principal-qa": who proposed this failure mode.
+    source: str = "ai"
 
     @field_validator("severity", "likelihood", "detectability", mode="before")
     @classmethod

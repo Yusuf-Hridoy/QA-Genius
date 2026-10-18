@@ -1,0 +1,90 @@
+id = "account_deletion"
+name = "Account deletion"
+short = "Deletion"
+triggers = ["delete account", "deletes account", "deleting the account", "delete my account", "account deletion", "deletion", "deleted", "gdpr", "erase", "erasure", "anonymise", "anonymize", "anonymised", "anonymized", "close my account"]
+exclude = []
+
+[[checks]]
+id = "needs_password"
+title = "Deletion needs the password again"
+severity = "high"
+why = "This is the one action nobody can undo, so a borrowed signed-in tab must not be enough."
+covered_if = ["re-enter", "reauthenticate", "re-authenticate", "reauthentication", "re-authentication", "confirm password", "password again", "type delete"]
+  [checks.test]
+  title = "Deleting the account asks for the password before it starts"
+  category = "Functional"
+  priority = "High"
+  pre_conditions = "A user is signed in as user@example.com"
+  steps = ["Open the delete-account flow and reach the confirmation step", "Submit it with a wrong password", "Submit it again with the correct password"]
+  expected_result = "The wrong password leaves the account untouched and shows an error; the correct password starts the deletion and the step is recorded."
+  test_data = "wrong=WrongPass123, correct=Harbour-Lantern-42"
+
+[[checks]]
+id = "grace_cancel"
+title = "Cancelling during the grace period restores the account"
+severity = "medium"
+why = "A grace period that does not actually restore everything is worse than none at all."
+covered_if = ["grace period", "cancel", "restore", "undo", "within 30 days", "reactivat", "recover"]
+  [checks.test]
+  title = "An account cancelled inside the grace period comes back whole"
+  category = "Functional"
+  priority = "Medium"
+  pre_conditions = "A user has started deletion of user@example.com and the grace period is still open"
+  steps = ["Sign in during the grace period and choose to cancel the deletion", "Open the profile, the preferences and the sign-in methods", "Sign out and sign back in"]
+  expected_result = "The account is active again with its profile, preferences and linked providers unchanged, and no further deletion happens when the grace period ends."
+  test_data = "deletion started, cancelled before the stated grace period ends"
+
+[[checks]]
+id = "signin_refused"
+title = "Signing in after deletion is refused"
+severity = "high"
+why = "If the old credentials still work, nothing was deleted."
+covered_if = ["after deletion", "cannot sign in", "refused", "no longer exists", "deleted account"]
+  [checks.test]
+  title = "The deleted account's password no longer signs anyone in"
+  category = "Negative"
+  priority = "High"
+  pre_conditions = "The account for user@example.com has been deleted and its grace period has passed"
+  steps = ["Try to sign in with the deleted account's email and password", "Try the password reset flow with the same email", "Try to sign in with the provider that was linked to it"]
+  expected_result = "All three are refused, the message is the same one an unknown email gets, and no session is created."
+  test_data = "email=user@example.com, password=Harbour-Lantern-42"
+
+[[checks]]
+id = "export_offered"
+title = "A data export is offered before deletion"
+severity = "low"
+why = "People delete accounts and then ask for their data; the offer has to come before the point of no return."
+covered_if = ["export", "download your data", "copy of your data", "portability", "before you delete"]
+  [checks.test]
+  title = "The deletion flow offers a data export before the final step"
+  category = "Functional"
+  priority = "Low"
+  pre_conditions = "A user is signed in as user@example.com with a profile, preferences and uploaded avatar"
+  steps = ["Open the delete-account flow", "Take the offered export and open the downloaded file", "Return to the flow and complete the deletion"]
+  expected_result = "An export is offered before the confirmation step, the downloaded file contains the profile, preferences and a reference to the avatar, and the deletion then proceeds."
+  test_data = "account user@example.com with a filled profile"
+
+[[checks]]
+id = "tokens_revoked"
+title = "All sessions and tokens are revoked"
+severity = "high"
+why = "A deleted account whose token still answers is an account that is not deleted."
+covered_if = ["revoke", "all sessions", "tokens", "signed out", "api refuses", "401"]
+  [checks.test]
+  title = "Every session and API token of a deleted account stops working"
+  category = "Functional"
+  priority = "High"
+  pre_conditions = "The account for user@example.com is signed in on two browsers and one API token has been captured"
+  steps = ["Complete the deletion from browser A", "Reload a protected page in browser B", "Call a protected API endpoint with the captured token"]
+  expected_result = "Browser B is sent to the sign-in page and the API answers 401 for the captured token; neither keeps working after the deletion."
+  test_data = "two browser sessions and one captured API token for user@example.com"
+
+[[risks]]
+title = "Deletion leaves orphaned data behind"
+category = "data"
+severity = 4
+likelihood = 4
+detectability = 4
+effect = "Uploaded files, audit rows and cached copies survive a deletion the user was told was complete."
+cause = "Only the account row is removed; related records and object storage are never swept."
+covered_if = ["orphan", "related data", "uploaded files", "cascade", "audit", "fully removed"]

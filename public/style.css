@@ -452,6 +452,42 @@ input[type=checkbox],input[type=radio]{width:16px;height:16px;
 .field-pair{display:grid;grid-template-columns:repeat(2,140px);gap:12px}
 .field-pair label{font-size:12.5px;font-weight:500;color:var(--text-2);
   margin-bottom:4px;display:block}
+/* ------------------------------------------------- principal QA (shadow QA)
+ * Everything Shadow QA adds carries the same label: one accent pill, same
+ * words, same size, on every desk. The blocks around it stay quiet so the
+ * AI's own answer is still the thing you read first.
+ */
+.pq-label{flex:none;letter-spacing:.01em}
+.pq-epic{border-color:color-mix(in srgb,var(--warn-line) 40%,transparent);
+  background:linear-gradient(160deg,var(--warn-bg),var(--card));
+  margin-bottom:16px}
+.pq-epic-head{gap:9px;align-items:center;margin:0 0 8px}
+.pq-epic-head strong{font-size:16px;color:var(--warn-fg)}
+.pq-pills{gap:6px;flex-wrap:wrap;margin:0 0 9px}
+.pq-split-link{margin-top:4px}
+.pq-clean{gap:8px;align-items:center;margin:0 0 16px}
+.pq-notes{list-style:none;margin:0;padding:0;display:grid;gap:9px}
+.pq-note{display:flex;flex-wrap:wrap;align-items:baseline;gap:7px;
+  padding:9px 11px;border-radius:var(--r-card);background:var(--card-2);
+  border-left:3px solid var(--border)}
+.pq-note.warn{border-left-color:var(--warn-line)}
+.pq-note.info{border-left-color:var(--info-fg)}
+.pq-note strong{font-weight:620}
+.pq-note .muted{flex:1 1 220px}
+/* A card the AI did not write. The hairline says so without shouting. */
+.tc-card.pq-case{border-left:3px solid var(--accent);background:var(--card-2)}
+.pq-why{margin:2px 0 0;color:var(--text-2);font-size:13px}
+.pq-card-actions{margin-top:10px;gap:8px}
+.pq-review-head{gap:9px;align-items:center;margin:0}
+.pq-review-line{margin:7px 0 0}
+.pq-review[open] .pq-review-more{margin-top:11px}
+.pq-review summary{cursor:pointer;list-style:none}
+.pq-review summary::-webkit-details-marker{display:none}
+.pq-review summary .pq-more-word{color:var(--accent);font-size:13px}
+.pq-review ul{margin:6px 0 0;padding-left:18px}
+.pq-review li{margin:3px 0}
+
+
 @media (max-width:640px){.field-grid{grid-template-columns:1fr}}
 /* No control is narrower than its content on a phone. */
 @media (max-width:480px){
@@ -1094,6 +1130,7 @@ body[data-card-primary="automation"] #automation-generate.btn-primary:hover{
   .content{padding:16px 16px 60px}
   .card{padding:16px 16px}
   .verdict{padding:16px;gap:14px}
+  .pq-note{flex-direction:column;gap:4px}
   .steps li{flex:1 1 100%}
   .field-pair{grid-template-columns:repeat(2,minmax(0,1fr))}
   table.grid th,table.grid td{padding:8px 9px}

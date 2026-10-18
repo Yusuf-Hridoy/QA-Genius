@@ -1,3 +1,4 @@
+{% import "_principal_qa.html" as pq %}
 {% if is_example %}
 {% with caption = "Add a key and press Find risks to run it on your own story." %}
 {% include "_example_flag.html" %}
@@ -77,10 +78,15 @@
       <p class="row">
         <span class="pill {{ level_pill[item.level] }}">RPN {{ item.rpn }} · {{ item.level }}</span>
         <span class="pill neutral">{{ item.risk.category }}</span>
+        {% if item.risk.source == principal_source %}{{ pq.label() }}{% endif %}
         <span class="muted small">S{{ item.risk.severity }} L{{ item.risk.likelihood }} D{{ item.risk.detectability }}</span>
       </p>
       <p><strong>Effect:</strong> {{ item.risk.effect }}</p>
       <p class="muted"><strong>Cause:</strong> {{ item.risk.cause }}</p>
+      {% if item.risk.source == principal_source %}
+      <p class="pq-why">The AI did not raise this one. It is a classic for this kind of
+        feature, scored by the same rules as every other risk here.</p>
+      {% endif %}
       {# "Covered" is the AI's claim, checked only against shared words, so the
          words are shown and the reader is told to confirm it. A tagged case was
          written for the risk, so it needs no evidence. #}

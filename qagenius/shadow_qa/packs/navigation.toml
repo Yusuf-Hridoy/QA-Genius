@@ -1,0 +1,65 @@
+id = "navigation"
+name = "Navigation"
+short = "Navigation"
+triggers = ["navigation", "navigate", "navbar", "nav bar", "menu", "menus", "sidebar", "route", "routes", "routing", "deep link", "tab bar", "breadcrumb", "breadcrumbs"]
+exclude = []
+
+[[checks]]
+id = "deep_link_protected"
+title = "A deep link to a protected page sends signed-out users to sign-in, then back"
+severity = "high"
+why = "Everyone shares links; losing the destination after sign-in is the oldest bug in web apps."
+covered_if = ["deep link", "redirect", "return to", "after sign-in", "protected page", "next url"]
+  [checks.test]
+  title = "Opening a protected URL while signed out returns there after signing in"
+  category = "Functional"
+  priority = "High"
+  pre_conditions = "Nobody is signed in and a protected page exists at /profile/security"
+  steps = ["Paste /profile/security into the address bar of a signed-out browser", "Sign in on the page that appears", "Note where the browser lands and press Back once"]
+  expected_result = "The signed-out visitor reaches the sign-in page, and after signing in lands on /profile/security itself, not the home page; Back does not return to the sign-in form."
+  test_data = "url=/profile/security"
+
+[[checks]]
+id = "back_forward"
+title = "Browser back and forward keep the right item active"
+severity = "medium"
+why = "Single-page navigation updates the view and forgets the menu, so the highlight points at the wrong place."
+covered_if = ["back button", "forward", "history", "active item", "highlighted", "browser back"]
+  [checks.test]
+  title = "The active menu item follows the browser's back and forward buttons"
+  category = "Functional"
+  priority = "Medium"
+  pre_conditions = "A user is signed in as user@example.com"
+  steps = ["Open Profile, then Security, then Preferences from the menu", "Press the browser Back button twice", "Press Forward once"]
+  expected_result = "At every step the page content and the highlighted menu item match the URL in the address bar."
+  test_data = "menu items Profile, Security, Preferences"
+
+[[checks]]
+id = "keyboard_focus"
+title = "Tab order is sensible and focus is visible"
+severity = "medium"
+why = "Keyboard users and screen readers navigate by this order, and an invisible focus ring makes the page unusable."
+covered_if = ["tab order", "keyboard", "focus", "focus ring", "focus visible", "skip link", "accessib"]
+  [checks.test]
+  title = "The menu can be used by keyboard alone with a visible focus ring"
+  category = "Functional"
+  priority = "Medium"
+  pre_conditions = "A user is signed in as user@example.com on the profile page"
+  steps = ["Press Tab from the top of the page and walk through every menu item", "Press Enter on one item", "Open the mobile menu and Tab through it"]
+  expected_result = "Focus moves in the visual order, every focused element shows a clearly visible ring, Enter follows the link, and focus does not get trapped inside the open mobile menu."
+  test_data = "keyboard only, no mouse"
+
+[[checks]]
+id = "active_after_refresh"
+title = "The active item is still correct after a refresh"
+severity = "low"
+why = "The highlight is often set by the click handler, so a reload leaves nothing highlighted."
+covered_if = ["refresh", "reload", "active item", "highlighted", "direct url"]
+  [checks.test]
+  title = "Reloading a sub-page keeps its menu item highlighted"
+  category = "Functional"
+  priority = "Low"
+  pre_conditions = "A user is signed in as user@example.com"
+  steps = ["Navigate to the Security page from the menu", "Press the browser reload button", "Open the same URL directly in a new tab"]
+  expected_result = "After both the reload and the direct open, Security is the highlighted menu item and the page content matches."
+  test_data = "url=/profile/security"

@@ -1,0 +1,53 @@
+{# One place for everything Shadow QA draws, so the label reads the same on
+   every desk: same words, same colour, same size. #}
+
+{% macro label() %}<span class="pill accent plain small pq-label">Principal QA</span>{% endmacro %}
+
+{# The epic warning. It sits above the score because a story that is really
+   seven features is the first thing to say about it. #}
+{% macro banner(epic, split_target="") %}
+{% if epic %}
+<div class="card pq-epic" role="note">
+  <p class="row pq-epic-head">
+    {{ label() }}
+    <strong>{{ epic.title }}</strong>
+  </p>
+  {% if epic.features %}
+  <p class="row pq-pills">
+    {% for feature in epic.features %}<span class="pill warn plain">{{ feature }}</span>{% endfor %}
+  </p>
+  {% endif %}
+  {# The pills already name the features, so the sentence does not. #}
+  <p class="muted">{{ epic.advice if epic.features else epic.detail }}</p>
+  {% if split_target %}
+  <p class="row">
+    <a class="btn btn-small pq-split-link" href="#{{ split_target }}">See the suggested split</a>
+  </p>
+  {% endif %}
+</div>
+{% endif %}
+{% endmacro %}
+
+{# The quieter notes: no actor, no benefit, no negative criterion. A clean
+   story still says so, so the reader knows the rules ran. #}
+{% macro notes(items, empty="") %}
+{% if not items %}
+{% if empty %}
+<p class="row pq-clean">{{ label() }}<span class="muted">{{ empty }}</span></p>
+{% endif %}
+{% else %}
+<div class="card card-section">
+  <h2>Principal QA notes</h2>
+  <ul class="pq-notes">
+    {% for note in items %}
+    <li class="pq-note {{ note.level }}">
+      {{ label() }}
+      <strong>{{ note.title }}</strong>
+      <span class="muted">{{ note.detail }}</span>
+    </li>
+    {% endfor %}
+  </ul>
+  <p class="muted small">Written by QA-Genius's own rules, not by the AI. No key needed.</p>
+</div>
+{% endif %}
+{% endmacro %}

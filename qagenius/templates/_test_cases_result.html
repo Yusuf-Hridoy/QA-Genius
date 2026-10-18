@@ -1,4 +1,5 @@
 {% from "_form_fields.html" import field %}
+{% import "_principal_qa.html" as pq %}
 {% if is_example %}
 {% with caption = "Add a key and press Generate test cases to run this on your own criteria." %}
 {% include "_example_flag.html" %}
@@ -105,6 +106,48 @@
   </div>
   <p class="form-note" id="select-hint"></p>
 </div>
+{% if review and review_line %}
+{# What the principal QA did to this suite, in one line. Everything under it
+   is detail, so it stays shut until someone asks for it. #}
+<details class="card pq-review" id="pq-review">
+  <summary>
+    <span class="row pq-review-head">
+      {{ pq.label() }}
+      <strong>{{ review_line }}</strong>
+      <span class="spacer"></span>
+      <span class="pq-more-word">Show detail</span>
+    </span>
+  </summary>
+  <div class="pq-review-more">
+    {% if review.more %}
+    <p class="pq-review-line"><strong>Also worth a test</strong></p>
+    <ul>
+      {% for gap in review.more[:10] %}
+      <li><span class="pill {{ 'bad' if gap.severity == 'high' else ('warn' if gap.severity == 'medium' else 'info') }} small">{{ gap.severity }}</span>
+        {{ gap.title }} — <span class="muted">{{ gap.why }}</span></li>
+      {% endfor %}
+    </ul>
+    {% if review.more | length > 10 %}
+    <p class="muted small">…and {{ review.more | length - 10 }} more the rule packs
+      know about for this kind of feature. A list this long is the epic warning
+      saying the same thing twice: split the story.</p>
+    {% endif %}
+    {% endif %}
+    {% if review.quality %}
+    <p class="pq-review-line"><strong>Weak cases in the AI's own list</strong></p>
+    <ul>
+      {% for note in review.quality %}<li>{{ note }}</li>{% endfor %}
+    </ul>
+    {% endif %}
+    {% if review.covered %}
+    <p class="muted small">The AI already covered {{ review.covered | length }} of the
+      checklist items on its own.</p>
+    {% endif %}
+    <p class="muted small">Found by QA-Genius's own rules inside the same request —
+      no second AI call, no extra key.</p>
+  </div>
+</details>
+{% endif %}
 <div id="tc-list">
   {% for item in cases %}
   {% with card_case = item.case, card_ac_ids = item.ac_ids, card_select = true %}{% include "_test_case_card.html" %}{% endwith %}

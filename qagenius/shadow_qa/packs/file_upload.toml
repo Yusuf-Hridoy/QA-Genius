@@ -1,0 +1,115 @@
+id = "file_upload"
+name = "File upload"
+short = "Upload"
+triggers = ["upload", "uploads", "uploading", "avatar", "avatars", "attachment", "attachments", "image", "images", "file", "files", "photo", "photos", "crop", "jpeg", "png", "webp"]
+exclude = []
+
+[[checks]]
+id = "size_limit"
+title = "Exactly at the size limit and one byte over"
+severity = "high"
+why = "The limit is where this breaks: a file of exactly the stated size is usually rejected by accident."
+covered_if = ["size limit", "exactly", "1 byte", "one byte", "just over", "just under", "boundary", "too large"]
+  [checks.test]
+  title = "A file at the size limit uploads and one byte over is refused"
+  category = "Boundary"
+  priority = "High"
+  pre_conditions = "A user is signed in as user@example.com and the size limit is the one stated in the criteria"
+  steps = ["Upload an image of exactly the stated limit", "Upload the same image with one extra byte", "Upload a file a little under the limit"]
+  expected_result = "The exact-limit file and the smaller file upload and appear; the one-byte-over file is refused with a message naming the limit, and the previous avatar is unchanged."
+  test_data = "three JPEG files: limit minus 1 KB, exactly the limit, limit plus 1 byte"
+
+[[checks]]
+id = "renamed_file"
+title = "A renamed file is judged by its content, not its extension"
+severity = "high"
+why = "Anyone can rename a file; an extension check is a check an attacker performs on themselves."
+covered_if = ["renamed", "extension", "magic bytes", "content type", "mime", "actual type", "disguised", "disguise"]
+  [checks.test]
+  title = "An executable renamed to .jpg is refused"
+  category = "Negative"
+  priority = "High"
+  pre_conditions = "A user is signed in as user@example.com and holds a small non-image file renamed to avatar.jpg"
+  steps = ["Upload avatar.jpg, which is really a non-image file", "Upload a text file renamed to photo.png", "Upload a real JPEG to confirm the happy path still works"]
+  expected_result = "Both disguised files are refused with a message about the file type, nothing is written to storage, and the real JPEG still uploads."
+  test_data = "avatar.jpg (non-image content), photo.png (text content), real.jpg"
+
+[[checks]]
+id = "empty_file"
+title = "An empty (0-byte) file"
+severity = "medium"
+why = "A 0-byte file passes every 'under the limit' check and then breaks whatever reads it."
+covered_if = ["empty file", "0 byte", "zero byte", "0-byte", "no content"]
+  [checks.test]
+  title = "A 0-byte file is refused with a readable message"
+  category = "Boundary"
+  priority = "Medium"
+  pre_conditions = "A user is signed in as user@example.com and holds an empty file named empty.jpg"
+  steps = ["Upload empty.jpg", "Read the message", "Reload the profile page"]
+  expected_result = "The upload is refused with a message saying the file is empty; no broken image placeholder is stored and the previous avatar is still shown."
+  test_data = "empty.jpg, 0 bytes"
+
+[[checks]]
+id = "huge_dimensions"
+title = "An image with very large dimensions"
+severity = "medium"
+why = "A small file can decode to an enormous bitmap, and the server runs out of memory resizing it."
+covered_if = ["dimensions", "pixels", "resolution", "very large image", "width", "height", "decompressed", "decompression", "pixel bomb"]
+  [checks.test]
+  title = "A small file with enormous pixel dimensions is handled, not crashed on"
+  category = "Edge Case"
+  priority = "Medium"
+  pre_conditions = "A user is signed in as user@example.com and holds a compressed PNG of 20000 by 20000 pixels that is under the size limit"
+  steps = ["Upload the 20000 by 20000 pixel image", "Watch the response and the server memory while it is processed", "Reload the profile page"]
+  expected_result = "Either the image is refused with a message about its dimensions or it is resized successfully; the request returns within the normal time and the server does not run out of memory."
+  test_data = "large.png, 20000 x 20000 pixels, well under the size limit"
+
+[[checks]]
+id = "cancel_upload"
+title = "Cancelling during the upload"
+severity = "low"
+why = "People change their mind mid-upload, and a half-written file left behind is a support ticket."
+covered_if = ["cancel", "cancelled", "abort", "stop the upload", "during the upload"]
+  [checks.test]
+  title = "Cancelling a running upload leaves the old avatar in place"
+  category = "Edge Case"
+  priority = "Low"
+  pre_conditions = "A user is signed in as user@example.com with an existing avatar"
+  steps = ["Start uploading a large image and press Cancel while the progress bar is moving", "Reload the profile page", "Upload a small image to confirm the control still works"]
+  expected_result = "The upload stops, the old avatar is still shown, no partial file appears in storage and the next upload succeeds."
+  test_data = "a file large enough to show a progress bar, cancelled part way"
+
+[[checks]]
+id = "network_drop"
+title = "The network drops during the upload"
+severity = "medium"
+why = "Mobile uploads fail half way as a matter of course; the page must say so rather than appear to succeed."
+covered_if = ["network", "offline", "connection lost", "interrupted", "retry", "timeout"]
+  [checks.test]
+  title = "An upload interrupted by a lost connection reports the failure"
+  category = "Negative"
+  priority = "Medium"
+  pre_conditions = "A user is signed in as user@example.com with an existing avatar"
+  steps = ["Start uploading an image and cut the network connection part way through", "Restore the connection and read the page", "Retry the upload"]
+  expected_result = "The page shows a clear failure message and offers a retry, the old avatar is unchanged, and the retry completes normally."
+  test_data = "a file large enough to still be uploading when the connection is cut"
+
+[[risks]]
+title = "A file at the size limit exhausts server memory while it is processed"
+category = "performance"
+severity = 4
+likelihood = 3
+detectability = 3
+effect = "A handful of maximum-size uploads at once make the server unresponsive for everyone."
+cause = "The whole file is read into memory and decoded before the size or dimensions are checked."
+covered_if = ["memory", "streamed", "at the limit", "concurrent uploads", "out of memory"]
+
+[[risks]]
+title = "An uploaded file is served back with its original content type"
+category = "security"
+severity = 4
+likelihood = 3
+detectability = 4
+effect = "An uploaded HTML or SVG file runs script in the browser of everyone who views it."
+cause = "The stored file is served from the application's own origin with the type the uploader supplied."
+covered_if = ["content type", "svg", "served", "separate domain", "content-disposition"]

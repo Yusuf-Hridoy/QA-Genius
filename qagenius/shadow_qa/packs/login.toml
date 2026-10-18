@@ -1,0 +1,117 @@
+id = "login"
+name = "Login"
+short = "Login"
+# A pack is active when ANY trigger matches the story + criteria text (case-insensitive, whole words/phrases).
+triggers = ["log in", "logs in", "logging in", "login", "logins", "sign in", "signs in", "signing in", "sign-in", "signin", "password", "passwords", "credentials"]
+# Optional: words that must NOT appear for this pack to activate.
+exclude = []
+
+[[checks]]
+id = "email_case"                  # full id becomes "login.email_case"
+title = "Email is not case-sensitive"
+severity = "high"                  # high | medium | low
+why = "Users type capitals on phones; a case-sensitive lookup locks them out or creates duplicate accounts."
+covered_if = ["uppercase", "upper case", "capital", "case-insensitive", "case insensitive", "USER@"]
+  [checks.test]
+  title = "Sign in with the email typed in capital letters"
+  category = "Edge Case"
+  priority = "High"
+  pre_conditions = "An account exists for user@example.com"
+  steps = ["Open the sign-in page", "Enter USER@EXAMPLE.COM and the correct password", "Submit"]
+  expected_result = "The user is signed in to the same account as user@example.com; no new account or error is created."
+  test_data = "email=USER@EXAMPLE.COM"
+
+[[checks]]
+id = "email_trim"
+title = "Spaces around the email are trimmed"
+severity = "medium"
+why = "Copy-paste and phone keyboards add a leading or trailing space, and the sign-in fails for no visible reason."
+covered_if = ["trim", "trailing space", "leading space", "whitespace", "space around"]
+  [checks.test]
+  title = "Sign in with a leading and trailing space in the email"
+  category = "Edge Case"
+  priority = "Medium"
+  pre_conditions = "An account exists for user@example.com"
+  steps = ["Open the sign-in page", "Paste '  user@example.com  ' into the email field", "Enter the correct password and submit"]
+  expected_result = "The user is signed in; the stored email is still user@example.com with no spaces."
+  test_data = "email='  user@example.com  '"
+
+[[checks]]
+id = "enumeration"
+title = "Same error for unknown email and wrong password"
+severity = "high"
+why = "Two different messages let anyone test which addresses have an account here."
+covered_if = ["enumeration", "same message", "same error", "does not reveal", "generic error", "identical message"]
+  [checks.test]
+  title = "Unknown email and wrong password give the same message"
+  category = "Negative"
+  priority = "High"
+  pre_conditions = "An account exists for user@example.com; nobody@example.com has no account"
+  steps = ["Sign in as nobody@example.com with any password and note the message", "Sign in as user@example.com with a wrong password and note the message", "Compare the two messages and the two response times"]
+  expected_result = "Both attempts show the identical message, for example 'Email or password is incorrect', and neither says which part was wrong."
+  test_data = "email=nobody@example.com / user@example.com, password=WrongPass123"
+
+[[checks]]
+id = "enter_key"
+title = "The form submits with the Enter key"
+severity = "low"
+why = "Most people sign in from the keyboard and never reach for the button."
+covered_if = ["enter key", "press enter", "keyboard submit", "submit with enter"]
+  [checks.test]
+  title = "Submit the sign-in form with the Enter key"
+  category = "Functional"
+  priority = "Low"
+  pre_conditions = "An account exists for user@example.com"
+  steps = ["Open the sign-in page", "Type the email and password", "Press Enter while the cursor is in the password field"]
+  expected_result = "The form submits once and the user is signed in; the page does not reload with the fields emptied."
+  test_data = "email=user@example.com"
+
+[[checks]]
+id = "injection_safe"
+title = "Script and SQL-like input is rejected safely and shown escaped"
+severity = "high"
+why = "A sign-in form is the first thing anyone pastes a payload into, and the error page echoes it straight back."
+covered_if = ["script", "sql", "injection", "xss", "escaped", "sanitised", "sanitized", "sanitise", "sanitize", "drop table"]
+  [checks.test]
+  title = "Script-like text in the email field is escaped, not executed"
+  category = "Negative"
+  priority = "High"
+  pre_conditions = "The sign-in page is open"
+  steps = ["Enter <script>alert(1)</script> in the email field", "Enter any password and submit", "Read the error message and view the page source"]
+  expected_result = "Sign-in fails with the normal error; the text appears escaped as plain characters, no dialog opens and no server error page is shown."
+  test_data = "email=<script>alert(1)</script>, password=' OR '1'='1"
+
+[[checks]]
+id = "session_timeout"
+title = "The session expires after inactivity"
+severity = "medium"
+why = "A session that never ends is a signed-in account on every shared and stolen device."
+covered_if = ["inactivity", "idle", "session expire", "session timeout", "times out", "expires after"]
+  [checks.test]
+  title = "An idle session is signed out and asks for the password again"
+  category = "Boundary"
+  priority = "Medium"
+  pre_conditions = "A user is signed in as user@example.com"
+  steps = ["Sign in and leave the tab untouched past the stated inactivity limit", "Click any link that needs a signed-in user", "Try the same page again after signing back in"]
+  expected_result = "The idle user is sent to the sign-in page, the old session token is refused by the API, and signing back in returns to the page they asked for."
+  test_data = "idle time = the limit stated in the criteria, plus one minute"
+
+[[risks]]
+title = "Error message reveals whether an email is registered"
+category = "security"
+severity = 4
+likelihood = 4
+detectability = 3
+effect = "Attackers can list which emails have accounts."
+cause = "Different messages for unknown email and wrong password."
+covered_if = ["enumeration", "same message", "does not reveal", "generic error"]
+
+[[risks]]
+title = "Response time differs between a known and an unknown email"
+category = "security"
+severity = 3
+likelihood = 3
+detectability = 4
+effect = "The timing alone tells an attacker which addresses have accounts, even when the message is identical."
+cause = "The password hash is only computed when the account exists, so the unknown-email path returns sooner."
+covered_if = ["timing", "response time", "constant time", "same duration"]

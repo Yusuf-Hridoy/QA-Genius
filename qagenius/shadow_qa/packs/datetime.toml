@@ -1,0 +1,50 @@
+id = "datetime"
+name = "Dates, times and timezones"
+short = "Dates"
+triggers = ["timezone", "timezones", "time zone", "time zones", "date", "dates", "schedule", "scheduled", "deadline", "deadlines", "expiry", "expires", "minute", "minutes", "hour", "hours", "utc"]
+exclude = []
+
+[[checks]]
+id = "dst_day"
+title = "The daylight-saving change day"
+severity = "medium"
+why = "Twice a year an hour repeats or vanishes, and anything counted in hours is wrong for a day."
+covered_if = ["daylight", "dst", "summer time", "clocks change", "clock change", "repeated hour"]
+  [checks.test]
+  title = "A scheduled time behaves correctly across the clock change"
+  category = "Edge Case"
+  priority = "Medium"
+  pre_conditions = "A user in a timezone that observes daylight saving, with something scheduled for 02:30 local time"
+  steps = ["Set the device clock to the day the clocks go forward and open the schedule", "Set it to the day the clocks go back and open it again", "Compare the times shown with the times stored"]
+  expected_result = "Each entry shows one unambiguous local time on both days, nothing is scheduled twice or skipped, and the stored UTC value is unchanged."
+  test_data = "local time 02:30 on both clock-change days"
+
+[[checks]]
+id = "utc_storage"
+title = "Shown in the user's timezone, stored in UTC"
+severity = "high"
+why = "Storing local time means every report, export and reminder is wrong for everyone else."
+covered_if = ["utc", "timezone", "time zone", "user's local", "converted", "offset"]
+  [checks.test]
+  title = "The same moment reads correctly for two users in different timezones"
+  category = "Functional"
+  priority = "High"
+  pre_conditions = "Two accounts, one set to Europe/London and one to Asia/Tokyo, can see the same item"
+  steps = ["Create a dated item as the London user and note the time shown", "Open the same item as the Tokyo user", "Read the stored value through the API or the export"]
+  expected_result = "Each user sees the time in their own timezone with the zone named, both describe the same moment, and the stored value is UTC."
+  test_data = "Europe/London and Asia/Tokyo accounts viewing one item"
+
+[[checks]]
+id = "midnight_boundary"
+title = "The midnight and end-of-day boundary"
+severity = "medium"
+why = "Whether a deadline at 00:00 belongs to yesterday or today decides who missed it."
+covered_if = ["midnight", "end of day", "00:00", "23:59", "inclusive", "same day", "boundary"]
+  [checks.test]
+  title = "An item at the edge of a day falls on the right side of the boundary"
+  category = "Boundary"
+  priority = "Medium"
+  pre_conditions = "A user in Europe/London with a day-based filter or deadline available"
+  steps = ["Create items at 23:59 and 00:00 local time on consecutive days", "Filter or group by day and read which day each item lands on", "Check an item due exactly at the deadline moment"]
+  expected_result = "Each item lands on the day its local time says, the filter is inclusive or exclusive in one documented way, and the item due exactly at the deadline is treated consistently everywhere."
+  test_data = "items at 23:59:59 and 00:00:00 local time"

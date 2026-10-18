@@ -1,9 +1,14 @@
 {% import "_confidence.html" as conf %}
+{% import "_principal_qa.html" as pq %}
 {% if is_example %}
 {% with caption = "Add a key and press Check story to run this on your own story." %}
 {% include "_example_flag.html" %}
 {% endwith %}
 {% endif %}
+
+{# A story that is really several features is said before the score: the
+   score is about wording, this is about scope. #}
+{{ pq.banner(epic, "recommended-split" if result.recommended_split else "") }}
 
 {# The answer opens with the one verdict, then the numbers, then the detail.
    Before this it was twelve cards of the same weight and you had to read all
@@ -86,6 +91,8 @@
   <p class="muted">{{ conf.said(result.invest_overall) }}</p>
 </div>
 
+{{ pq.notes(shadow_notes, "" if epic else "Nothing to add — this story names its actor, its benefit, and what happens when something goes wrong.") }}
+
 <div class="card card-section">
   <h2>Vague phrases</h2>
   {% if result.vague_phrases %}
@@ -133,7 +140,7 @@
   </ul>
   {% endif %}
   {% if result.recommended_split %}
-  <h3>Recommended split</h3>
+  <h3 id="recommended-split">Recommended split</h3>
   <ul>
     {% for split in result.recommended_split %}<li>{{ conf.said(split) }}</li>{% endfor %}
   </ul>

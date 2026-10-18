@@ -1,0 +1,60 @@
+id = "permissions"
+name = "Roles and permissions"
+short = "Permissions"
+triggers = ["role", "roles", "admin", "admins", "permission", "permissions", "authorized", "unauthorized", "authorised", "unauthorised", "access control", "forbidden", "privileges"]
+exclude = []
+
+[[checks]]
+id = "ui_and_api"
+title = "A user without permission sees no button AND the API refuses"
+severity = "high"
+why = "Hiding the button is not a permission check; the request is one line away in any browser console."
+covered_if = ["403", "api refuses", "server side", "forbidden", "hidden button", "both", "endpoint"]
+  [checks.test]
+  title = "The API refuses an action whose button is hidden for this role"
+  category = "Negative"
+  priority = "High"
+  pre_conditions = "A user with a read-only role is signed in, and an admin-only action exists"
+  steps = ["Open the page as the read-only user and confirm the admin button is not shown", "Call the admin action's endpoint directly with that user's session", "Call the same endpoint as an admin"]
+  expected_result = "The button is absent, the direct call answers 403 and changes nothing, and the admin's call succeeds."
+  test_data = "read-only account reader@example.com, admin account admin@example.com"
+
+[[checks]]
+id = "direct_url"
+title = "A direct URL to a forbidden page is refused"
+severity = "high"
+why = "Links get shared and bookmarks survive role changes."
+covered_if = ["direct url", "deep link", "forbidden page", "403", "redirect", "not authorized", "not authorised"]
+  [checks.test]
+  title = "Typing the URL of an admin page as a non-admin is refused"
+  category = "Negative"
+  priority = "High"
+  pre_conditions = "A user with a read-only role is signed in and an admin page exists at /admin/users"
+  steps = ["Paste /admin/users into the address bar as the read-only user", "Read the page that appears", "Open the same URL as an admin"]
+  expected_result = "The read-only user gets a clear 'not allowed' page or is sent away, and no admin data appears in the HTML or in any background request; the admin sees the page."
+  test_data = "url=/admin/users"
+
+[[checks]]
+id = "role_change_live"
+title = "A role change takes effect without signing out"
+severity = "medium"
+why = "A permission cached in the session means a removed admin stays an admin until they feel like leaving."
+covered_if = ["role change", "takes effect", "without re-login", "immediately", "cached permission", "revoked role"]
+  [checks.test]
+  title = "Removing a role stops the user's access in their current session"
+  category = "Functional"
+  priority = "Medium"
+  pre_conditions = "An admin user is signed in and working, and a second admin can change their role"
+  steps = ["As the second admin, change the first user's role to read-only", "In the first user's open session, reload an admin page", "In the same session, call an admin endpoint directly"]
+  expected_result = "The admin page and the direct call are both refused in the existing session, without the user signing out and in again."
+  test_data = "admin@example.com demoted to read-only while signed in"
+
+[[risks]]
+title = "Permissions are checked in the user interface only"
+category = "security"
+severity = 5
+likelihood = 3
+detectability = 4
+effect = "Any signed-in user can perform an admin action by calling the endpoint directly."
+cause = "The role decides which controls are rendered, and the endpoint trusts whoever reaches it."
+covered_if = ["403", "api refuses", "server side", "endpoint", "direct call"]

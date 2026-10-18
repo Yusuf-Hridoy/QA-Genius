@@ -73,6 +73,20 @@ from qagenius.prompts import (
 )
 from qagenius.providers import PROVIDERS, get_provider, pick_default
 from qagenius.report_parsers import ReportError, RunReport, parse_report
+from qagenius.shadow_qa.review import (
+    CODING_RULES,
+    PRINCIPAL_PREFIX,
+    PRINCIPAL_SOURCE,
+    CaseReview,
+    checklist_block,
+    is_principal,
+    reason_for,
+    review_automation,
+    review_risks,
+    review_test_cases,
+    risk_titles,
+)
+from qagenius.shadow_qa.story_rules import StoryNote, review_story
 from qagenius.story_text import (
     split_confidence,
     strip_confidence_deep,
@@ -413,6 +427,13 @@ def _score_tone(score: int) -> str:
     return "warn" if score >= 45 else "bad"
 
 
+def _shadow_story(story: str, criteria: list[str]) -> tuple[StoryNote | None, list[StoryNote]]:
+    """The Principal QA read of the story: the epic warning, then the rest."""
+    found = review_story(story, criteria)
+    epic = next((note for note in found if note.epic), None)
+    return epic, [note for note in found if not note.epic]
+
+
 def _story_result_context(
     request: Request,
     story: str,
@@ -422,7 +443,11 @@ def _story_result_context(
 ) -> dict:
     rows, passes = _invest_rows(result)
     clarity = max(0, 100 - result.ambiguity_score)
+    # Same click: the rules run on the result that just came back, no AI.
+    epic, shadow_notes = _shadow_story(story, result.generated_acceptance_criteria)
     return {
+        "epic": epic,
+        "shadow_notes": shadow_notes,
         "result": result,
         "clarity_score": clarity,
         "score_tone": _score_tone(clarity),
@@ -838,12 +863,31 @@ def _coverage_pill(percent: int) -> str:
     return "bad"
 
 
+def _review_line(review: CaseReview) -> str:
+    """The one line on the Principal QA review card, before it is opened."""
+    parts = []
+    if review.added:
+        parts.append(
+            f"Added {len(review.added)} case{'' if len(review.added) == 1 else 's'} "
+            "the AI missed"
+        )
+    if review.more:
+        parts.append(f"{len(review.more)} more idea{'' if len(review.more) == 1 else 's'}")
+    if review.quality:
+        parts.append(
+            f"{len(review.quality)} note{'' if len(review.quality) == 1 else 's'} "
+            "on weak cases"
+        )
+    return " · ".join(parts)
+
+
 def _test_cases_result_context(
     result: TestCaseList,
     criteria: list[Criterion],
     notes: list[str],
     provider_name: str,
     is_example: bool = False,
+    review: CaseReview | None = None,
 ) -> dict:
     """Everything the result card shows is computed here, never read from result.summary."""
     coverage = compute_coverage(result, criteria)
@@ -872,6 +916,10 @@ def _test_cases_result_context(
         "is_example": is_example,
         "notes": notes,
         "provider_name": provider_name,
+        "review": review,
+        "review_line": _review_line(review) if review else "",
+        "is_principal": is_principal,
+        "pq_reason": reason_for,
     }
 
 
@@ -921,6 +969,9 @@ def test_cases_run(
     criteria = number_criteria(texts)
     system, base_user = test_cases_prompt(user_story)
     user = build_user_text(base_user, list(coverage_focus), criteria)
+    # The checklist rides along with the request the user already made. The v1
+    # prompt text is untouched; this is appended to the user text.
+    user += checklist_block(user_story, criteria)[0]
     try:
         result, used_index, notes = llm.generate_json(keys, system, user, TestCaseList)
     except llm.NoKeysError:
@@ -953,36 +1004,58 @@ def test_cases_run(
     except llm.BadOutputError as e:
         return _error_card(request, str(e))
     provider = get_provider(keys[used_index]["provider"])
+    merged, review = _with_principal_cases(user_story, criteria, result)
     return templates.TemplateResponse(
         request,
         "_test_cases_result.html",
         _test_cases_result_context(
-            result,
+            merged,
             criteria,
             notes,
             provider["name"] if provider else "unknown provider",
+            review=review,
         ),
     )
 
 
-def _test_cases_sample() -> tuple[TestCaseList, list[Criterion]]:
+def _with_principal_cases(
+    story: str, criteria: list[Criterion], result: TestCaseList
+) -> tuple[TestCaseList, CaseReview]:
+    """The AI's cases plus the ones it missed. Every count is then taken from this."""
+    review = review_test_cases(story, criteria, result)
+    merged = TestCaseList(
+        test_cases=list(result.test_cases) + list(review.added),
+        summary=result.summary,
+    )
+    return merged, review
+
+
+def _test_cases_sample() -> tuple[TestCaseList, list[Criterion], str]:
     with open(SAMPLES_DIR / "test_cases.json", encoding="utf-8") as f:
         sample = json.load(f)
     return (
         TestCaseList.model_validate(sample["result"]),
         number_criteria(sample["criteria"]),
+        str(sample.get("story") or ""),
     )
+
+
+def _example_suite() -> tuple[TestCaseList, list[Criterion], CaseReview, str]:
+    """The saved suite with Principal QA's additions, exactly as a run shows it."""
+    result, criteria, story = _test_cases_sample()
+    merged, review = _with_principal_cases(story, criteria, result)
+    return merged, criteria, review, story
 
 
 @app.get("/requirements/test-cases/example", response_class=HTMLResponse)
 def test_cases_example(request: Request) -> HTMLResponse:
-    """Load example: a saved suite. No key needed, no AI call."""
-    result, criteria = _test_cases_sample()
+    """Load example: a saved suite, reviewed. No key needed, no AI call."""
+    merged, criteria, review, _ = _example_suite()
     return templates.TemplateResponse(
         request,
         "_test_cases_result.html",
         _test_cases_result_context(
-            result, criteria, [], "saved example", is_example=True
+            merged, criteria, [], "saved example", is_example=True, review=review
         ),
     )
 
@@ -1097,6 +1170,8 @@ def _diff_context(
         "category_pill": _category_pill,
         "priority_pill": _priority_pill,
         "field_labels": FIELD_LABELS,
+        "is_principal": is_principal,
+        "pq_reason": reason_for,
         "proposal": {
             "result": proposed.model_dump(),
             "criteria": [criterion.text for criterion in criteria],
@@ -1256,6 +1331,7 @@ def test_cases_refine(
     else:
         asked = strengthen_instruction(depth)
     user = refine_user_text(base, current, criteria, asked)
+    user += checklist_block(user_story, criteria)[0]
     try:
         ai_result, used_index, notes = llm.generate_json(
             keys, system, user, TestCaseList
@@ -1301,6 +1377,8 @@ def test_cases_refine(
         proposed = add_risk_tags(
             current, proposed, [item.risk.id for item in asked_risks]
         )
+    # Principal QA cases join the proposal, so they show as added in the diff.
+    proposed, _ = _with_principal_cases(user_story, criteria, proposed)
     provider = get_provider(keys[used_index]["provider"])
     return templates.TemplateResponse(
         request,
@@ -1319,10 +1397,26 @@ def test_cases_refine(
 @app.get("/requirements/test-cases/example-strengthen", response_class=HTMLResponse)
 def test_cases_example_strengthen(request: Request) -> HTMLResponse:
     """What Strengthen does to the saved example. No key needed, no AI call."""
-    current, criteria = _test_cases_sample()
+    # The page already shows the reviewed suite, so the diff is against that
+    # one; otherwise every Principal QA case would read as "removed".
+    current, criteria, _, _ = _example_suite()
+    saved, _, _ = _test_cases_sample()
+    known = {case.id for case in saved.test_cases}
     with open(SAMPLES_DIR / "test_cases_strengthened.json", encoding="utf-8") as f:
         sample = json.load(f)
-    proposed = TestCaseList.model_validate(sample["result"])
+    stronger = TestCaseList.model_validate(sample["result"])
+    # The saved proposal numbers its new cases from where the saved suite
+    # ended; the Principal QA cases now sit there, so the ids come off and
+    # merge_strengthened gives them the next free ones.
+    fresh = TestCaseList(
+        test_cases=[
+            case.model_copy(update={"id": ""})
+            for case in stronger.test_cases
+            if case.id not in known
+        ],
+        summary=stronger.summary,
+    )
+    proposed = merge_strengthened(current, fresh)
     return templates.TemplateResponse(
         request,
         "_test_cases_diff.html",
@@ -1367,6 +1461,25 @@ def _browsers_text(framework: str, browsers: list[str]) -> str:
     return ", ".join(picked) or "chromium"
 
 
+def _checked_project(script: AutomationScript, selected_ids: list[str]) -> CheckReport:
+    """The existing checks plus what a principal QA would send back. No AI."""
+    report = check_project(script, selected_ids)
+    extra = review_automation(script, report.files)
+    if not extra:
+        return report
+    return replace(report, findings=list(report.findings) + extra)
+
+
+def _is_pq_finding(finding) -> bool:
+    return str(finding.message or "").startswith(PRINCIPAL_PREFIX)
+
+
+def _finding_text(finding) -> str:
+    """The message without the label, which the card draws as a pill instead."""
+    message = str(finding.message or "")
+    return message[len(PRINCIPAL_PREFIX):] if _is_pq_finding(finding) else message
+
+
 def _automation_result_context(
     script: AutomationScript,
     report: CheckReport,
@@ -1375,8 +1488,13 @@ def _automation_result_context(
     provider_name: str,
     is_example: bool = False,
 ) -> dict:
-    warnings = [finding for finding in report.findings if finding.level == "warning"]
-    errors = [finding for finding in report.findings if finding.level == "error"]
+    # The two stats mean one thing each: Syntax is about the code parsing,
+    # Principal QA is about what a reviewer would send back. No finding is
+    # counted in both.
+    checked = [one for one in report.findings if not _is_pq_finding(one)]
+    principal = [one for one in report.findings if _is_pq_finding(one)]
+    warnings = [finding for finding in checked if finding.level == "warning"]
+    errors = [finding for finding in checked if finding.level == "error"]
     return {
         "script": script,
         "report": report,
@@ -1384,11 +1502,14 @@ def _automation_result_context(
         "traced_total": len(report.traced) + len(report.missing),
         "warnings": warnings,
         "errors": errors,
+        "principal_findings": principal,
         "syntax_label": "all valid" if not errors else f"{len(errors)} error"
         + ("s" if len(errors) != 1 else ""),
         "notes": notes,
         "provider_name": provider_name,
         "is_example": is_example,
+        "is_pq_finding": _is_pq_finding,
+        "finding_text": _finding_text,
         # Worked out from the files in the ZIP, not from the AI's instructions.
         "run_it": run_steps(script, report.files),
         # What the Download ZIP button posts back to the export route.
@@ -1448,7 +1569,7 @@ def automation_run(
         _browsers_text(framework, list(browsers)),
         site_type,
     )
-    user = automation.build_user_text(base_user, cases, base_url)
+    user = automation.build_user_text(base_user, cases, base_url) + CODING_RULES
     try:
         script, used_index, notes = llm.generate_json(
             keys, system, user, AutomationScript
@@ -1484,7 +1605,7 @@ def automation_run(
         return _error_card(request, str(e))
 
     selected_ids = [case.id for case in cases]
-    report = check_project(script, selected_ids)
+    report = _checked_project(script, selected_ids)
     provider = get_provider(keys[used_index]["provider"])
     return templates.TemplateResponse(
         request,
@@ -1512,7 +1633,7 @@ def _automation_sample() -> tuple[AutomationScript, list[str]]:
 def automation_example(request: Request) -> HTMLResponse:
     """Load example: a saved project. No key needed, no AI call."""
     script, selected_ids = _automation_sample()
-    report = check_project(script, selected_ids)
+    report = _checked_project(script, selected_ids)
     return templates.TemplateResponse(
         request,
         "_automation_result.html",
@@ -2068,7 +2189,20 @@ def _risk_result_context(
         "notes": notes,
         "provider_name": provider_name,
         "answered_line": answered_line,
+        "principal_source": PRINCIPAL_SOURCE,
     }
+
+
+TYPICAL_RISKS_HEAD = "Typical risks for this kind of feature (consider them too):"
+
+
+def _typical_risks_block(story: str, criteria: list[str]) -> str:
+    """What a principal QA would hand the AI before it starts. No AI, no key."""
+    titles = risk_titles(story, criteria)
+    if not titles:
+        return ""
+    lines = [TYPICAL_RISKS_HEAD] + [f"- {one}" for one in titles]
+    return "\n\n" + "\n".join(lines)
 
 
 def _risk_result(request: Request, **context) -> HTMLResponse:
@@ -2123,6 +2257,7 @@ def risks_run(
     system, user = risk_radar_prompt(
         user_story, criteria_lines(criteria), case_lines(cases)
     )
+    user += _typical_risks_block(user_story, texts)
     try:
         result, used_index, notes = llm.generate_json(keys, system, user, RiskAnalysis)
     except llm.NoKeysError:
@@ -2151,11 +2286,14 @@ def risks_run(
     except llm.BadOutputError as e:
         return _error_card(request, str(e))
 
-    analysis, guard_notes = clean_analysis(
-        result,
-        {criterion.id for criterion in criteria},
-        {case.id for case in cases},
-    )
+    known_ids = ({criterion.id for criterion in criteria}, {case.id for case in cases})
+    analysis, guard_notes = clean_analysis(result, *known_ids)
+    # The classics the AI left out, numbered and scored like everything else.
+    extra = review_risks(user_story, texts, analysis)
+    if extra:
+        analysis, _ = clean_analysis(
+            RiskAnalysis(failure_modes=list(analysis.failure_modes) + extra), *known_ids
+        )
     provider = get_provider(keys[used_index]["provider"])
     return _risk_result(
         request,
@@ -2195,16 +2333,25 @@ def risks_rescore(
 def _risk_sample() -> tuple[RiskAnalysis, list[TestCase], list[Criterion]]:
     with open(SAMPLES_DIR / "risk_radar.json", encoding="utf-8") as f:
         sample = json.load(f)
-    return (
-        RiskAnalysis.model_validate(sample["analysis"]),
-        [TestCase.model_validate(case) for case in sample["cases"]],
-        number_criteria(sample["criteria"]),
-    )
+    analysis = RiskAnalysis.model_validate(sample["analysis"])
+    cases = [TestCase.model_validate(case) for case in sample["cases"]]
+    criteria = number_criteria(sample["criteria"])
+    story = str(sample.get("story") or "")
+    # The example runs the reviewer too, so Load example shows what a real run
+    # shows. Still no key and still no AI call.
+    extra = review_risks(story, [item.text for item in criteria], analysis)
+    if extra:
+        analysis, _ = clean_analysis(
+            RiskAnalysis(failure_modes=list(analysis.failure_modes) + extra),
+            {item.id for item in criteria},
+            {case.id for case in cases},
+        )
+    return analysis, cases, criteria
 
 
 @app.get("/risks/example", response_class=HTMLResponse)
 def risks_example(request: Request) -> HTMLResponse:
-    """Load example: a saved FMEA. No key needed, no AI call."""
+    """Load example: a saved FMEA, reviewed. No key needed, no AI call."""
     analysis, cases, criteria = _risk_sample()
     return _risk_result(
         request,
@@ -2366,6 +2513,7 @@ def _ship_inputs(raw: dict) -> tuple[ShipInputs, list[str]]:
 
     return (
         ShipInputs(
+            story=_ship_story(raw),
             story_analysis=_ship_part(
                 raw, "story_analysis", AmbiguityAnalysis.model_validate, ignored
             ),

@@ -1,0 +1,50 @@
+id = "notifications_email"
+name = "Email and notifications"
+short = "Email"
+triggers = ["email", "emails", "notification", "notifications", "notify", "notified", "confirmation email", "reminder", "reminders", "push"]
+exclude = []
+
+[[checks]]
+id = "sent_once"
+title = "The email is sent once and never duplicated on a retry"
+severity = "medium"
+why = "A retried job sends the same message again, and the recipient acts on it twice."
+covered_if = ["once", "duplicate", "twice", "idempotent", "idempotency", "idempotency key", "retry", "only one email"]
+  [checks.test]
+  title = "A retried send does not produce a second email"
+  category = "Edge Case"
+  priority = "Medium"
+  pre_conditions = "A test mailbox is available and the action that sends the email can be retried"
+  steps = ["Trigger the action and let the email be sent", "Make the first delivery attempt time out so the job retries", "Count the messages in the mailbox and check the send log"]
+  expected_result = "Exactly one message arrives however many times the job runs, and the log records one send for that event."
+  test_data = "mailbox user@example.com, one triggering event, delivery retried once"
+
+[[checks]]
+id = "links_work_expire"
+title = "Links in the email work and expire as stated"
+severity = "medium"
+why = "A link that never expires sits in an inbox forever, and one that expires early sends people to support."
+covered_if = ["link", "expires", "expiry", "token", "valid for", "no longer valid", "single use"]
+  [checks.test]
+  title = "An emailed link works once and stops working after its stated lifetime"
+  category = "Boundary"
+  priority = "Medium"
+  pre_conditions = "An email containing an action link has been received at user@example.com"
+  steps = ["Open the link straight away and complete the action", "Open the same link a second time", "Trigger a new email, wait past the stated lifetime and open that link"]
+  expected_result = "The first open works; the second says the link has already been used; the expired link says it has expired and offers a way to get a new one. None of them shows a server error."
+  test_data = "one action link, used twice, and one left past its stated lifetime"
+
+[[checks]]
+id = "user_language"
+title = "The content is in the user's language"
+severity = "low"
+why = "The email is sent by a background job that has no idea who asked for it."
+covered_if = ["language", "locale", "translated", "translation", "localised", "localized", "user's language"]
+  [checks.test]
+  title = "An email sent by a background job uses the recipient's language"
+  category = "Functional"
+  priority = "Low"
+  pre_conditions = "An account at user@example.com has its language set to something other than the default"
+  steps = ["Set the account language to the non-default option", "Trigger the email from a background job rather than a direct click", "Read the subject, the body and the button text"]
+  expected_result = "Subject, body and button are all in the account's language, with no untranslated placeholder text and no mixed languages in one message."
+  test_data = "account language set away from the default"

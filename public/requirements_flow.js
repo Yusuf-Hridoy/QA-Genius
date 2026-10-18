@@ -1072,6 +1072,40 @@
     renderList(proposal, backToRiskRadar);
   }
 
+  /* Drop one case from a saved {result, criteria} payload. Returns a new
+   * payload, or null when the id is not in it. Pure: the caller stores it. */
+  function withoutCase(payload, caseId) {
+    if (!payload || !payload.result || !payload.result.test_cases) return null;
+    var cases = payload.result.test_cases;
+    var kept = [];
+    for (var i = 0; i < cases.length; i++) {
+      if (cases[i] && cases[i].id === caseId) continue;
+      kept.push(cases[i]);
+    }
+    if (kept.length === cases.length) return null;
+    return {
+      result: { test_cases: kept, summary: payload.result.summary },
+      criteria: payload.criteria
+    };
+  }
+
+  /* Remove a Principal QA case. The list before the removal goes on the undo
+   * stack, so the Undo button brings it straight back. */
+  function removePrincipalCase(caseId) {
+    var run = readRun() || {};
+    var current = run.test_cases || displayedList();
+    var next = withoutCase(current, caseId);
+    if (!next) return;
+    var history = run.test_cases_history || [];
+    history.push(current);
+    while (history.length > HISTORY_MAX) history.shift();
+    run.test_cases_history = history;
+    run.test_cases = next;
+    writeRun(run);
+    clearProposal();
+    renderList(next);
+  }
+
   function undoLastChange() {
     var run = readRun() || {};
     var history = run.test_cases_history || [];
@@ -1201,6 +1235,11 @@
     }
     if (closest(event.target, "#undo-btn")) {
       undoLastChange();
+      return;
+    }
+    var remove = closest(event.target, ".pq-remove");
+    if (remove) {
+      removePrincipalCase(remove.getAttribute("data-case-id"));
     }
   });
 
@@ -1285,4 +1324,10 @@
     renderTestCases();
     renderAutomation();
   });
+
+  /* The pure helpers the unit tests in tests/js reach for. The page itself
+   * never goes through here. */
+  if (typeof window !== "undefined") {
+    window.QAGFlow = { withoutCase: withoutCase, renumber: renumber };
+  }
 })();

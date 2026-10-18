@@ -100,7 +100,9 @@ def test_strengthen_ignores_ai_edits_to_existing_cases(monkeypatch) -> None:
     body = client.post(
         "/requirements/test-cases/refine", data=_form(), headers=KEYS_HEADER
     ).text
-    assert "+1 added" in body
+    # The AI's one new case, plus whatever Principal QA found missing.
+    assert "added" in body and "+0 added" not in body
+    assert "Unknown email is refused politely" in body
     assert "~0 changed" in body
     assert "−0 removed" in body
     assert "The AI rewrote this title" not in body
@@ -152,7 +154,7 @@ def test_instruction_mode_shows_added_changed_and_removed(monkeypatch) -> None:
         data=_form(mode="instruction", instruction="Use exact times."),
         headers=KEYS_HEADER,
     ).text
-    assert "+1 added" in body
+    assert "Fifteen minutes exactly still refuses" in body
     assert "~1 changed" in body
     assert "−7 removed" in body
     assert "This removes 7 test cases." in body
@@ -218,7 +220,10 @@ def test_proposal_json_round_trips_through_render(monkeypatch) -> None:
     raw = body.split('<script type="application/json" id="tc-proposed">')[1]
     raw = raw.split("</script>")[0]
     payload = json.loads(raw)
-    assert len(payload["result"]["test_cases"]) == 9
+    cases = payload["result"]["test_cases"]
+    # The 8 current cases, the AI's new one, and the Principal QA additions.
+    assert len(cases) >= 9
+    assert [one["id"] for one in cases][:9] == [f"TC-{n:03d}" for n in range(1, 10)]
     response = client.post("/requirements/test-cases/render", json=payload)
     assert response.status_code == 200
     assert "TC-009" in response.text
@@ -315,7 +320,7 @@ def test_risks_mode_only_adds_cases(monkeypatch) -> None:
     body = client.post(
         "/requirements/test-cases/refine", data=_risk_form(), headers=KEYS_HEADER
     ).text
-    assert "+1 added" in body
+    assert "Counter is shared between servers" in body
     assert "−0 removed" in body
     assert "Rewritten by the AI" not in body
 

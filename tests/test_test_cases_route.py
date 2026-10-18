@@ -119,11 +119,18 @@ def test_run_renders_chips_and_coverage(monkeypatch) -> None:
 
 
 def test_run_reports_uncovered_criteria(monkeypatch) -> None:
-    # Only AC-1 is traced, so AC-2 must be reported as uncovered.
+    # Only AC-1 is traced, so AC-2 must be reported as uncovered. The story is
+    # one no rule pack recognises, so Principal QA adds nothing and the only
+    # coverage on the page is the AI's own.
     monkeypatch.setattr(
         llm, "generate_json", _fake_generate(suite=_suite(_case("TC-001", "Functional", "AC-1")))
     )
-    body = client.post("/requirements/test-cases/run", data=FORM, headers=KEYS_HEADER).text
+    quiet = dict(
+        FORM,
+        user_story="As a reader, I want a quiet wall so that I can think.",
+        criteria_json=json.dumps(["The wall is grey", "The wall is tall"]),
+    )
+    body = client.post("/requirements/test-cases/run", data=quiet, headers=KEYS_HEADER).text
     assert "Coverage 50%" in body
     assert "Not covered:" in body
 
@@ -176,10 +183,12 @@ def test_example_needs_no_key() -> None:
     response = client.get("/requirements/test-cases/example")
     assert response.status_code == 200
     body = response.text
-    assert "Coverage 80%" in body
-    assert "Not covered:" in body
+    # Principal QA fills the gap the saved suite left, so the example shows
+    # what a real run shows: full coverage and the cases that got it there.
+    assert "Coverage 100%" in body
     assert "AC-5" in body
     assert "saved example" in body
+    assert "Principal QA" in body
 
 
 def test_export_csv_route() -> None:
@@ -225,7 +234,8 @@ def test_result_has_one_card_per_case(monkeypatch) -> None:
 
 def test_coverage_bar_width_matches_percent() -> None:
     body = client.get("/requirements/test-cases/example").text
-    assert 'style="width:80%"' in body
+    percent = re.search(r"Coverage (\d+)%", body).group(1)
+    assert f'style="width:{percent}%"' in body
 
 
 def test_filter_chips_list_only_present_categories() -> None:

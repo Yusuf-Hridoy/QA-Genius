@@ -116,6 +116,48 @@ profile, locale, colour scheme and stored session, and **Download CSV** covers
 the rest, including the runs Playwright cannot drive, which are counted rather
 than quietly dropped. The result feeds the Test matrix row of Ship check.
 
+## Principal QA (Shadow QA)
+Every AI call on every desk has a principal QA engineer sitting either side of
+it, and it costs you nothing: same click, same single AI call, no key of its
+own, no waiting. **Before** the call, QA-Genius appends a short checklist of
+what a senior tester would insist on for this kind of feature — the email typed
+in capitals, the same error for an unknown email and a wrong password, the file
+of exactly 5 MB and the one a byte over — together with the exact boundary
+values your criteria imply (4 / 5 / 6 attempts, 14 / 15 / 16 minutes). **After**
+the call it reads what came back and adds what is still missing, straight into
+the same result: test cases labelled **Principal QA** with the reason they
+exist and a Remove button, extra risks scored by the same rules as the AI's own,
+findings on automation code that never asserts or leaves `.only` behind, and a
+warning on Story check when a story is really seven features wearing one hat.
+It never edits the AI's own work — it only adds, and everything it adds is
+removable, with Undo. All of it is plain Python over rule packs, so it runs on
+**Load example** with no key at all.
+
+The rules live in `qagenius/shadow_qa/packs/*.toml`, one file per kind of
+feature, and you can add your own — drop a file in and it is picked up:
+
+```toml
+id = "coupons"
+name = "Coupon codes"
+short = "Coupons"
+triggers = ["coupon", "coupons", "promo code", "discount code"]
+
+[[checks]]
+id = "expired"
+title = "An expired coupon is refused"
+severity = "high"
+why = "An expired code that still works is money out of the door."
+covered_if = ["expired", "expiry", "no longer valid"]
+  [checks.test]
+  title = "Apply a coupon one day after it expired"
+  category = "Negative"
+  priority = "High"
+  pre_conditions = "A coupon SPRING10 expired yesterday"
+  steps = ["Add an item to the basket", "Apply SPRING10 and read the message"]
+  expected_result = "The coupon is refused with a message saying it has expired, and the total is unchanged."
+  test_data = "code=SPRING10"
+```
+
 ## Always up to date
 Every desk says, at the top, what it was built from and whether that is still
 your latest work: **Not built yet**, **Out of date** or **Up to date**, each

@@ -2,6 +2,7 @@
 
 import io
 import json
+import re
 
 import openpyxl
 from fastapi.testclient import TestClient
@@ -234,10 +235,15 @@ def test_the_example_shows_every_coverage_state() -> None:
     assert "No test covers this risk" in body
 
 
-def test_the_example_counts_two_untested_high_risks() -> None:
+def test_the_example_counts_its_untested_high_risks() -> None:
     body = client.get("/risks/example").text
-    assert "Write tests for 2 untested high risks" in body
-    assert '<div class="num">2</div><div class="lbl">High risk, untested</div>' in body
+    # The saved analysis plus the classics Principal QA adds; the button and
+    # the stat must agree on the number whatever that number is.
+    shown = re.search(
+        r'<div class="num">(\d+)</div><div class="lbl">High risk, untested</div>', body
+    )
+    assert shown and int(shown.group(1)) >= 2
+    assert f"Write tests for {shown.group(1)} untested high risks" in body
     assert "stat stat-bad" in body
 
 

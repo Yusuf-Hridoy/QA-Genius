@@ -1,0 +1,115 @@
+id = "two_factor"
+name = "Two-factor authentication"
+short = "Two-factor"
+triggers = ["2fa", "two-factor", "two factor", "authenticator", "totp", "otp", "verification code", "verification codes", "recovery code", "recovery codes"]
+exclude = []
+
+[[checks]]
+id = "wrong_code"
+title = "A wrong code is rejected"
+severity = "high"
+why = "If a wrong code ever passes, the second factor is decoration."
+covered_if = ["wrong code", "incorrect code", "invalid code", "bad code", "rejected"]
+  [checks.test]
+  title = "A wrong verification code is refused"
+  category = "Negative"
+  priority = "High"
+  pre_conditions = "A user with two-factor enabled has entered the correct password"
+  steps = ["Reach the verification code step", "Enter 000000 instead of the code from the authenticator app", "Submit"]
+  expected_result = "Sign-in is refused with a message about the code, the user stays on the code step, and no session is created."
+  test_data = "code=000000"
+
+[[checks]]
+id = "expired_code"
+title = "An expired code is rejected"
+severity = "high"
+why = "A code that works ten minutes later is a password someone can read over a shoulder and use at leisure."
+covered_if = ["expired", "expiry", "expires", "time window", "no longer valid", "stale code"]
+  [checks.test]
+  title = "A code entered after its window has passed is refused"
+  category = "Boundary"
+  priority = "High"
+  pre_conditions = "A user with two-factor enabled has entered the correct password"
+  steps = ["Read the current code from the authenticator app and wait until its window has passed", "Enter the now-expired code", "Read the next code and enter that one"]
+  expected_result = "The expired code is refused with a message saying it has expired; the current code is accepted."
+  test_data = "one code read, then used after its validity window"
+
+[[checks]]
+id = "code_reuse"
+title = "The same code cannot be used twice"
+severity = "high"
+why = "A replayed code lets anyone who sees it once sign in again inside the same window."
+covered_if = ["reuse", "re-use", "used twice", "replay", "already used", "one-time"]
+  [checks.test]
+  title = "A code that already signed someone in is refused the second time"
+  category = "Negative"
+  priority = "High"
+  pre_conditions = "A user with two-factor enabled and a fresh code from the authenticator app"
+  steps = ["Sign in with the code and complete the sign-in", "Sign out immediately", "Sign in again and enter the same code while its window is still open"]
+  expected_result = "The second attempt is refused because the code has already been used; a new code works."
+  test_data = "the same 6-digit code entered twice inside one window"
+
+[[checks]]
+id = "recovery_once"
+title = "A recovery code works once and only once"
+severity = "high"
+why = "Recovery codes are written on paper and photographed; one that keeps working is a permanent spare key."
+covered_if = ["recovery code", "backup code", "single use", "once only", "used once", "burn"]
+  [checks.test]
+  title = "A used recovery code is refused on the second attempt"
+  category = "Negative"
+  priority = "High"
+  pre_conditions = "A user with two-factor enabled holds a list of unused recovery codes"
+  steps = ["Sign in using one recovery code and complete the sign-in", "Sign out", "Sign in again and enter the same recovery code"]
+  expected_result = "The second attempt is refused and the code is shown as used in the account's recovery code list; the remaining codes still work."
+  test_data = "one recovery code from the generated list"
+
+[[checks]]
+id = "disable_needs_password"
+title = "Turning two-factor off needs the password again"
+severity = "high"
+why = "An unattended signed-in tab should not be enough to strip the account's strongest protection."
+covered_if = ["re-enter", "reauthenticate", "re-authenticate", "reauthentication", "re-authentication", "confirm password", "password again", "disable"]
+  [checks.test]
+  title = "Disabling two-factor asks for the password before it takes effect"
+  category = "Functional"
+  priority = "High"
+  pre_conditions = "A user is signed in as user@example.com with two-factor enabled"
+  steps = ["Open the security settings and choose to turn two-factor off", "Submit the confirmation with a wrong password", "Submit it again with the correct password"]
+  expected_result = "The wrong password leaves two-factor enabled and shows an error; the correct password turns it off and the change is recorded."
+  test_data = "wrong=WrongPass123, correct=Harbour-Lantern-42"
+
+[[checks]]
+id = "lost_device"
+title = "There is a usable path when the device is lost"
+severity = "medium"
+why = "A phone is lost every day; without a tested route back the account is simply gone."
+covered_if = ["lost device", "lost phone", "recovery", "locked out", "support", "no access to"]
+  [checks.test]
+  title = "A user without the authenticator app can still reach their account"
+  category = "Edge Case"
+  priority = "Medium"
+  pre_conditions = "A user with two-factor enabled no longer has the authenticator app"
+  steps = ["Enter the correct password and reach the code step", "Choose the 'I cannot use my authenticator' option", "Follow the offered route to the end"]
+  expected_result = "A recovery route is offered on the code step and completes; the account is reachable and the old authenticator secret no longer works."
+  test_data = "account user@example.com with the authenticator removed"
+
+[[risks]]
+title = "A verification code can be replayed inside its time window"
+category = "security"
+severity = 4
+likelihood = 3
+detectability = 4
+effect = "Anyone who reads one code can sign in again until the window closes."
+cause = "The code is checked against the time-based algorithm but never marked as used."
+covered_if = ["replay", "used twice", "one-time", "already used"]
+
+[[risks]]
+title = "Verification codes are not rate limited"
+category = "security"
+severity = 4
+likelihood = 3
+detectability = 3
+effect = "A six-digit code can be guessed by trying every value."
+cause = "The attempt counter sits on the password step only, not on the code step."
+covered_if = ["rate limit", "attempts", "throttle", "lockout", "brute"]

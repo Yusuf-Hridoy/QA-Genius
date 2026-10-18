@@ -1,0 +1,75 @@
+id = "rate_limiting"
+name = "Rate limiting and lockout"
+short = "Rate limit"
+triggers = ["rate limit", "rate limiting", "attempt", "attempts", "too many", "lockout", "lock", "locks", "locked", "throttle", "throttling", "brute force", "brute"]
+exclude = []
+
+[[checks]]
+id = "attempt_boundary"
+title = "One below the limit, exactly the limit, one over"
+severity = "high"
+why = "Off-by-one here either locks people out a try early or gives an attacker a free extra guess."
+covered_if = ["one below", "exactly", "boundary", "nth attempt", "attempt limit", "limit + 1", "limit - 1"]
+  [checks.test]
+  title = "The account locks on the stated attempt and not before it"
+  category = "Boundary"
+  priority = "High"
+  pre_conditions = "An account exists for user@example.com and the attempt limit is the one stated in the criteria"
+  steps = ["Fail one time fewer than the limit, then sign in with the correct password", "Fail exactly the limit number of times and read the message", "Fail once more and read the message again"]
+  expected_result = "The correct password still works one below the limit; the account locks exactly at the stated attempt, and the attempt after the limit is refused with the same lock message rather than a new error."
+  test_data = "limit from the criteria; try limit minus 1, limit, limit plus 1 wrong passwords"
+
+[[checks]]
+id = "window_resets"
+title = "The window resets after the stated time"
+severity = "high"
+why = "A counter that never resets locks out honest people who mistype twice a week."
+covered_if = ["window", "resets", "reset", "within", "rolling", "counter", "after the"]
+  [checks.test]
+  title = "Failed attempts stop counting once the window has passed"
+  category = "Boundary"
+  priority = "High"
+  pre_conditions = "An account exists for user@example.com and the window is the one stated in the criteria"
+  steps = ["Fail one time fewer than the limit", "Wait until just past the stated window", "Fail the same number of times again and then sign in with the correct password"]
+  expected_result = "The account does not lock, because the first group of attempts fell out of the window; the correct password signs the user in."
+  test_data = "window from the criteria, waited out plus one minute"
+
+[[checks]]
+id = "lock_duration"
+title = "The lock lasts exactly the stated duration"
+severity = "medium"
+why = "A lock that never lifts is a support queue; one that lifts early is not a lock."
+covered_if = ["lock lasts", "lock duration", "for 30", "minutes", "unlocks after", "still locked"]
+  [checks.test]
+  title = "A locked account stays locked for the stated time and then works again"
+  category = "Boundary"
+  priority = "Medium"
+  pre_conditions = "An account for user@example.com has just been locked by failed attempts"
+  steps = ["Sign in with the correct password one minute before the lock is due to lift", "Wait until one minute after it is due to lift and sign in again", "Note the message at each attempt"]
+  expected_result = "The early attempt is refused with the lock message and does not extend the lock; the later attempt signs the user in and the failure counter is back to zero."
+  test_data = "lock duration from the criteria, checked one minute either side"
+
+[[checks]]
+id = "per_account"
+title = "The limit applies per account, even from different IPs and devices"
+severity = "medium"
+why = "A limit counted per IP is bypassed by anyone with more than one IP, which is everyone."
+covered_if = ["per account", "different ip", "different device", "across devices", "per ip", "distributed"]
+  [checks.test]
+  title = "Attempts from two devices count against the same account"
+  category = "Edge Case"
+  priority = "Medium"
+  pre_conditions = "An account exists for user@example.com and two devices or browsers with different IP addresses are available"
+  steps = ["Fail half of the limit on device one", "Fail the remaining attempts on device two", "Try the correct password on a third device"]
+  expected_result = "The account is locked after the combined attempts reach the limit, and the correct password on the third device is refused with the lock message."
+  test_data = "attempts split across two IP addresses for one account"
+
+[[risks]]
+title = "The attempt limit is counted per IP address rather than per account"
+category = "security"
+severity = 4
+likelihood = 3
+detectability = 4
+effect = "An attacker spreading guesses over several addresses is never locked out."
+cause = "The counter key is the client address, which costs an attacker nothing to change."
+covered_if = ["per account", "per ip", "different ip", "distributed"]

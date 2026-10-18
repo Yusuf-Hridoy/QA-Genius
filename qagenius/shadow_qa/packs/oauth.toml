@@ -1,0 +1,75 @@
+id = "oauth"
+name = "OAuth and social sign-in"
+short = "OAuth"
+triggers = ["oauth", "google", "github", "sso", "single sign-on", "social login", "social sign-in", "link account", "linking", "link", "unlink", "unlinking", "provider", "providers"]
+exclude = []
+
+[[checks]]
+id = "user_cancels"
+title = "The user cancels at the provider's consent screen"
+severity = "medium"
+why = "Pressing Cancel is the most common thing that happens on that screen, and it usually lands on a blank error page."
+covered_if = ["cancel", "cancels", "denies", "declines", "consent screen", "goes back"]
+  [checks.test]
+  title = "Cancelling at the provider returns to sign-in with a readable message"
+  category = "Negative"
+  priority = "Medium"
+  pre_conditions = "The sign-in page offers Continue with Google"
+  steps = ["Press Continue with Google", "On the provider's consent screen, press Cancel", "Read where the browser lands"]
+  expected_result = "The user is back on the QA-Genius sign-in page with a plain message that sign-in was cancelled; no account is created and no stack trace is shown."
+  test_data = "provider account tester@example.com"
+
+[[checks]]
+id = "email_collision"
+title = "The provider's email already belongs to another account"
+severity = "high"
+why = "Guessing wrong here either merges two people's data or silently creates a second account nobody can find."
+covered_if = ["already exists", "existing account", "same email", "collision", "merge", "already registered"]
+  [checks.test]
+  title = "Signing in with a provider whose email matches an existing password account"
+  category = "Edge Case"
+  priority = "High"
+  pre_conditions = "A password account exists for user@example.com and the provider account also uses user@example.com"
+  steps = ["Sign out and press Continue with Google", "Complete the provider sign-in with user@example.com", "Open the account's sign-in methods afterwards"]
+  expected_result = "The product follows one stated rule — either it asks for the password before linking, or it refuses — and never ends with two accounts for user@example.com or data from one account visible in the other."
+  test_data = "email=user@example.com on both the password account and the provider account"
+
+[[checks]]
+id = "unlink_last_method"
+title = "Unlinking the last sign-in method is blocked"
+severity = "high"
+why = "Removing the only way in locks the owner out of their own account with one click."
+covered_if = ["last method", "only method", "locked out", "at least one", "cannot unlink", "set a password first"]
+  [checks.test]
+  title = "Unlinking the only sign-in method is refused"
+  category = "Negative"
+  priority = "High"
+  pre_conditions = "An account signs in with Google only and has no password set"
+  steps = ["Open the sign-in methods page", "Press Unlink on the Google provider", "Set a password, then press Unlink again"]
+  expected_result = "The first unlink is refused with a message saying one sign-in method must remain; after a password is set the unlink succeeds and the password signs the user in."
+  test_data = "account user@example.com linked to Google only"
+
+[[checks]]
+id = "provider_error"
+title = "A provider error or timeout is handled"
+severity = "medium"
+why = "The provider is someone else's server; when it is slow or returns an error the user must still land somewhere sensible."
+covered_if = ["provider error", "timeout", "times out", "unavailable", "fails to respond", "5xx", "try again"]
+  [checks.test]
+  title = "A failed provider callback shows a readable message and a way to retry"
+  category = "Negative"
+  priority = "Medium"
+  pre_conditions = "The sign-in page offers Continue with Google"
+  steps = ["Press Continue with Google", "Make the callback fail — return an error code from the provider or let the call time out", "Read the page the user lands on"]
+  expected_result = "A plain message explains that sign-in with the provider failed and offers Try again and another sign-in method; no partial account is created and no internal error text is shown."
+  test_data = "callback with error=server_error, and a callback held past the timeout"
+
+[[risks]]
+title = "A provider account takes over an existing account with the same email"
+category = "security"
+severity = 5
+likelihood = 3
+detectability = 4
+effect = "Anyone who can create a provider account with a known email reaches that user's data."
+cause = "The callback matches on the email address alone and signs the visitor into the existing account."
+covered_if = ["collision", "same email", "already exists", "verified email", "takeover"]

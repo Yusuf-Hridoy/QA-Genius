@@ -1,0 +1,75 @@
+id = "sessions"
+name = "Sessions and devices"
+short = "Sessions"
+triggers = ["session", "sessions", "sign out", "signs out", "signing out", "sign-out", "log out", "logout", "revoke", "revokes", "revoking", "revoked", "device", "devices", "active logins"]
+exclude = []
+
+[[checks]]
+id = "revoked_token_refused"
+title = "A revoked session's token is refused by the API immediately"
+severity = "high"
+why = "Revoking in the list and still accepting the token is the difference between a feature and a picture of one."
+covered_if = ["revoked token", "token is rejected", "api refuses", "401", "immediately", "no longer accepted"]
+  [checks.test]
+  title = "The API refuses the token of a session that was just revoked"
+  category = "Functional"
+  priority = "High"
+  pre_conditions = "The same account is signed in on two browsers, A and B, and browser B's session token has been captured"
+  steps = ["In browser A, open the session list and revoke browser B's session", "Call an API endpoint directly with browser B's token", "Reload a protected page in browser B"]
+  expected_result = "The API answers 401 for that token on the first call after the revoke, and browser B is sent to the sign-in page."
+  test_data = "browser B's session token, used against one protected API endpoint"
+
+[[checks]]
+id = "current_vs_other"
+title = "Revoking the current session behaves differently from revoking another, and says so"
+severity = "medium"
+why = "Signing yourself out while trying to remove an old laptop is a surprise people report as a bug."
+covered_if = ["current session", "this device", "your current", "own session", "signed out of this"]
+  [checks.test]
+  title = "Revoking this device signs the user out, revoking another device does not"
+  category = "Functional"
+  priority = "Medium"
+  pre_conditions = "The same account is signed in on two browsers, A and B"
+  steps = ["In browser A, open the session list and note which row is marked as the current session", "Revoke browser B's row and keep using browser A", "Revoke browser A's own row"]
+  expected_result = "Revoking B leaves A signed in and removes B's row; revoking A's own row warns first and then signs A out to the sign-in page."
+  test_data = "two browser profiles signed in as user@example.com"
+
+[[checks]]
+id = "sign_out_everywhere"
+title = "Sign out everywhere ends every session"
+severity = "medium"
+why = "If one session survives, the person who clicked it believes they are safe and is not."
+covered_if = ["sign out everywhere", "log out everywhere", "all sessions", "all devices", "every session"]
+  [checks.test]
+  title = "Sign out everywhere ends all sessions, including the one that clicked it"
+  category = "Functional"
+  priority = "Medium"
+  pre_conditions = "The same account is signed in on three browsers, A, B and C"
+  steps = ["In browser A, choose Sign out everywhere and confirm", "Reload a protected page in browsers B and C", "Call a protected API endpoint with each browser's old token"]
+  expected_result = "All three browsers are at the sign-in page and all three old tokens are refused; the session list is empty until someone signs in again."
+  test_data = "three browser profiles signed in as user@example.com"
+
+[[checks]]
+id = "list_shows_device"
+title = "The session list shows the device and when it was last active"
+severity = "low"
+why = "A list of identical rows gives nobody the confidence to revoke anything."
+covered_if = ["device", "browser name", "last active", "last used", "location", "ip address"]
+  [checks.test]
+  title = "Each session row names a device and a last-active time"
+  category = "Functional"
+  priority = "Low"
+  pre_conditions = "The same account is signed in from two different browsers"
+  steps = ["Open the active sessions list", "Read each row", "Use one of the sessions and reload the list"]
+  expected_result = "Every row names a device or browser and a last-active time, the current session is marked, and the used session's time updates."
+  test_data = "two sessions from different browsers"
+
+[[risks]]
+title = "A revoked token is still accepted by a server that cached it"
+category = "security"
+severity = 5
+likelihood = 3
+detectability = 4
+effect = "A session the user believes is gone keeps working on some servers for as long as the cache lives."
+cause = "Revocation writes to the database but each server keeps its own in-memory session cache."
+covered_if = ["cache", "every server", "all servers", "immediately", "propagated", "propagation", "propagates"]

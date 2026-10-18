@@ -18,6 +18,7 @@ from qagenius.models import (
     TestCaseList,
 )
 from qagenius.risk_radar import score_risks
+from qagenius.shadow_qa.story_rules import epic_note, review_story
 from qagenius.story_text import without_criteria_lines
 from qagenius.test_case_depth import compute_depth
 from qagenius.test_cases import Criterion, compute_coverage, number_criteria
@@ -115,6 +116,8 @@ class MatrixRun:
 
 @dataclass(frozen=True)
 class ShipInputs:
+    # The story itself, so the Principal QA rules can be run over it again here.
+    story: str = ""
     story_analysis: AmbiguityAnalysis | None = None
     duel: DuelSummary | None = None
     test_cases: TestCaseList | None = None
@@ -236,6 +239,14 @@ def _clarity(inputs: ShipInputs, criteria: list[Criterion]) -> ShipCheckItem:
             summary = f"Clarity {clarity} — vague story, but {pinned}"
 
     details += [f"Missing: {item}" for item in missing]
+
+    # A story that is really seven features is the first thing to say about
+    # its clarity, whatever the score was.
+    epic = epic_note(review_story(inputs.story, [item.text for item in criteria]))
+    if epic is not None:
+        details.insert(0, f"Principal QA: {epic.title} — {epic.detail}")
+        if status == "pass":
+            status = "warn"
     return _item("clarity", status, summary, details)
 
 

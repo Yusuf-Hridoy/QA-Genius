@@ -1,8 +1,12 @@
+{% import "_principal_qa.html" as pq %}
 <div class="stat-row">
   <div class="stat"><div class="num">{{ report.files | length }}</div><div class="lbl">Files</div></div>
   <div class="stat"><div class="num">{{ report.traced | length }} / {{ traced_total }}</div><div class="lbl">Tests traced</div></div>
   <div class="stat"><div class="num">{{ syntax_label }}</div><div class="lbl">Syntax</div></div>
   <div class="stat"><div class="num">{{ warnings | length }}</div><div class="lbl">Warnings</div></div>
+  <div class="stat{% if principal_findings %} stat-accent{% endif %}">
+    <div class="num">{{ principal_findings | length }}</div><div class="lbl">Principal QA</div>
+  </div>
 </div>
 <div class="card">
   <h2>Checks</h2>
@@ -30,7 +34,8 @@
     {% for finding in report.findings %}
     <li class="{{ finding.level }}">
       <span class="mono small">{{ finding.file }}{% if finding.line %}:{{ finding.line }}{% endif %}</span>
-      — {{ finding.message }}
+      {% if is_pq_finding(finding) %}{{ pq.label() }}{% endif %}
+      — {{ finding_text(finding) }}
     </li>
     {% endfor %}
   </ul>

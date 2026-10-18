@@ -137,3 +137,45 @@ def bug_report(**overrides) -> BugReport:
     }
     values.update(overrides)
     return BugReport(**values)
+
+
+# ── the two stories the Shadow QA tests use (fictional) ───────────────────────
+
+PROFILE_STORY = (
+    "As a registered user, I want to seamlessly view and manage my personal "
+    "information, security credentials, notification preferences, and privacy "
+    "settings on a central User Profile page, so that I stay in control of my "
+    "account. I can edit basic details (full name, email, phone number, bio, "
+    "language, and timezone), upload, crop, or remove an avatar (JPEG/PNG/WebP "
+    "up to 5MB), update my password with enforced strength criteria, configure "
+    "two-factor authentication (2FA) via authenticator apps with recovery codes, "
+    "review and revoke active login sessions across devices, link or unlink OAuth "
+    "providers like Google or GitHub, toggle granular email, push, and theme "
+    "preferences (Light/Dark mode) with instant auto-saving, and initiate "
+    "multi-step permanent account deletion."
+)
+
+PROFILE_CRITERIA = [
+    "The profile page shows the full name, email, phone number, bio, language and timezone",
+    "The full name accepts at most 80 characters",
+    "The bio accepts at most 160 characters",
+    "An avatar must be a JPEG, PNG or WebP image under 5MB",
+    "Changing the password requires the current password",
+    "Enabling 2FA shows a 6-digit verification code step and ten recovery codes",
+    "The account locks when a user exceeds 5 failed verification attempts "
+    "within a 15-minute window",
+    "A locked account stays locked for 30 minutes",
+    "Active sessions list each device and its last active time, and can be revoked",
+    "Preference toggles auto-save and persist across devices",
+    "Account deletion requires the password and offers a 30-day grace period",
+]
+
+LOCKOUT_STORY = (
+    "As a shopper, I want my Aurora Storefront account to lock quickly after "
+    "too many wrong passwords so that my account stays safe."
+)
+
+LOCKOUT_CRITERIA = [
+    "The account locks after 5 failed sign-in attempts",
+    "A locked account stays locked for 30 minutes",
+]

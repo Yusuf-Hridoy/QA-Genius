@@ -1,0 +1,50 @@
+id = "list_paging"
+name = "Lists and paging"
+short = "Lists"
+triggers = ["list", "lists", "listing", "table", "tables", "page size", "pagination", "paginated", "paging", "load more", "infinite scroll"]
+exclude = []
+
+[[checks]]
+id = "empty_list"
+title = "The empty-list message"
+severity = "low"
+why = "A new account sees this screen first, and an empty table with headers tells them nothing."
+covered_if = ["empty", "no items", "nothing yet", "empty state", "first time", "zero items"]
+  [checks.test]
+  title = "A list with no items explains itself and offers the next step"
+  category = "Boundary"
+  priority = "Low"
+  pre_conditions = "An account at user@example.com with no items in the list"
+  steps = ["Open the list page as the new account", "Read what is shown", "Add one item and open the page again"]
+  expected_result = "A readable empty-state message appears with an action to add the first item; no empty table, spinner or error. With one item the normal list is shown."
+  test_data = "account with 0 items, then 1 item"
+
+[[checks]]
+id = "page_boundary"
+title = "Exactly one page of items, and one page plus one"
+severity = "medium"
+why = "At exactly the page size a phantom second page usually appears, empty."
+covered_if = ["exactly", "one page", "page size", "boundary", "page + 1", "second page"]
+  [checks.test]
+  title = "A list of exactly the page size shows no second page, and one more item does"
+  category = "Boundary"
+  priority = "Medium"
+  pre_conditions = "The page size is the one stated in the criteria and the item count can be set"
+  steps = ["Load the list with exactly the page-size number of items", "Add one item so there is page size plus one and reload", "Open the second page"]
+  expected_result = "At exactly the page size no next-page control is offered; with one more item the control appears and page two shows that single item."
+  test_data = "item counts: page size, then page size plus 1"
+
+[[checks]]
+id = "last_page"
+title = "The last page"
+severity = "low"
+why = "The last page is where the next button should stop and usually does not."
+covered_if = ["last page", "final page", "end of list", "next disabled", "beyond the last"]
+  [checks.test]
+  title = "The last page ends the list cleanly"
+  category = "Boundary"
+  priority = "Low"
+  pre_conditions = "A list with at least three pages of items"
+  steps = ["Page to the last page and read the controls", "Press Next if it is still active", "Change the page number in the URL to one past the last page"]
+  expected_result = "Next is disabled or absent on the last page, the item count matches the remainder, and a page number past the end shows an empty-state or the last page rather than an error."
+  test_data = "three pages of items, then a URL asking for page 99"

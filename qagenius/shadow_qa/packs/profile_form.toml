@@ -1,0 +1,105 @@
+id = "profile_form"
+name = "Profile form"
+short = "Profile"
+triggers = ["profile", "profiles", "full name", "display name", "bio", "phone", "phone number", "personal information", "personal details", "edit details"]
+exclude = []
+
+[[checks]]
+id = "max_length"
+title = "Each field at its limit and one character over"
+severity = "medium"
+why = "A limit enforced in the browser but not on the server turns into a truncated name or a 500."
+covered_if = ["max length", "maximum length", "character limit", "too long", "limit + 1", "truncated", "truncation", "cut off", "boundary"]
+  [checks.test]
+  title = "A field at its limit saves and one character over is refused"
+  category = "Boundary"
+  priority = "Medium"
+  pre_conditions = "A user is signed in as user@example.com and the field limits are the ones stated in the criteria"
+  steps = ["Fill the bio with exactly the maximum number of characters and save", "Add one more character and save again", "Send the over-length value straight to the API with the browser limit removed"]
+  expected_result = "The exact-limit value saves and reads back whole; the over-length value is refused by both the form and the API with a message naming the limit, and nothing is silently truncated."
+  test_data = "bio at the stated maximum, then maximum + 1 characters"
+
+[[checks]]
+id = "unicode_names"
+title = "Names with accents, emoji and right-to-left text"
+severity = "medium"
+why = "Most people's names are not plain ASCII, and the ones that break are never in the sample data."
+covered_if = ["accent", "unicode", "emoji", "right-to-left", "rtl", "arabic", "non-ascii", "diacritics", "diacritic"]
+  [checks.test]
+  title = "A name with accents, emoji and right-to-left characters saves and reads back"
+  category = "Edge Case"
+  priority = "Medium"
+  pre_conditions = "A user is signed in as user@example.com"
+  steps = ["Set the full name to 'Zoë Ağaoğlu 🌤 مثال' and save", "Reload the profile page", "Open the page that greets the user by name and a page that lists users"]
+  expected_result = "The name is stored and shown exactly as typed in every place, with no question marks, no mojibake and no broken layout."
+  test_data = "full_name=Zoë Ağaoğlu 🌤 مثال"
+
+[[checks]]
+id = "phone_formats"
+title = "Phone numbers with +, spaces, and one that is too short"
+severity = "medium"
+why = "Everyone writes a phone number differently; a strict field rejects real numbers and a loose one stores nonsense."
+covered_if = ["phone format", "country code", "plus", "too short", "digits only", "invalid phone"]
+  [checks.test]
+  title = "Phone numbers in several formats are handled consistently"
+  category = "Boundary"
+  priority = "Medium"
+  pre_conditions = "A user is signed in as user@example.com"
+  steps = ["Save the phone number as +44 20 7946 0958", "Save it again as 00442079460958", "Save it as 123 and read the message"]
+  expected_result = "Both full numbers are accepted and read back in one consistent stored format; the three-digit value is refused with a message saying what a valid number looks like."
+  test_data = "phone=+44 20 7946 0958 / 00442079460958 / 123"
+
+[[checks]]
+id = "unsaved_changes"
+title = "Leaving with unsaved changes warns first"
+severity = "low"
+why = "Typing a bio and losing it to a stray click is the complaint that reaches support."
+covered_if = ["unsaved", "leave the page", "discard", "navigate away", "are you sure"]
+  [checks.test]
+  title = "Navigating away with unsaved edits asks before discarding them"
+  category = "Edge Case"
+  priority = "Low"
+  pre_conditions = "A user is signed in as user@example.com and the profile form is open"
+  steps = ["Edit the bio but do not save", "Click a link to another page in the app", "Choose to stay, then try the browser Back button"]
+  expected_result = "Both routes warn that changes will be lost; choosing to stay keeps the edited text in the field, choosing to leave discards it."
+  test_data = "bio edited to 'Draft text that was never saved'"
+
+[[checks]]
+id = "two_tabs"
+title = "The same profile edited in two tabs — the last save does not silently overwrite"
+severity = "medium"
+why = "Two tabs is normal behaviour, and losing the other tab's edit without a word is data loss."
+covered_if = ["two tabs", "concurrent", "conflict", "stale", "overwrite", "last write", "another tab"]
+  [checks.test]
+  title = "A second tab saving an older copy does not silently discard the first save"
+  category = "Edge Case"
+  priority = "Medium"
+  pre_conditions = "A user is signed in as user@example.com with the profile form open in tabs A and B"
+  steps = ["In tab A, change the full name and save", "In tab B, which still shows the old name, change the bio and save", "Reload the profile in both tabs"]
+  expected_result = "Either tab B is told the profile changed and is given the current values, or both edits survive; the name saved in tab A is never silently replaced by the old one."
+  test_data = "tab A sets full_name=Dana Reed; tab B saves with the pre-change name still in its form"
+
+[[checks]]
+id = "bio_escaped"
+title = "HTML or script in the bio is shown as text"
+severity = "high"
+why = "A bio is shown to other people, so an unescaped tag runs in their browser, not the author's."
+covered_if = ["script", "html", "escaped", "xss", "sanitised", "sanitized", "sanitise", "sanitize", "rendered as text"]
+  [checks.test]
+  title = "HTML typed into the bio is displayed as characters, not markup"
+  category = "Negative"
+  priority = "High"
+  pre_conditions = "A user is signed in as user@example.com"
+  steps = ["Set the bio to <b>bold</b><script>alert(1)</script> and save", "Reload the profile page and view the page source", "Open the public view of that profile in another account"]
+  expected_result = "Both views show the characters <b>bold</b><script>alert(1)</script> as plain text; nothing is bolded, no dialog appears and the stored value is unchanged."
+  test_data = "bio=<b>bold</b><script>alert(1)</script>"
+
+[[risks]]
+title = "Two tabs saving the same profile overwrite each other"
+category = "data"
+severity = 3
+likelihood = 4
+detectability = 4
+effect = "An edit the user made and saw saved disappears without any message."
+cause = "The save sends every field from the form it was loaded with, so stale values replace newer ones."
+covered_if = ["two tabs", "conflict", "stale", "last write", "concurrent"]

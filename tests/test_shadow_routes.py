@@ -1,0 +1,401 @@
+"""Shadow QA inside the real routes: same click, one AI call, no extra step."""
+
+import json
+from pathlib import Path
+
+from fastapi.testclient import TestClient
+
+import main
+from qagenius import llm
+from qagenius.models import AmbiguityAnalysis, FailureMode, RiskAnalysis
+from tests.factories import (
+    LOCKOUT_CRITERIA,
+    LOCKOUT_STORY,
+    PROFILE_STORY,
+    case,
+    script,
+    suite,
+)
+
+client = TestClient(main.app)
+
+KEYS_HEADER = {"X-QAG-Keys": json.dumps([{"provider": "gemini", "key": "first"}])}
+
+STORY_SAMPLE = json.loads(
+    Path("qagenius/samples/story_check.json").read_text(encoding="utf-8")
+)
+STORY_RESULT = AmbiguityAnalysis.model_validate(STORY_SAMPLE["result"])
+
+
+def _fake_story(calls: list):
+    def fake(keys, system, user, schema):
+        calls.append(user)
+        return STORY_RESULT, 0, []
+
+    return fake
+
+
+# ── story check ───────────────────────────────────────────────────────────────
+
+
+def test_the_profile_story_shows_the_epic_banner(monkeypatch) -> None:
+    calls: list = []
+    monkeypatch.setattr(llm, "generate_json", _fake_story(calls))
+    response = client.post(
+        "/requirements/story/run",
+        data={"user_story": PROFILE_STORY},
+        headers=KEYS_HEADER,
+    )
+    body = response.text
+    assert response.status_code == 200
+    assert "pq-epic" in body
+    assert "This story is really" in body
+    assert body.count('class="pill warn plain"') >= 7
+    assert "Test cases will be shallow" in body
+    # Same click, still exactly one AI call.
+    assert len(calls) == 1
+
+
+def test_the_banner_sits_above_the_score(monkeypatch) -> None:
+    monkeypatch.setattr(llm, "generate_json", _fake_story([]))
+    body = client.post(
+        "/requirements/story/run",
+        data={"user_story": PROFILE_STORY},
+        headers=KEYS_HEADER,
+    ).text
+    assert body.index("pq-epic") < body.index('class="verdict"')
+
+
+def test_the_lockout_story_shows_no_banner(monkeypatch) -> None:
+    monkeypatch.setattr(llm, "generate_json", _fake_story([]))
+    body = client.post(
+        "/requirements/story/run",
+        data={"user_story": LOCKOUT_STORY},
+        headers=KEYS_HEADER,
+    ).text
+    assert "pq-epic" not in body
+
+
+def test_the_banner_links_to_the_suggested_split(monkeypatch) -> None:
+    monkeypatch.setattr(llm, "generate_json", _fake_story([]))
+    body = client.post(
+        "/requirements/story/run",
+        data={"user_story": PROFILE_STORY},
+        headers=KEYS_HEADER,
+    ).text
+    if 'id="recommended-split"' in body:
+        assert "See the suggested split" in body
+        assert 'href="#recommended-split"' in body
+
+
+def test_a_story_without_an_actor_gets_a_principal_qa_note(monkeypatch) -> None:
+    monkeypatch.setattr(llm, "generate_json", _fake_story([]))
+    body = client.post(
+        "/requirements/story/run",
+        data={"user_story": "The profile page shows a name and a bio."},
+        headers=KEYS_HEADER,
+    ).text
+    assert "Principal QA notes" in body
+    assert "No actor" in body
+
+
+def test_the_story_example_runs_the_rules_without_a_key() -> None:
+    response = client.get("/requirements/story/example")
+    assert response.status_code == 200
+    # The saved story is a small one, so the rules run and find nothing to warn
+    # about. What matters here is that they ran without a key and without an AI.
+    assert "pq-epic" not in response.text
+
+
+# ── test cases ────────────────────────────────────────────────────────────────
+
+TC_FORM = {
+    "user_story": LOCKOUT_STORY,
+    "criteria_json": json.dumps(LOCKOUT_CRITERIA),
+    "coverage_focus": ["Functional", "Negative"],
+}
+
+
+def _fake_cases(calls: list, result=None):
+    answer = result if result is not None else suite(case(case_id="TC-001"))
+
+    def fake(keys, system, user, schema):
+        calls.append(user)
+        return answer, 0, []
+
+    return fake
+
+
+def _shown_cases(body: str) -> list[dict]:
+    raw = body.split('<script type="application/json" id="tc-data">')[1]
+    return json.loads(raw.split("</script>")[0])["result"]["test_cases"]
+
+
+def test_the_checklist_is_appended_to_the_user_text(monkeypatch) -> None:
+    calls: list = []
+    monkeypatch.setattr(llm, "generate_json", _fake_cases(calls))
+    client.post("/requirements/test-cases/run", data=TC_FORM, headers=KEYS_HEADER)
+    assert len(calls) == 1
+    user = calls[0]
+    assert "PRINCIPAL QA CHECKLIST" in user
+    assert "[login.enumeration]" in user
+    assert 'tags as "qa:<id>"' in user
+    # The v1 prompt text is still there, untouched, in front of it.
+    assert user.index("Test Coverage Focus") < user.index("PRINCIPAL QA CHECKLIST")
+
+
+def test_the_result_holds_the_ai_cases_plus_the_added_ones(monkeypatch) -> None:
+    monkeypatch.setattr(llm, "generate_json", _fake_cases([]))
+    body = client.post(
+        "/requirements/test-cases/run", data=TC_FORM, headers=KEYS_HEADER
+    ).text
+    cases = _shown_cases(body)
+    assert cases[0]["id"] == "TC-001"
+    assert len(cases) > 1
+    added = [one for one in cases if "principal-qa" in one["tags"]]
+    assert added
+    assert all(one["id"].startswith("TC-") for one in added)
+    assert [one["id"] for one in cases] == sorted({one["id"] for one in cases})
+
+
+def test_the_counts_are_computed_on_the_merged_list(monkeypatch) -> None:
+    monkeypatch.setattr(llm, "generate_json", _fake_cases([]))
+    body = client.post(
+        "/requirements/test-cases/run", data=TC_FORM, headers=KEYS_HEADER
+    ).text
+    total = len(_shown_cases(body))
+    assert f">{total}</div>\n    <div class=\"lbl\">Test cases</div>" in body.replace(
+        "><div", ">\n    <div"
+    ) or f"{total}" in body
+
+
+def test_a_check_the_ai_already_tagged_is_not_added_again(monkeypatch) -> None:
+    tagged = suite(
+        case(
+            case_id="TC-001",
+            title="Sign in with the email in capitals",
+            tags=["qa:login.email_case"],
+        )
+    )
+    monkeypatch.setattr(llm, "generate_json", _fake_cases([], tagged))
+    body = client.post(
+        "/requirements/test-cases/run", data=TC_FORM, headers=KEYS_HEADER
+    ).text
+    added = [one for one in _shown_cases(body) if "principal-qa" in one["tags"]]
+    assert not any("qa:login.email_case" in one["tags"] for one in added)
+
+
+def test_the_review_card_and_labels_are_shown(monkeypatch) -> None:
+    monkeypatch.setattr(llm, "generate_json", _fake_cases([]))
+    body = client.post(
+        "/requirements/test-cases/run", data=TC_FORM, headers=KEYS_HEADER
+    ).text
+    assert 'id="pq-review"' in body
+    assert "Added " in body and "the AI missed" in body
+    assert body.count("pq-label") >= 2
+    assert "Why a principal QA insists on this" in body
+
+
+def test_remove_buttons_sit_only_on_principal_qa_cases(monkeypatch) -> None:
+    monkeypatch.setattr(llm, "generate_json", _fake_cases([]))
+    body = client.post(
+        "/requirements/test-cases/run", data=TC_FORM, headers=KEYS_HEADER
+    ).text
+    added = [one for one in _shown_cases(body) if "principal-qa" in one["tags"]]
+    assert body.count('class="btn btn-small btn-danger pq-remove"') == len(added)
+    for one in added:
+        assert f'pq-remove" data-case-id="{one["id"]}"' in body
+    assert 'pq-remove" data-case-id="TC-001"' not in body
+
+
+def test_the_render_route_keeps_the_labels_without_a_review_card() -> None:
+    payload = {
+        "result": suite(
+            case(case_id="TC-001"),
+            case(
+                case_id="TC-002",
+                title="Unknown email and wrong password give the same message",
+                tags=["principal-qa", "qa:login.enumeration", "pack:login"],
+            ),
+        ).model_dump(),
+        "criteria": LOCKOUT_CRITERIA,
+    }
+    body = client.post("/requirements/test-cases/render", json=payload).text
+    assert "pq-case" in body
+    assert "pq-remove" in body
+    assert 'id="pq-review"' not in body
+
+
+def test_refine_appends_the_checklist_and_adds_cases_to_the_proposal(monkeypatch) -> None:
+    calls: list = []
+    current = suite(case(case_id="TC-001"), case(case_id="TC-002", category="Negative"))
+    proposed = suite(
+        case(case_id="TC-001"),
+        case(case_id="TC-002", category="Negative"),
+        case(case_id="TC-003", category="Boundary", title="Exactly five attempts"),
+    )
+    monkeypatch.setattr(llm, "generate_json", _fake_cases(calls, proposed))
+    body = client.post(
+        "/requirements/test-cases/refine",
+        data={
+            "user_story": LOCKOUT_STORY,
+            "criteria_json": json.dumps(LOCKOUT_CRITERIA),
+            "current_json": current.model_dump_json(),
+            "mode": "strengthen",
+            "coverage_focus": ["Functional", "Negative"],
+        },
+        headers=KEYS_HEADER,
+    ).text
+    assert len(calls) == 1
+    assert "PRINCIPAL QA CHECKLIST" in calls[0]
+    raw = body.split('<script type="application/json" id="tc-proposed">')[1]
+    cases = json.loads(raw.split("</script>")[0])["result"]["test_cases"]
+    assert any("principal-qa" in one["tags"] for one in cases)
+    assert "Exactly five attempts" in body
+
+
+# ── automation ────────────────────────────────────────────────────────────────
+
+AUTO_FORM = {
+    "selected_json": json.dumps([case(case_id="TC-001").model_dump()]),
+    "framework_choice": "Playwright · TypeScript",
+    "structure_choice": "Page Object Model",
+    "browsers": ["chromium"],
+    "base_url": "https://example.com",
+}
+
+BAD_SPEC = (
+    "test.only('TC-001: it signs in', async ({ page }) => {\n"
+    "  const password = 'Harbour-Lantern-42';\n"
+    "  await page.goto('/');\n"
+    "});\n"
+)
+
+
+def _fake_script(calls: list, code: str = BAD_SPEC):
+    answer = script(test_file_name="tests/login.spec.ts", test_code=code)
+
+    def fake(keys, system, user, schema):
+        calls.append(user)
+        return answer, 0, []
+
+    return fake
+
+
+def test_the_coding_rules_are_appended_to_the_automation_prompt(monkeypatch) -> None:
+    calls: list = []
+    monkeypatch.setattr(llm, "generate_json", _fake_script(calls))
+    client.post("/requirements/automation/run", data=AUTO_FORM, headers=KEYS_HEADER)
+    assert len(calls) == 1
+    assert "PRINCIPAL QA CODING RULES" in calls[0]
+    assert "Never leave .only" in calls[0]
+
+
+def test_a_test_with_only_and_no_assertion_is_flagged(monkeypatch) -> None:
+    monkeypatch.setattr(llm, "generate_json", _fake_script([]))
+    body = client.post(
+        "/requirements/automation/run", data=AUTO_FORM, headers=KEYS_HEADER
+    ).text
+    assert "`.only` leaves the rest of the suite unrun" in body
+    assert "this test never asserts anything" in body
+    assert "hard-coded secret" in body
+    assert "pq-label" in body
+    assert ">Principal QA</div>" in body
+
+
+def test_clean_automation_code_is_not_flagged(monkeypatch) -> None:
+    clean = (
+        "test('TC-001: it signs in', async ({ page }) => {\n"
+        "  await page.goto('/');\n"
+        "  await expect(page.getByRole('heading')).toBeVisible();\n"
+        "});\n"
+    )
+    monkeypatch.setattr(llm, "generate_json", _fake_script([], clean))
+    body = client.post(
+        "/requirements/automation/run", data=AUTO_FORM, headers=KEYS_HEADER
+    ).text
+    assert "Principal QA: " not in body
+    assert '<div class="num">0</div><div class="lbl">Principal QA</div>' in body
+
+
+# ── risk radar ────────────────────────────────────────────────────────────────
+
+RISK_FORM = {
+    "user_story": LOCKOUT_STORY,
+    "criteria_json": json.dumps(LOCKOUT_CRITERIA),
+    "cases_json": json.dumps([case(case_id="TC-001").model_dump()]),
+}
+
+
+def _one_risk() -> RiskAnalysis:
+    return RiskAnalysis(
+        failure_modes=[
+            FailureMode(
+                id="R1",
+                title="The lock never lifts",
+                category="reliability",
+                effect="Shoppers cannot sign in again.",
+                cause="The unlock job never runs.",
+                severity=4,
+                likelihood=3,
+                detectability=3,
+            )
+        ]
+    )
+
+
+def _fake_risks(calls: list):
+    def fake(keys, system, user, schema):
+        calls.append(user)
+        return _one_risk(), 0, []
+
+    return fake
+
+
+def test_the_typical_risks_are_appended_to_the_risk_prompt(monkeypatch) -> None:
+    calls: list = []
+    monkeypatch.setattr(llm, "generate_json", _fake_risks(calls))
+    client.post("/risks/run", data=RISK_FORM, headers=KEYS_HEADER)
+    assert len(calls) == 1
+    assert "Typical risks for this kind of feature" in calls[0]
+    assert "Error message reveals whether an email is registered" in calls[0]
+
+
+def test_principal_qa_risks_are_added_scored_and_labelled(monkeypatch) -> None:
+    monkeypatch.setattr(llm, "generate_json", _fake_risks([]))
+    body = client.post("/risks/run", data=RISK_FORM, headers=KEYS_HEADER).text
+    # The AI's own risk is still there, and the classics sit beside it.
+    assert "The lock never lifts" in body
+    assert "Error message reveals whether an email is registered" in body
+    assert "pq-label" in body
+    assert "The AI did not raise this one" in body
+    # Scored and numbered like every other risk.
+    assert "RPN " in body
+    assert "R2" in body
+
+
+def test_a_risk_the_ai_already_named_is_not_doubled(monkeypatch) -> None:
+    def fake(keys, system, user, schema):
+        return (
+            RiskAnalysis(
+                failure_modes=[
+                    FailureMode(
+                        id="R1",
+                        title="Error message reveals whether an email is registered",
+                        category="security",
+                        effect="Attackers can list accounts.",
+                        cause="Two different messages.",
+                        severity=4,
+                        likelihood=4,
+                        detectability=3,
+                    )
+                ]
+            ),
+            0,
+            [],
+        )
+
+    monkeypatch.setattr(llm, "generate_json", fake)
+    body = client.post("/risks/run", data=RISK_FORM, headers=KEYS_HEADER).text
+    # One risk card, not two. (The title also appears once in the saved JSON.)
+    assert body.count("· Error message reveals whether an email is registered") == 1

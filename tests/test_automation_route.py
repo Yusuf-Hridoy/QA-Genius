@@ -81,7 +81,8 @@ def test_each_case_card_has_a_labelled_checkbox() -> None:
     body = client.get("/requirements/test-cases/example").text
     assert 'aria-label="Select TC-001"' in body
     assert 'data-case-id="TC-001"' in body
-    assert body.count('class="tc-select"') == 11
+    # Every case on the page is selectable, the Principal QA ones included.
+    assert body.count('class="tc-select"') == body.count('class="card tc-card')
 
 
 def test_the_select_bar_starts_empty_and_disabled() -> None:

@@ -1,7 +1,10 @@
-<div class="card tc-card{% if card_class %} {{ card_class }}{% endif %}" data-category="{{ card_case.category }}">
+{% import "_principal_qa.html" as pq %}
+{% set card_pq = is_principal is defined and is_principal(card_case) %}
+<div class="card tc-card{% if card_pq %} pq-case{% endif %}{% if card_class %} {{ card_class }}{% endif %}" data-category="{{ card_case.category }}">
   <h3>{% if card_select %}<input type="checkbox" class="tc-select" data-case-id="{{ card_case.id }}" aria-label="Select {{ card_case.id }}"> {% endif %}{{ card_case.id }} · {{ card_case.title }}</h3>
   <p class="row">
     <span class="pill {{ category_pill(card_case.category) }}">{{ card_case.category }}</span>
+    {% if card_pq %}{{ pq.label() }}{% endif %}
     <span class="pill {{ priority_pill(card_case.priority) }}">{{ card_case.priority }}</span>
     {% if card_ac_ids %}
     {% for ac_id in card_ac_ids %}<span class="pill accent" title="{{ ac_text[ac_id] }}">{{ ac_id }}</span>{% endfor %}
@@ -21,4 +24,14 @@
   <details><summary>BDD scenario</summary><pre class="code">{{ card_case.bdd_scenario }}</pre></details>
   {% endif %}
   <p class="muted small">Automation: {{ card_case.automation_feasibility }} · effort {{ card_case.automation_effort }}</p>
+  {% if card_pq %}
+  {% set why = pq_reason(card_case) %}
+  {% if why %}<p class="pq-why">Why a principal QA insists on this: {{ why }}</p>{% endif %}
+  {% if card_select %}
+  <p class="row pq-card-actions">
+    <button type="button" class="btn btn-small btn-danger pq-remove" data-case-id="{{ card_case.id }}">Remove</button>
+    <span class="hint">Undo brings it back.</span>
+  </p>
+  {% endif %}
+  {% endif %}
 </div>

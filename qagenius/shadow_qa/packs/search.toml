@@ -1,0 +1,80 @@
+id = "search"
+name = "Search and filter"
+short = "Search"
+triggers = ["search", "searches", "searching", "filter", "filters", "filtering", "find", "query", "queries", "lookup", "autocomplete"]
+exclude = []
+
+[[checks]]
+id = "empty_search"
+title = "An empty search"
+severity = "low"
+why = "Pressing the button with nothing typed is the first thing anybody does."
+covered_if = ["empty search", "blank", "no input", "without typing", "empty query"]
+  [checks.test]
+  title = "Searching with an empty box does something sensible"
+  category = "Boundary"
+  priority = "Low"
+  pre_conditions = "The search page is open with results already listed"
+  steps = ["Clear the search box and press the search button", "Press Enter in the empty box", "Read the page"]
+  expected_result = "The page follows one stated rule — all results or a prompt to type something — and never shows an error, a spinner that never ends or a blank page."
+  test_data = "query=''"
+
+[[checks]]
+id = "special_characters"
+title = "Special characters and quotes"
+severity = "medium"
+why = "Apostrophes, percent signs and quotes reach the query layer and either break it or return nothing."
+covered_if = ["special character", "quote", "apostrophe", "percent", "wildcard", "escape", "injection"]
+  [checks.test]
+  title = "A query with quotes, a percent sign and an apostrophe is handled safely"
+  category = "Negative"
+  priority = "Medium"
+  pre_conditions = "The search page is open and an item named O'Brien & Co. 50% exists"
+  steps = ["Search for O'Brien", "Search for 50%", "Search for \"quoted phrase\" and for ' OR 1=1 --"]
+  expected_result = "Each search returns results or a no-results message; none of them shows a database error, and the injection-style query is treated as plain text."
+  test_data = "queries: O'Brien, 50%, \"quoted phrase\", ' OR 1=1 --"
+
+[[checks]]
+id = "no_results"
+title = "The no-results message"
+severity = "low"
+why = "An empty list with no words leaves the user unsure whether the search ran at all."
+covered_if = ["no results", "nothing found", "no matches", "empty state", "zero results"]
+  [checks.test]
+  title = "A search with no matches explains itself"
+  category = "Functional"
+  priority = "Low"
+  pre_conditions = "The search page is open and nothing matches the term zzzznomatch"
+  steps = ["Search for zzzznomatch", "Read the page", "Clear the search and search again for a term that matches"]
+  expected_result = "A readable no-results message names the term searched for and offers a way to clear or change it; clearing restores the full list."
+  test_data = "query=zzzznomatch"
+
+[[checks]]
+id = "very_long_query"
+title = "A very long query"
+severity = "low"
+why = "A pasted paragraph reaches the URL length limit and the request fails before the page can say why."
+covered_if = ["long query", "very long", "max length", "truncated", "truncation", "cut off", "url length", "too long"]
+  [checks.test]
+  title = "A query of several thousand characters is handled, not crashed on"
+  category = "Boundary"
+  priority = "Low"
+  pre_conditions = "The search page is open"
+  steps = ["Paste 5000 characters of text into the search box and submit", "Read the response", "Search for a normal term afterwards"]
+  expected_result = "The page either refuses the query with a message naming the limit or returns a no-results page; it does not show a server error, and the next normal search works."
+  test_data = "query = 5000 repeated characters"
+
+[[checks]]
+id = "results_paging"
+title = "Paging through results"
+severity = "medium"
+why = "Page two usually loses the search term, the filter or both."
+covered_if = ["paging", "pagination", "page 2", "next page", "load more", "keeps the filter"]
+  [checks.test]
+  title = "Moving to the next page keeps the search term and the filters"
+  category = "Functional"
+  priority = "Medium"
+  pre_conditions = "A search term that returns more than one page of results, with one filter applied"
+  steps = ["Search and apply a filter so there are at least three pages", "Go to page two, then page three", "Reload page three and press the browser Back button"]
+  expected_result = "Every page shows results for the same term and filter with no repeated or skipped items; the reload returns the same page and Back goes to page two."
+  test_data = "a term with at least three pages of results, one filter applied"

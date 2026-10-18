@@ -1,0 +1,90 @@
+id = "payment"
+name = "Payment and checkout"
+short = "Payment"
+triggers = ["payment", "payments", "checkout", "card", "cards", "billing", "invoice", "invoices", "refund", "refunds", "subscription", "pay"]
+exclude = []
+
+[[checks]]
+id = "double_click_pay"
+title = "A double click on Pay charges once"
+severity = "high"
+why = "Charging a customer twice is the one defect nobody forgives."
+covered_if = ["double click", "twice", "duplicate charge", "idempotent", "idempotency", "idempotency key", "double submit", "once only"]
+  [checks.test]
+  title = "Clicking Pay twice in quick succession creates one charge"
+  category = "Edge Case"
+  priority = "High"
+  pre_conditions = "A basket is ready for payment with a valid test card"
+  steps = ["Fill the payment form and double-click the Pay button", "Wait for the result page", "Open the order list and the payment provider's test dashboard"]
+  expected_result = "Exactly one order and one charge exist for the basket; the button disables after the first click and the page shows a single confirmation."
+  test_data = "test card 4242 4242 4242 4242, basket total 49.99"
+
+[[checks]]
+id = "card_declined"
+title = "A declined card is explained"
+severity = "high"
+why = "Half of all payment failures are declines, and a blank page loses the sale."
+covered_if = ["declined", "decline", "rejected card", "insufficient", "payment failed", "try another card"]
+  [checks.test]
+  title = "A declined card shows a readable message and keeps the basket"
+  category = "Negative"
+  priority = "High"
+  pre_conditions = "A basket is ready for payment and the provider's decline test card is available"
+  steps = ["Pay with the card that the provider always declines", "Read the message on the page", "Pay again with a card that succeeds"]
+  expected_result = "A plain message says the card was declined and invites another card; the basket and address are still filled in, no order is created, and the second attempt succeeds."
+  test_data = "decline test card 4000 0000 0000 0002, then 4242 4242 4242 4242"
+
+[[checks]]
+id = "sca_cancelled"
+title = "The user cancels 3-D Secure"
+severity = "medium"
+why = "The bank's own screen is where people stop, and the app has to recover from a half-finished payment."
+covered_if = ["3-d secure", "3ds", "two-step", "bank page", "cancel", "authentication step"]
+  [checks.test]
+  title = "Cancelling on the bank's authentication page leaves no charge and no order"
+  category = "Negative"
+  priority = "Medium"
+  pre_conditions = "A basket is ready and the provider's test card requiring 3-D Secure is available"
+  steps = ["Pay with the card that triggers the authentication step", "Press Cancel on the bank's page", "Read where the browser lands and check the order list"]
+  expected_result = "The user returns to checkout with a message that payment was not completed, the basket is intact, and no order or charge exists."
+  test_data = "3-D Secure test card 4000 0027 6000 3184"
+
+[[checks]]
+id = "currency_rounding"
+title = "Currency rounding on totals"
+severity = "medium"
+why = "Per-line rounding and total rounding disagree by a penny, and the invoice no longer adds up."
+covered_if = ["rounding", "round", "decimal", "cents", "penny", "total matches", "vat", "tax"]
+  [checks.test]
+  title = "Line totals, tax and the grand total agree to the penny"
+  category = "Boundary"
+  priority = "Medium"
+  pre_conditions = "A basket with three items priced 0.10, 33.33 and 9.99 and a percentage tax applied"
+  steps = ["Build the basket and open the checkout summary", "Add the line totals and the tax by hand and compare with the grand total", "Complete the payment and compare the charged amount and the invoice"]
+  expected_result = "The line totals, tax and grand total add up exactly, and the amount charged and the amount on the invoice are the same to the penny."
+  test_data = "items 0.10, 33.33, 9.99 with the stated tax rate"
+
+[[checks]]
+id = "refund_updates"
+title = "A refund updates the order and the balance"
+severity = "medium"
+why = "A refund issued at the provider but not recorded in the app leaves support guessing."
+covered_if = ["refund", "refunded", "credit", "balance", "order status", "partial refund"]
+  [checks.test]
+  title = "A refund is reflected in the order, the balance and the invoice"
+  category = "Functional"
+  priority = "Medium"
+  pre_conditions = "A completed, paid order for 49.99 exists"
+  steps = ["Refund 20.00 of the order", "Open the order, the account balance and the invoice", "Refund the remaining amount and look again"]
+  expected_result = "After the partial refund the order shows 20.00 refunded and 29.99 outstanding; after the second refund the order reads fully refunded and no further refund is possible."
+  test_data = "order total 49.99, refunds of 20.00 then 29.99"
+
+[[risks]]
+title = "A retried payment request creates a second charge"
+category = "data"
+severity = 5
+likelihood = 3
+detectability = 4
+effect = "The customer is charged twice for one basket and asks for a refund and an apology."
+cause = "The payment call carries no idempotency key, so a retry after a timeout is a new charge."
+covered_if = ["idempotent", "idempotency", "idempotency key", "double charge", "twice", "retry", "duplicate"]

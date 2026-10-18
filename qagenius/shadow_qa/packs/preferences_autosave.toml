@@ -1,0 +1,75 @@
+id = "preferences_autosave"
+name = "Preferences and auto-save"
+short = "Preferences"
+triggers = ["auto-save", "auto-saves", "auto-saving", "autosave", "autosaves", "autosaving", "auto save", "toggle", "toggles", "toggling", "preference", "preferences", "theme", "themes", "dark mode", "light mode", "settings"]
+exclude = []
+
+[[checks]]
+id = "rapid_toggles"
+title = "Rapid toggles end on the last chosen value"
+severity = "medium"
+why = "Auto-save fires a request per click, and the answers come back in whatever order they like."
+covered_if = ["rapid", "quickly", "several times", "race", "out of order", "last value", "debounce"]
+  [checks.test]
+  title = "Toggling a preference five times quickly leaves it on the last value"
+  category = "Edge Case"
+  priority = "Medium"
+  pre_conditions = "A user is signed in as user@example.com with email notifications off"
+  steps = ["Click the email notifications toggle five times in under two seconds, ending on 'on'", "Wait for the saves to settle and reload the page", "Open the same preference in another browser"]
+  expected_result = "The toggle reads 'on' after the reload and in the other browser; the stored value matches what is shown."
+  test_data = "five clicks ending on 'on'"
+
+[[checks]]
+id = "save_failure"
+title = "A failed save shows an error and puts the toggle back"
+severity = "medium"
+why = "A toggle that stays on after the save failed tells the user a lie they will act on."
+covered_if = ["save fails", "failure", "error", "reverts", "rolls back", "offline", "retry"]
+  [checks.test]
+  title = "A preference whose save fails reverts and says so"
+  category = "Negative"
+  priority = "Medium"
+  pre_conditions = "A user is signed in as user@example.com with dark mode off"
+  steps = ["Make the save request fail — go offline or have the server answer with an error", "Switch the dark mode toggle on", "Read the page, then reload it"]
+  expected_result = "A visible error says the setting was not saved, the toggle returns to off, and the reload still shows off."
+  test_data = "save endpoint returning an error while the toggle is switched"
+
+[[checks]]
+id = "persists"
+title = "The setting survives a reload and appears on another device"
+severity = "medium"
+why = "A preference kept only in the browser looks saved and is gone on the next laptop."
+covered_if = ["persist", "after reload", "another device", "second browser", "stored", "survives"]
+  [checks.test]
+  title = "A saved preference is still set after a reload and on a second device"
+  category = "Functional"
+  priority = "Medium"
+  pre_conditions = "The same account is signed in on two browsers, A and B"
+  steps = ["In browser A, switch dark mode on and wait for the save", "Reload browser A", "Reload browser B and open the same preferences page"]
+  expected_result = "Dark mode is on in both browsers after the reload, so the value is stored on the server and not only in local storage."
+  test_data = "two browser profiles signed in as user@example.com"
+
+[[checks]]
+id = "theme_no_reload"
+title = "The theme applies without a page reload and reads in both modes"
+severity = "low"
+why = "A theme that needs a reload, or that leaves grey text on a grey card, is the part people see first."
+covered_if = ["without reload", "immediately", "contrast", "readable", "light and dark", "both modes"]
+  [checks.test]
+  title = "Switching the theme repaints the page at once and every element stays readable"
+  category = "Functional"
+  priority = "Low"
+  pre_conditions = "A user is signed in as user@example.com on the profile page in light mode"
+  steps = ["Switch the theme to dark and watch the page without reloading", "Read every card, pill, input and disabled control on the page", "Switch back to light and check the same elements"]
+  expected_result = "The page repaints immediately with no reload and no flash of the old theme; all text, borders and placeholders stay legible in both modes."
+  test_data = "theme=dark, then theme=light"
+
+[[risks]]
+title = "Auto-saved preferences are written out of order"
+category = "data"
+severity = 3
+likelihood = 4
+detectability = 5
+effect = "The setting the user sees is not the one that was stored, and it flips back on the next page load."
+cause = "Each toggle fires its own request and a slower earlier save lands after a faster later one."
+covered_if = ["out of order", "race", "rapid", "last write", "debounce"]
