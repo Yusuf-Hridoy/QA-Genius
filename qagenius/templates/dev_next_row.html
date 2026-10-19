@@ -1,0 +1,31 @@
+{# A check page, not a desk: the "Next:" row in all three states at once.
+   The real row gets its marks from source_card.js; these are the same marks
+   written out, so a screenshot can prove the icon stays small. #}
+{% extends "base.html" %}
+{% block title %}Next row — QA-Genius{% endblock %}
+{% block top_title %}Next row{% endblock %}
+{% block content %}
+<div class="page-head">
+  <span class="eyebrow">Check page</span>
+  <h1>Where to go next</h1>
+  <p class="lede">Not built yet, old, and up to date — side by side, so the
+    marks can be seen at every width. Nothing here calls an AI.</p>
+</div>
+<div class="next-strip" role="navigation" aria-label="Next steps, every state">
+  <span class="next-label">Next:</span>
+  <a class="next-chip" href="/risks" data-state="none">
+    <span class="next-name">Risk radar</span>
+    <span class="next-state">Not built yet</span>
+  </a>
+  <a class="next-chip" href="/requirements/matrix" data-state="stale">
+    <span class="next-mark dot-stale"></span>
+    <span class="next-name">Test matrix</span>
+    <span class="next-state">Old</span>
+  </a>
+  <a class="next-chip" href="/ship" data-state="fresh">
+    <svg class="next-mark tick-fresh" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 7 9.5 17.5 4 12"/></svg>
+    <span class="next-name">Ship check</span>
+    <span class="next-state">Matches your work</span>
+  </a>
+</div>
+{% endblock %}

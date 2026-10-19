@@ -1,10 +1,11 @@
 """Per-criterion depth: how many cases cover each criterion, of which kinds, and whether it is thin."""
 
+import re
 from dataclasses import dataclass
 
 from qagenius.models import TestCaseList
 from qagenius.shadow_qa.boundaries import find_boundaries
-from qagenius.shadow_qa.detect import mentions
+from qagenius.shadow_qa.detect import phrase_pattern
 from qagenius.test_case_diff import normalised_words, word_form
 from qagenius.test_cases import (
     CATEGORY_ORDER,
@@ -20,11 +21,16 @@ MIN_CASES = 2
 VISUAL_CASES = 1
 
 # A criterion asks for a test at the limits only when it states a limit:
-# a number with a unit ("5 attempts", "15 minutes"), or one of these.
+# a number with a unit ("5 attempts", "15 minutes"), or one of these words
+# saying how much ("over 5 MB", "below 768 pixels").
 LIMIT_PHRASES = (
     "at least", "at most", "up to", "maximum", "minimum", "below", "above",
     "under", "over", "within", "more than", "less than",
 )
+# A limit word on its own is just a word: a reader moves the mouse cursor
+# over a link without any limit being near. The number has to follow it.
+WORDS_AFTER_A_LIMIT = 3
+_A_NUMBER = re.compile(r"\d")
 # ... and for a wrong-input test only when somebody can put something in, or
 # a rule can turn them away. A breadcrumb trail can do neither.
 INPUT_WORDS = (
@@ -39,10 +45,19 @@ _INPUT_FORMS = frozenset(word_form(word) for word in INPUT_WORDS)
 _VISUAL_FORMS = frozenset(word_form(word) for word in VISUAL_WORDS)
 
 
+def _says_how_much(said: str, phrase: str) -> bool:
+    """Is this limit word followed, soon enough, by the amount it limits?"""
+    for found in phrase_pattern(phrase).finditer(said):
+        after = said[found.end():].split()[:WORDS_AFTER_A_LIMIT]
+        if any(_A_NUMBER.search(word) for word in after):
+            return True
+    return False
+
+
 def needs_limit_test(text: str) -> bool:
     """Does this criterion state a limit worth testing either side of?"""
     said = str(text or "")
-    if any(mentions(said, phrase) for phrase in LIMIT_PHRASES):
+    if any(_says_how_much(said, phrase) for phrase in LIMIT_PHRASES):
         return True
     # The same reader of numbers the senior tester's limit cases use, so the
     # two never disagree about what a limit is.

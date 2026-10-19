@@ -906,12 +906,22 @@ def _nothing_to_add_line(review: CaseReview) -> str:
 
 def _review_line(review: CaseReview) -> str:
     """The one line on the Principal QA review card, before it is opened."""
-    if not review.added:
+    if not review.added and not review.conflicts:
         return _nothing_to_add_line(review)
-    parts = [
-        f"Added {len(review.added)} case{'' if len(review.added) == 1 else 's'} "
-        "the AI missed"
-    ]
+    parts = []
+    # A test that argues with a criterion is the most valuable thing here,
+    # so it is said before anything that was added.
+    if review.conflicts:
+        count = len(review.conflicts)
+        parts.append(
+            f"{count} test{'' if count == 1 else 's'} "
+            f"{'disagrees' if count == 1 else 'disagree'} with a criterion"
+        )
+    if review.added:
+        parts.append(
+            f"Added {len(review.added)} case{'' if len(review.added) == 1 else 's'} "
+            "the AI missed"
+        )
     if review.more:
         parts.append(f"{len(review.more)} more idea{'' if len(review.more) == 1 else 's'}")
     if review.quality:
@@ -2655,6 +2665,16 @@ def dev_rings(request: Request) -> HTMLResponse:
             ],
         },
     )
+
+
+@app.get("/dev/next-row", response_class=HTMLResponse)
+def dev_next_row(request: Request) -> HTMLResponse:
+    """A check page: the "Next:" row in all three states, marks and all.
+
+    Not a desk and not in the rail. The real row fills its marks in from the
+    run, so this is the only way to see all three at once in a screenshot.
+    """
+    return templates.TemplateResponse(request, "dev_next_row.html", {})
 
 
 @app.post("/ship/report", response_class=HTMLResponse)

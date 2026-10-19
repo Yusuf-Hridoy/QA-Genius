@@ -20,6 +20,7 @@ from qagenius.models import (
 from qagenius.risk_radar import score_risks
 from qagenius.shadow_qa.story_rules import epic_note, review_story
 from qagenius.story_text import without_criteria_lines
+from qagenius.shadow_qa.review import limit_conflicts
 from qagenius.test_case_depth import compute_depth
 from qagenius.test_cases import Criterion, compute_coverage, number_criteria
 from qagenius.test_run_metrics import Insights
@@ -315,19 +316,23 @@ def _depth(inputs: ShipInputs, criteria: list[Criterion]) -> ShipCheckItem:
     depth = compute_depth(inputs.test_cases, criteria)
     thin = depth.thin_ids
     total = len(depth.rows)
+    # A case that expects the opposite of the limit its criterion states is
+    # worth more than any count: one of the two is wrong, and the suite
+    # cannot say which.
+    conflicts = limit_conflicts(criteria, list(inputs.test_cases.test_cases))
     if not thin:
         return _item(
             "depth",
-            "pass",
+            "warn" if conflicts else "pass",
             f"All {_criteria_count(total)} have the tests they need",
-            [],
+            conflicts,
         )
     # "More than half" is the point where the suite stops being a safety net.
     status = "fail" if len(thin) * 2 > total else "warn"
     # The grouped reasons are the detail lines; a summary stays glanceable.
     needs = "needs" if len(thin) == 1 else "need"
     summary = f"{len(thin)} of {total} criteria {needs} more tests ({_listed(thin)})"
-    details = [
+    details = conflicts + [
         f"{row.id} — {', '.join(row.reasons)}" for row in depth.rows if row.thin
     ]
     return _item("depth", status, summary, details)

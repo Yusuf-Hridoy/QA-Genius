@@ -392,3 +392,29 @@ def test_the_big_story_warning_is_said_in_plain_words() -> None:
     assert "This is too much for one story." in page
     assert "shallow" not in page.lower()
     assert "depth will suffer" not in page.lower()
+
+
+def test_ship_check_says_when_a_test_disagrees_with_a_limit() -> None:
+    """The same note the test-cases desk shows, under How well tested."""
+    body = sample()
+    suite = body["test_cases"]
+    suite["criteria"] = [
+        "The user can select a JPEG photo under 2 megabytes and upload it",
+        "A photo larger than 2 megabytes is rejected with a message",
+    ]
+    at_the_limit = dict(suite["result"]["test_cases"][0])
+    at_the_limit.update(
+        {
+            "id": "TC-005",
+            "title": "A photo at the size limit",
+            "category": "Boundary",
+            "steps": ["Choose a 2MB JPEG photo and upload it"],
+            "expected_result": "The exact 2MB file is accepted and saved.",
+            "test_data": "2MB JPEG",
+            "traceability": "AC-1",
+        }
+    )
+    suite["result"]["test_cases"] = [at_the_limit]
+    page = post(body).text
+    assert "exactly 2 MB should be refused" in page
+    assert statuses(page)["depth"] in {"warn", "fail"}

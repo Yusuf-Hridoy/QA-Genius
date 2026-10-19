@@ -4,6 +4,8 @@ import time
 
 from tests.factories import (
     BIG_STORY,
+    PHOTO_CRITERIA,
+    PHOTO_STORY,
     NAVBAR_CRITERIA,
     NAVBAR_STORY,
     LOCKOUT_CRITERIA,
@@ -25,6 +27,7 @@ from qagenius.shadow_qa.review import (
     PRINCIPAL_SOURCE,
     PRINCIPAL_TAG,
     checklist_block,
+    limit_conflicts,
     is_principal,
     reason_for,
     review_automation,
@@ -715,3 +718,94 @@ def test_an_added_case_is_linked_to_the_criterion_it_is_about():
     per_account = by_check["rate_limiting.per_account"]
     assert "two devices" in per_account.title
     assert per_account.traceability == "AC-1"
+
+
+# ── a limit case anybody can run ─────────────────────────────────────────────
+
+
+def test_a_limit_case_is_written_from_the_criterion_itself():
+    """Test B: "Exercise it at 1.99 MB" is not a test anybody can run."""
+    criteria = number_criteria(PHOTO_CRITERIA)
+    written = suite(
+        case(
+            case_id="TC-001",
+            title="Upload a small JPEG photo",
+            pre_conditions="The user is signed in and on the profile page",
+            steps=["Open the profile page", "Choose a 1 MB JPEG photo", "Upload it"],
+            expected_result="The photo is cropped to a square and shown.",
+            traceability="AC-1",
+        )
+    )
+    review = review_test_cases(PHOTO_STORY, criteria, written)
+    added = [one for one in review.added if "pack:boundary" in one.tags]
+    assert added, "no limit case was added"
+    limit = added[0]
+    assert limit.steps[0] == "Open the profile page."
+    assert "Select a JPEG photo of 1.99 MB and upload it." in limit.steps
+    assert limit.steps[-1] == "Check the result."
+    # The outcome comes from the criteria, not from a guess.
+    assert "AC-1 still holds at 1.99 MB" in limit.expected_result
+    assert "AC-3 applies at 2.01 MB" in limit.expected_result
+    assert "rejected with a message" in limit.expected_result
+    assert "JPEG photo" in limit.test_data and "1.99 MB" in limit.test_data
+
+
+def test_a_criterion_with_no_action_still_gets_the_old_generic_steps():
+    criteria = number_criteria(["The lock lasts 15 minutes"])
+    review = review_test_cases(
+        "As a shopper, I want my account to lock so that it stays safe.",
+        criteria,
+        suite(case(case_id="TC-001", traceability="AC-1")),
+    )
+    added = [one for one in review.added if "pack:boundary" in one.tags]
+    assert added
+    assert added[0].steps[0] == "Set up the behaviour AC-1 describes"
+
+
+# ── a test that disagrees with the limit ─────────────────────────────────────
+
+
+def _at_the_limit(expected: str):
+    return case(
+        case_id="TC-005",
+        title="A photo at the size limit",
+        steps=["Choose a 2MB JPEG photo and upload it"],
+        expected_result=expected,
+        traceability="AC-1",
+    )
+
+
+def test_a_test_that_disagrees_with_the_limit_is_called_out():
+    """Test B: AC-1 says "under 2 megabytes" and TC-005 accepts exactly 2 MB."""
+    notes = limit_conflicts(number_criteria(PHOTO_CRITERIA), [_at_the_limit(
+        "The exact 2MB file is accepted and saved."
+    )])
+    assert len(notes) == 1
+    note = notes[0]
+    assert "TC-005 expects a JPEG photo of exactly 2 MB to be accepted" in note
+    assert 'AC-1 says "under 2 megabytes"' in note
+    assert "exactly 2 MB should be refused" in note
+    assert "ask which is meant" in note
+
+
+def test_a_limit_that_includes_its_own_value_agrees_with_that_test():
+    criteria = number_criteria(
+        ["The user can select a JPEG photo up to 2 megabytes and upload it"]
+    )
+    assert limit_conflicts(criteria, [_at_the_limit("The 2MB file is accepted.")]) == []
+
+
+def test_a_test_that_refuses_the_limit_value_agrees_with_under():
+    criteria = number_criteria(PHOTO_CRITERIA)
+    assert limit_conflicts(
+        criteria, [_at_the_limit("The 2MB file is rejected with a message.")]
+    ) == []
+
+
+def test_the_conflict_is_a_note_not_a_new_test_case():
+    criteria = number_criteria(PHOTO_CRITERIA)
+    review = review_test_cases(
+        PHOTO_STORY, criteria, suite(_at_the_limit("The exact 2MB file is accepted."))
+    )
+    assert len(review.conflicts) == 1
+    assert not any("disagree" in one.title.lower() for one in review.added)

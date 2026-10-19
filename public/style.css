@@ -297,6 +297,9 @@ a{color:var(--accent);text-underline-offset:2px}
 .stat.stat-bad .num,.stat.stat-bad .lbl{color:var(--bad-fg)}
 .stat.stat-ok{background:var(--ok-bg);border-color:color-mix(in srgb,var(--ok-line) 30%,transparent)}
 .stat.stat-ok .num,.stat.stat-ok .lbl{color:var(--ok-fg)}
+/* Worth knowing, not worth worrying about. Red is for a real problem. */
+.stat.stat-warn{background:var(--warn-bg);border-color:color-mix(in srgb,var(--warn-line) 32%,transparent)}
+.stat.stat-warn .num,.stat.stat-warn .lbl{color:var(--warn-fg)}
 
 /* Meter: the fill carries severity, the track is a quiet step of the surface. */
 .meter{height:8px;border-radius:999px;background:var(--card-3);
@@ -500,6 +503,12 @@ input[type=checkbox],input[type=radio]{width:16px;height:16px;
 .pq-review summary::-webkit-details-marker{display:none}
 .pq-review summary .pq-more-word{color:var(--accent);font-size:13px}
 .pq-review ul{margin:6px 0 0;padding-left:18px}
+/* A test that argues with a criterion: amber, because somebody has to
+   decide which of the two is right. */
+.pq-conflicts{list-style:none;padding-left:0;margin:6px 0 0}
+.pq-conflicts li{background:var(--warn-bg);color:var(--warn-fg);
+  border-left:3px solid var(--warn-line);border-radius:var(--r-sm);
+  padding:8px 11px;margin:6px 0}
 .pq-review li{margin:3px 0}
 
 
@@ -775,9 +784,21 @@ tr.diff-row td:first-child{box-shadow:inset 3px 0 0 var(--warn-line)}
 .tc-steps li{margin:3px 0}
 .tc-card h3 .tc-select{margin-right:7px;vertical-align:middle;
   accent-color:var(--accent)}
-#tc-select-bar{position:sticky;top:66px;z-index:4;
-  background:color-mix(in srgb,var(--card) 94%,transparent);
-  backdrop-filter:blur(8px)}
+/* The selection bar follows the list it belongs to. Stuck to the top it has
+ * to be a surface, not a pane: a see-through bar shows half a line of the
+ * card sliding under it, which reads as a drawing mistake. Solid in both
+ * themes, and above the cards but under the topbar and the key drawer. */
+/* Flush under the topbar (58px tall), so no strip of the list can scroll
+   through the gap between the two. */
+#tc-select-bar{position:sticky;top:58px;z-index:12;background:var(--card);
+  transition:box-shadow .16s var(--ease),border-color .16s var(--ease)}
+/* The lift is for being stuck, so it is only there while it is. */
+#tc-select-bar.is-stuck{border-bottom-color:var(--border-strong);
+  box-shadow:var(--shadow-2)}
+/* One pixel of nothing, watched to tell "stuck" from "in the page". */
+.tc-stick-sentinel{height:1px;margin-bottom:-1px}
+/* Jumping to a card must not park it under the bar. */
+.tc-card{scroll-margin-top:calc(58px + var(--tc-bar-h,64px) + 8px)}
 
 /* ------------------------------------------- criteria editor & coverage */
 .ac-list{display:flex;flex-direction:column;gap:10px;margin:14px 0}
@@ -1019,9 +1040,18 @@ body[data-card-primary="automation"] #automation-generate.btn-primary:hover{
 .next-chip[data-state="stale"]{border-color:color-mix(in srgb,var(--warn-line) 45%,transparent)}
 .next-chip[data-state="stale"] .next-state{color:var(--warn-fg)}
 .next-chip[data-state="fresh"] .next-state{color:var(--ok-fg)}
-.next-mark{flex:0 0 auto}
+/* The mark is a status, not a picture: one small size, whatever shape it is.
+ * An SVG with no width of its own fills whatever box it lands in, which is
+ * how a tick ended up as tall as the chip and squeezed the name into a
+ * column. The size belongs to the component, never to the element. */
+.next-mark{width:14px;height:14px;flex:0 0 14px;display:block}
+svg.next-mark{color:var(--ok-line)}
+.next-mark.dot-stale{width:8px;height:8px;flex:0 0 8px;border-radius:50%;
+  background:var(--warn-line)}
 @media (max-width:480px){
-  .next-chip{flex:1 1 100%;justify-content:flex-start}
+  /* The chip may wrap onto two lines; it keeps its padding and its mark. */
+  .next-chip{flex:1 1 100%;justify-content:flex-start;flex-wrap:wrap;
+    row-gap:2px}
 }
 
 /* ---------------------------------------------------------- nav status */

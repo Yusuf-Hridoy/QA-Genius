@@ -949,6 +949,42 @@
         hint.textContent = "";
       }
     }
+    var bar = document.getElementById("tc-select-bar");
+    // The hint line comes and goes, so the bar is not always one height.
+    if (bar) barHeight(bar);
+  }
+
+  /* ---------- the selection bar while it is stuck ---------- */
+
+  /* The bar is sticky, so "is it stuck?" is not a scroll position: the list
+   * it belongs to starts somewhere down the page. One pixel of nothing above
+   * it answers the question — when that leaves the top of the window, the
+   * bar is holding the top of the list. */
+  function barHeight(bar) {
+    var height = Math.ceil(bar.getBoundingClientRect().height);
+    if (height) {
+      document.documentElement.style.setProperty("--tc-bar-h", height + "px");
+    }
+  }
+
+  function watchSelectBar() {
+    var bar = document.getElementById("tc-select-bar");
+    if (!bar || bar.getAttribute("data-watched") === "yes") return;
+    barHeight(bar);
+    if (!window.IntersectionObserver || !bar.parentNode) return;
+    bar.setAttribute("data-watched", "yes");
+    var sentinel = document.createElement("div");
+    sentinel.className = "tc-stick-sentinel";
+    sentinel.setAttribute("aria-hidden", "true");
+    bar.parentNode.insertBefore(sentinel, bar);
+    // The same number the CSS sticks the bar at, read from the bar itself.
+    var top = parseInt(window.getComputedStyle(bar).top, 10) || 0;
+    new IntersectionObserver(
+      function (entries) {
+        bar.classList.toggle("is-stuck", !entries[0].isIntersecting);
+      },
+      { rootMargin: "-" + (top + 1) + "px 0px 0px 0px", threshold: 0 }
+    ).observe(sentinel);
   }
 
   /* Tick what the run remembers, and forget ids this list no longer has. */
@@ -1318,6 +1354,7 @@
       rememberDisplayed(false);
     }
     restoreSelection();
+    watchSelectBar();
     runPendingRisks();
   });
 
@@ -1325,6 +1362,7 @@
     renderCriteria();
     renderTestCases();
     renderAutomation();
+    watchSelectBar();
   });
 
   /* The pure helpers the unit tests in tests/js reach for. The page itself

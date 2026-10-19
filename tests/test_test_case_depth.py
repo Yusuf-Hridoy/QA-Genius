@@ -1,6 +1,11 @@
 """Depth tests: how thoroughly each criterion is tested."""
 
-from qagenius.test_case_depth import compute_depth, reason_counts, summary_line
+from qagenius.test_case_depth import (
+    compute_depth,
+    needs_limit_test,
+    reason_counts,
+    summary_line,
+)
 from qagenius.test_cases import number_criteria
 from tests.factories import case, navbar_run, real_run, suite
 
@@ -234,3 +239,24 @@ def test_a_criterion_about_the_way_it_looks_is_answered_by_one_test() -> None:
     assert report.rows[0].reasons == []
     # The one that is not about looks still wants a second test.
     assert report.rows[1].reasons == ["only one test"]
+
+
+def test_a_limit_word_counts_only_when_it_says_how_much() -> None:
+    """The nav-bar run: a cursor moves "over" a link, which is no limit at all."""
+    assert needs_limit_test("The reader moves their mouse cursor over an unselected link") is False
+    assert needs_limit_test("Files over 5 MB are refused") is True
+    assert needs_limit_test("The menu collapses below 768 pixels") is True
+    assert needs_limit_test("The code expires within 10 minutes") is True
+    # A number with its unit still says "limit" on its own.
+    assert needs_limit_test("The account locks after 5 failed attempts") is True
+    # And a number too far behind the word is about something else.
+    assert needs_limit_test("The banner sits above the bar that holds the 5 sections") is False
+
+
+def test_the_navbar_breadcrumb_criterion_is_not_asked_for_a_limit_test() -> None:
+    """AC-2 says "cursor over a step" and has two tests: it is well tested."""
+    result, criteria = navbar_run()
+    row = {one.id: one for one in compute_depth(result, criteria).rows}["AC-2"]
+    assert "over" in row.text
+    assert row.needs_limit is False
+    assert row.reasons == []

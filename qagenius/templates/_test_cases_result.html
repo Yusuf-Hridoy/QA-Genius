@@ -120,6 +120,14 @@
     </span>
   </summary>
   <div class="pq-review-more">
+    {# A test that argues with a criterion comes before everything else: one
+       of the two is wrong, and only the reader knows which. #}
+    {% if review.conflicts %}
+    <p class="pq-review-line"><strong>Tests that disagree with a criterion</strong></p>
+    <ul class="pq-conflicts">
+      {% for note in review.conflicts %}<li>{{ note }}</li>{% endfor %}
+    </ul>
+    {% endif %}
     {% if review.more %}
     <p class="pq-review-line"><strong>Also worth a test</strong></p>
     <ul>

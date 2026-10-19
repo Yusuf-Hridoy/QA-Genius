@@ -13,7 +13,8 @@
       {%- if matrix.covered_pairs == matrix.valid_pairs %} ✓{% endif %}</div>
     <div class="lbl">Pairs tested together<span data-explain="pairwise"></span></div>
   </div>
-  <div class="stat{% if manual_only %} stat-bad{% endif %}">
+  {# Runs nobody can automate are worth knowing about, not an error. #}
+  <div class="stat{% if manual_only %} stat-warn{% endif %}">
     <div class="num">{{ manual_only }}</div><div class="lbl">Test by hand</div>
   </div>
 </div>

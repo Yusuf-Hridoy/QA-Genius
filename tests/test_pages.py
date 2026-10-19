@@ -109,3 +109,13 @@ def test_the_ring_check_page_shows_every_awkward_value() -> None:
     for value in (0, 7, 44, 100):
         assert f'<span class="score-num">{value}<span class="pct">%</span>' in body
     assert body.count("score-ring") == 4
+
+
+def test_the_next_row_check_page_shows_all_three_states() -> None:
+    """The marks have to be small at every width, so they are all on one page."""
+    body = client.get("/dev/next-row").text
+    assert body.count("next-chip") == 3
+    assert 'class="next-mark dot-stale"' in body
+    assert "next-mark tick-fresh" in body
+    for state in ("Not built yet", "Old", "Matches your work"):
+        assert state in body

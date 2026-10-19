@@ -361,6 +361,16 @@ def _value_in(value: str, said: list[tuple[str, float]]) -> bool:
     return any(other == unit and _same(number, amount) for other, number in said)
 
 
+def states_value(text: str, value: str) -> bool:
+    """Does this sentence state this quantity, however it spells it?
+
+    "2 MB", "2.00 megabytes" and "2,097,152 bytes" are one number, so the
+    criterion that refuses a photo at the limit can be found from the
+    criterion that allows one under it.
+    """
+    return _value_in(value, quantities(str(text or "").replace(",", "")))
+
+
 def boundary_covered(b: Boundary, cases: list[TestCase]) -> list[str]:
     """Which of the boundary's values the cases state, however they spell it.
 

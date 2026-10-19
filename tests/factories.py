@@ -200,6 +200,26 @@ LOCKOUT_CRITERIA = [
 ]
 
 
+# Test B: the photo-upload run. Short, and every criterion states the same
+# limit from a different side.
+PHOTO_STORY = (
+    "As a registered user, I want to upload a profile photo so that other "
+    "users can recognise me."
+)
+
+PHOTO_CONTEXT = (
+    "Profile page. Accepted formats: JPEG and PNG. Maximum size 2 MB. "
+    "The photo is cropped to a square."
+)
+
+PHOTO_CRITERIA = [
+    "The user can select a JPEG photo under 2 megabytes and upload it",
+    "The user can select a PNG photo under 2 megabytes and upload it",
+    "A photo larger than 2 megabytes is rejected with a message",
+    "A file in a format other than JPEG or PNG is rejected with a message",
+]
+
+
 NAVBAR_STORY = (
     "As a reader, I want a navigation bar with a sidebar menu and breadcrumbs "
     "so that I can move around the site."
@@ -210,7 +230,8 @@ NAVBAR_STORY = (
 # and only AC-5 can turn a reader away.
 NAVBAR_CRITERIA = [
     "The sidebar highlights the item for the page the reader is on",
-    "Breadcrumbs show the path from the home page to the current page",
+    "Breadcrumbs show the path to the current page, with a hint when the "
+    "reader moves their mouse cursor over a step",
     "The menu opens and closes with the menu button on a phone",
     "The current item is shown in bold",
     "A reader without the admin role is not shown the admin link "

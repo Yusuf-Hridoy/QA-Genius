@@ -319,3 +319,18 @@ def test_every_pack_risk_that_has_a_check_names_it():
                 f"{pack.id}: {risk.title!r} — a risk with no check of its own "
                 "belongs in this list, and one with a check must name it"
             )
+
+
+def test_a_word_that_names_a_page_is_never_strong():
+    """A page holds many features, so its name says nothing about any of them.
+
+    "Profile" switched the profile-form rules on for a story that only
+    uploaded a photo, and the checklist then asked for bio and two-tab tests.
+    """
+    page_words = {
+        "profile", "profiles", "settings", "setting", "dashboard",
+        "account", "accounts", "page", "pages", "my account", "home",
+    }
+    for pack in load_packs():
+        strong = {word.lower() for word in pack.triggers}
+        assert not (strong & page_words), f"{pack.id}: {sorted(strong & page_words)}"

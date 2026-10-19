@@ -415,6 +415,35 @@ def test_detection_says_whether_the_story_named_the_pack():
     criteria = ["The account locks after 5 failed sign-in attempts"]
     hits = {hit.pack.id: hit.in_story for hit in detect_hits(story_text(story, criteria), story)}
     assert hits["file_upload"] is True
-    assert hits["profile_form"] is True
     assert hits["rate_limiting"] is False
     assert hits["login"] is False
+    # "Profile" names the page this sits on, not a form full of fields.
+    assert "profile_form" not in hits
+
+
+def test_the_word_profile_alone_is_not_a_profile_form():
+    """Test B: a story about uploading a photo asked for bio and two-tab tests."""
+    story = (
+        "As a registered user, I want to upload a profile photo so that other "
+        "users can recognise me."
+    )
+    context = (
+        "Profile page. Accepted formats: JPEG and PNG. Maximum size 2 MB. "
+        "The photo is cropped to a square."
+    )
+    criteria = [
+        "The user can select a JPEG photo under 2 megabytes and upload it",
+        "The user can select a PNG photo under 2 megabytes and upload it",
+        "A photo larger than 2 megabytes is rejected with a message",
+        "A file in a format other than JPEG or PNG is rejected with a message",
+    ]
+    whole = story_text("\n".join([story, context]), criteria)
+    assert _ids(whole, story) == ["file_upload"]
+
+
+def test_a_story_about_the_fields_themselves_is_a_profile_form():
+    story = (
+        "As a user, I want to edit my full name and bio on my profile so that "
+        "it is up to date."
+    )
+    assert "profile_form" in _ids(story)

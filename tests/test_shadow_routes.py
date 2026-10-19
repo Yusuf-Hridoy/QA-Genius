@@ -11,6 +11,8 @@ from qagenius import llm
 from qagenius.models import AmbiguityAnalysis, FailureMode, RiskAnalysis
 from tests.factories import (
     BIG_STORY,
+    PHOTO_CRITERIA,
+    PHOTO_STORY,
     NAVBAR_CRITERIA,
     NAVBAR_STORY,
     LOCKOUT_CRITERIA,
@@ -261,6 +263,34 @@ def test_the_senior_tester_box_shows_even_when_nothing_was_added(monkeypatch) ->
     # Nothing was added, so the label does not claim anything was.
     assert "Checked by senior tester" in body
     assert "Added by senior tester" not in body
+
+
+def test_a_test_that_disagrees_with_the_limit_is_shown_first(monkeypatch) -> None:
+    """Test B: TC-005 accepted exactly 2 MB where AC-1 says "under 2 MB"."""
+    written = suite(
+        case(
+            case_id="TC-005",
+            title="A photo at the size limit",
+            steps=["Choose a 2MB JPEG photo and upload it"],
+            expected_result="The exact 2MB file is accepted and saved.",
+            traceability="AC-1",
+        )
+    )
+    monkeypatch.setattr(llm, "generate_json", _fake_cases([], written))
+    body = client.post(
+        "/requirements/test-cases/run",
+        data={
+            "user_story": PHOTO_STORY,
+            "criteria_json": json.dumps(PHOTO_CRITERIA),
+            "coverage_focus": ["Functional", "Negative"],
+        },
+        headers=KEYS_HEADER,
+    ).text
+    assert "1 test disagrees with a criterion" in body
+    assert "Tests that disagree with a criterion" in body
+    assert "exactly 2 MB should be refused" in body
+    # It comes before the other detail blocks in the box.
+    assert body.index("Tests that disagree") < body.index("Found by QA-Genius")
 
 
 def test_remove_buttons_sit_only_on_principal_qa_cases(monkeypatch) -> None:

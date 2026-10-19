@@ -1,8 +1,11 @@
 id = "profile_form"
 name = "Profile form"
 short = "Profile"
-triggers = ["profile", "profiles", "full name", "display name", "bio", "phone number", "personal information", "personal details", "edit details"]
-weak_triggers = ["phone", "name field", "about me"]
+# A word that names a page is not a feature: "profile" is said by every story
+# about anything on the profile page, including one that only uploads a photo.
+# The strong words here are the fields a profile form is made of.
+triggers = ["full name", "first name", "last name", "display name", "bio", "phone number", "date of birth", "edit profile", "edit details", "personal information", "personal details", "profile form", "profile fields"]
+weak_triggers = ["profile", "profiles", "phone", "name field", "about me"]
 exclude = []
 
 [[checks]]

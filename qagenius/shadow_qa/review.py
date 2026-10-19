@@ -6,7 +6,7 @@ started. Nothing the AI wrote is ever modified — only added to.
 """
 
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from qagenius.automation_checks import Finding, ProjectFile
 from qagenius.models import (
@@ -16,7 +16,13 @@ from qagenius.models import (
     TestCase,
     TestCaseList,
 )
-from qagenius.shadow_qa.boundaries import Boundary, case_text, find_boundaries, missing_values
+from qagenius.shadow_qa.boundaries import (
+    Boundary,
+    case_text,
+    find_boundaries,
+    missing_values,
+    states_value,
+)
 from qagenius.shadow_qa.detect import PackHit, detect_hits, mentions, story_text
 from qagenius.shadow_qa.packs import SEVERITY_RANK, Check, PackRisk
 from qagenius.test_case_diff import STOPWORDS, normalised_words, title_score
@@ -75,6 +81,9 @@ class CaseReview:
     more: list[Gap]  # further gaps not added (shown as a list)
     quality: list[str]  # notes about weak AI cases
     covered: list[str]  # check ids the AI already covered
+    # Cases that expect the opposite of the limit their criterion states.
+    # The most valuable thing on the card, so it is shown first.
+    conflicts: list[str] = field(default_factory=list)
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -237,21 +246,165 @@ def _case_from_check(
     )
 
 
-def _boundary_outcome(boundary: Boundary, value: str) -> str:
-    """What should happen at this one value."""
+# ── a limit case written from the criterion's own words ──────────────────────
+
+# What a criterion asks the user to do. The test is built from the first of
+# these it says, so the steps are the criterion's own actions.
+_ACTIONS = (
+    "upload", "select", "choose", "attach", "add", "enter", "type", "submit",
+    "send", "pick", "set", "drag", "paste", "crop",
+)
+_ACTION_RE = re.compile(
+    r"(?<![\w-])(?:" + "|".join(_ACTIONS) + r")(?:s|es|ing)?(?![\w-])",
+    re.IGNORECASE,
+)
+# The words a limit is introduced by, swapped out with the limit itself for
+# the value under test: "under 2 megabytes" becomes "of 1.99 MB".
+_LIMIT_LEAD = (
+    r"(?:of\s+|under\s+|over\s+|below\s+|above\s+|within\s+|up\s+to\s+|"
+    r"at\s+most\s+|at\s+least\s+|no\s+more\s+than\s+|no\s+fewer\s+than\s+|"
+    r"larger\s+than\s+|bigger\s+than\s+|smaller\s+than\s+|more\s+than\s+|"
+    r"less\s+than\s+|fewer\s+than\s+|exactly\s+|maximum\s+of\s+|minimum\s+of\s+)?"
+)
+# Where the thing being acted on stops and the rest of the sentence begins.
+_OBJECT_END = re.compile(
+    r"(?<![\w-])(?:under|over|below|above|larger|bigger|smaller|more|less|"
+    r"fewer|at|up|within|no|maximum|minimum|with|that|which|and|or|from|into|"
+    r"when|if|then|is|are|of|to|in|on|for)(?![\w-])",
+    re.IGNORECASE,
+)
+_ARTICLE = re.compile(r"^(?:a|an|the|their|its|his|her|your|my)\s+", re.IGNORECASE)
+# A page is named for the thing it holds, not by "the", "this" or "next".
+_PAGE_NAME = re.compile(r"(?<![\w-])([a-z][\w-]*)\s+page(?![\w-])", re.IGNORECASE)
+_NOT_A_PAGE = frozenset(
+    """the a an this that these those next last first same one per each other
+    every any some no new old whole entire second third single""".split()
+)
+# A criterion that says what happens when the limit is passed.
+_REFUSES = (
+    "reject", "rejects", "rejected", "refuse", "refuses", "refused",
+    "declined", "denied", "blocked", "not allowed", "not accepted",
+    "too large", "too big", "too long", "too many", "error",
+)
+
+
+@dataclass(frozen=True)
+class Setting:
+    """What the whole run knows that one criterion does not: where this is."""
+
+    page: str  # "the profile page", or "" when nothing says
+    criteria: list[Criterion]
+
+
+def page_in(texts: list[str]) -> str:
+    """The page these sentences keep naming, if they name one.
+
+    The story rarely says where a criterion happens, but the AI's own cases
+    almost always do ("Open the profile page"), so they are read too.
+    """
+    counts: dict[str, int] = {}
+    for text in texts:
+        for found in _PAGE_NAME.finditer(str(text or "")):
+            word = found.group(1).lower()
+            if word in _NOT_A_PAGE:
+                continue
+            counts[word] = counts.get(word, 0) + 1
+    if not counts:
+        return ""
+    best = max(counts.items(), key=lambda pair: (pair[1], -len(pair[0])))
+    return f"the {best[0]} page"
+
+
+def _action_phrase(text: str) -> str:
+    """The criterion from its first action onwards, or nothing."""
+    found = _ACTION_RE.search(str(text or ""))
+    return str(text or "")[found.start():].strip(" .;,") if found else ""
+
+
+def _object_of(action: str) -> str:
+    """What the action is done to: "select a JPEG photo …" -> "JPEG photo"."""
+    rest = action.split(None, 1)[1] if " " in action else ""
+    end = _OBJECT_END.search(rest)
+    words = (rest[: end.start()] if end else rest).strip(" ,.;:")
+    words = _ARTICLE.sub("", words)
+    return words if 1 <= len(words.split()) <= 4 else ""
+
+
+def _at_value(action: str, limit: str, value: str) -> str:
+    """The criterion's action with the limit swapped for the value tested."""
+    swap = re.compile(_LIMIT_LEAD + re.escape(limit), re.IGNORECASE)
+    if swap.search(action):
+        return swap.sub(f"of {value}", action, count=1)
+    return f"{action} at {value}"
+
+
+def _sentence(text: str) -> str:
+    text = str(text or "").strip()
+    if not text:
+        return ""
+    text = text[0].upper() + text[1:]
+    return text if text.endswith((".", "!", "?")) else text + "."
+
+
+def _refusing_criterion(
+    boundary: Boundary, setting: Setting
+) -> Criterion | None:
+    """The criterion that says what happens past this limit, if there is one."""
+    for criterion in setting.criteria:
+        if criterion.id == boundary.source:
+            continue
+        if not any(mentions(criterion.text, word) for word in _REFUSES):
+            continue
+        if states_value(criterion.text, boundary.values[1]):
+            return criterion
+    return None
+
+
+def _boundary_outcome(boundary: Boundary, value: str, setting: Setting) -> str:
+    """What should happen at this one value, in the criteria's own words."""
     index = boundary.values.index(value)
-    if index == 1:
-        return f"the limit takes effect at exactly {value} and not before it"
-    side = "under" if index == 0 else "over"
-    return f"{value} behaves as {side} the limit"
+    if index < 2:
+        at = "at exactly " if index == 1 else "at "
+        return f"{boundary.source} still holds {at}{value}"
+    refuses = _refusing_criterion(boundary, setting)
+    if refuses is not None:
+        tail = refuses.text.strip().rstrip(".")
+        return f"{refuses.id} applies at {value}: {tail[0].lower() + tail[1:]}"
+    return f"{value} is past the limit {boundary.source} states, so it is refused"
 
 
-def _case_from_boundary(boundary: Boundary, case_id: str, missing: list[str]) -> TestCase:
+def _boundary_steps(
+    boundary: Boundary, missing: list[str], setting: Setting, action: str
+) -> list[str]:
+    """Real steps, from the criterion's own action. Never "exercise it"."""
+    if not action:
+        return [
+            f"Set up the behaviour {boundary.source} describes",
+            *[f"Exercise it at {value}" for value in missing],
+        ]
+    opening = f"Open {setting.page}." if setting.page else f"Open the page {boundary.source} is about."
+    return [
+        opening,
+        *[_sentence(_at_value(action, boundary.phrase, value)) for value in missing],
+        "Check the result.",
+    ]
+
+
+def _case_from_boundary(
+    boundary: Boundary, case_id: str, missing: list[str], setting: Setting
+) -> TestCase:
     """A case for the values the AI left out -- and for no others.
 
     Naming all three when the AI already wrote two of them is how the
-    reviewer ends up asking for a test that is already in the suite.
+    reviewer ends up asking for a test that is already in the suite. And a
+    step reading "exercise it at 1.99 MB" is not a test anybody can run, so
+    the steps are written out of the criterion's own action and object.
     """
+    criterion = next(
+        (one for one in setting.criteria if one.id == boundary.source), None
+    )
+    action = _action_phrase(criterion.text if criterion else "")
+    thing = _object_of(action)
     listed = ", ".join(missing)
     return TestCase(
         id=case_id,
@@ -264,20 +417,150 @@ def _case_from_boundary(boundary: Boundary, case_id: str, missing: list[str]) ->
             f"The system is set up with the limit {boundary.source} states: "
             f"{boundary.phrase}"
         ),
-        steps=[f"Set up the behaviour {boundary.source} describes"]
-        + [f"Exercise it at {value}" for value in missing],
+        steps=_boundary_steps(boundary, missing, setting, action),
         expected_result=(
-            "; ".join(_boundary_outcome(boundary, value) for value in missing) + "."
+            "; ".join(_boundary_outcome(boundary, value, setting) for value in missing)
+            + "."
         ),
         priority="High",
         # The card already says "Data to use", so the values say themselves.
-        test_data=listed,
+        test_data=f"{listed} ({thing})" if thing else listed,
         bdd_scenario=None,
         automation_feasibility="High",
         automation_effort="Low",
         tags=[PRINCIPAL_TAG, CHECK_TAG + f"boundary:{boundary.source}", "pack:boundary"],
         traceability=boundary.source,
     )
+
+
+# ── a test that disagrees with the limit its criterion states ────────────────
+
+# Words that say the limit value itself is allowed...
+_LIMIT_INCLUDES = (
+    "up to", "at most", "maximum", "maximum of", "max", "no more than",
+    "no larger than", "no bigger than", "no longer than", "or less",
+    "or fewer", "or under", "at least", "no fewer than", "minimum", "≤", "<=",
+)
+# ... and words that say it is not.
+_LIMIT_EXCLUDES = (
+    "under", "below", "less than", "fewer than", "smaller than",
+    "shorter than", "<",
+)
+# A rule written from the other side: "larger than 2 MB is rejected" leaves
+# exactly 2 MB allowed.
+_LIMIT_REJECTS_OVER = (
+    "more than", "over", "above", "larger than", "bigger than",
+    "greater than", "longer than", "exceeds", "exceed",
+)
+# What a case says it expects to happen.
+_EXPECTS_YES = (
+    "accepted", "accept", "accepts", "saved", "saves", "succeeds", "succeed",
+    "successful", "success", "uploaded", "uploads", "allowed", "shown",
+    "created", "goes through",
+)
+_EXPECTS_NO = _REFUSES + ("fails", "failure", "message about", "not saved")
+
+
+@dataclass(frozen=True)
+class LimitRule:
+    """One limit a criterion states, and whether the limit itself is allowed."""
+
+    source: str  # "AC-1"
+    value: str  # "2 MB"
+    phrase: str  # "under 2 megabytes"
+    allowed: bool  # is a value of exactly `value` allowed?
+    thing: str  # "JPEG photo", or ""
+
+
+def _limit_allowed(text: str) -> bool | None:
+    """Is the limit value itself inside the rule, outside it, or unsaid?"""
+    if any(mentions(text, word) for word in _LIMIT_EXCLUDES):
+        return False
+    if any(mentions(text, word) for word in _LIMIT_INCLUDES):
+        return True
+    if any(mentions(text, word) for word in _LIMIT_REJECTS_OVER):
+        # Only what is past the limit is refused, so the limit itself stands.
+        return True
+    return None
+
+
+def _limit_phrase(text: str, boundary: Boundary) -> str:
+    """The criterion's own words for the limit: "under 2 megabytes"."""
+    words = _LIMIT_EXCLUDES + _LIMIT_INCLUDES + _LIMIT_REJECTS_OVER
+    for word in words:
+        found = re.search(
+            re.escape(word) + r"\s+" + re.escape(boundary.phrase), text, re.IGNORECASE
+        )
+        if found:
+            return found.group(0)
+    return boundary.phrase
+
+
+def limit_rules(criteria: list[Criterion]) -> list[LimitRule]:
+    """Every limit the criteria state, with the side the limit value falls on."""
+    rules: list[LimitRule] = []
+    for criterion in criteria or []:
+        allowed = _limit_allowed(criterion.text)
+        if allowed is None:
+            continue
+        for boundary in find_boundaries([criterion]):
+            rules.append(
+                LimitRule(
+                    source=criterion.id,
+                    value=boundary.values[1],
+                    phrase=_limit_phrase(criterion.text, boundary),
+                    allowed=allowed,
+                    thing=_object_of(_action_phrase(criterion.text)),
+                )
+            )
+    return rules
+
+
+def _expects(case: TestCase) -> str:
+    """Does this case expect the thing to go through, or to be turned away?"""
+    text = " ".join([str(case.title or ""), str(case.expected_result or "")])
+    yes = any(mentions(text, word) for word in _EXPECTS_YES)
+    no = any(mentions(text, word) for word in _EXPECTS_NO)
+    if yes and not no:
+        return "accepted"
+    if no and not yes:
+        return "refused"
+    return ""
+
+
+def limit_conflicts(criteria: list[Criterion], cases: list[TestCase]) -> list[str]:
+    """Cases that use the limit value itself and expect the opposite of the rule.
+
+    The run this came from: AC-1 said "under 2 megabytes", so exactly 2 MB is
+    too big, and the AI still wrote a case expecting a 2 MB photo to be
+    accepted. Nobody can tell from the suite which of the two is wrong, which
+    is exactly why it is worth saying out loud.
+    """
+    rules = limit_rules(criteria)
+    if not rules:
+        return []
+    notes: list[str] = []
+    for case in cases or []:
+        verdict = _expects(case)
+        if not verdict:
+            continue
+        text = case_text(case)
+        rule = next((one for one in rules if states_value(text, one.value)), None)
+        if rule is None:
+            continue
+        wanted = "accepted" if rule.allowed else "refused"
+        if verdict == wanted:
+            continue
+        thing = f"a {rule.thing}" if rule.thing else "a value"
+        notes.append(
+            f"{case.id} expects {thing} of exactly {rule.value} to be {verdict}, "
+            f'but {rule.source} says "{rule.phrase}", so exactly {rule.value} '
+            f"should be {wanted}. One of them is wrong — ask which is meant, "
+            f"then fix the test or the criterion."
+        )
+        if len(notes) >= MAX_QUALITY_NOTES:
+            break
+    return notes
 
 
 def _has_checkable_outcome(expected: str) -> bool:
@@ -339,6 +622,11 @@ def review_test_cases(
     hits = detect_hits(text, story)
     cases = list(result.test_cases)
     texts = [case_text(case) for case in cases]
+    # Where this all happens: the story rarely says, the AI's own cases do.
+    setting = Setting(
+        page=page_in([text, *texts]),
+        criteria=list(criteria or []),
+    )
 
     covered: list[str] = []
     gaps: list[tuple[Gap, Check]] = []
@@ -388,13 +676,14 @@ def review_test_cases(
             continue
         case_id = next_case_id(taken)
         taken.append(case_id)
-        added.append(_case_from_boundary(boundary, case_id, missing))
+        added.append(_case_from_boundary(boundary, case_id, missing, setting))
 
     return CaseReview(
         added=added,
         more=more,
         quality=_quality_notes(cases),
         covered=covered,
+        conflicts=limit_conflicts(criteria, cases),
     )
 
 

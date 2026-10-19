@@ -239,6 +239,9 @@ PAGES = (
     "/bugs/example",
     "/insights/example",
     "/insights/example-explained",
+    # The check pages are read by people too.
+    "/dev/rings",
+    "/dev/next-row",
 )
 
 _SCRIPT = re.compile(r"<script\b[^>]*>.*?</script>", re.DOTALL | re.IGNORECASE)

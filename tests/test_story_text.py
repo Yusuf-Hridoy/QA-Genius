@@ -82,3 +82,45 @@ def test_criteria_lines_go_once_criteria_exist() -> None:
 def test_without_criteria_nothing_is_hidden() -> None:
     missing = ["No acceptance criteria defined", "No error handling specified"]
     assert without_criteria_lines(missing, False) == missing
+
+
+def test_a_bare_bracket_level_is_a_label_too() -> None:
+    """Test B: the model dropped the word "confidence" and kept the brackets."""
+    assert split_confidence("No lockout limit [HIGH]") == Said("No lockout limit", "High")
+    assert split_confidence("The crop is not described (low)") == Said(
+        "The crop is not described", "Low"
+    )
+    said = split_confidence("The avatar limit is unclear [Medium].")
+    assert said == Said("The avatar limit is unclear.", "Medium")
+    # Mid-sentence, the sentence closes up behind it.
+    assert split_confidence("No format list [HIGH] is given").text == (
+        "No format list is given"
+    )
+
+
+def test_the_confidence_label_phrase_goes_with_the_comma_that_led_into_it() -> None:
+    assert split_confidence(
+        "The photo size is not stated, with confidence label HIGH."
+    ) == Said("The photo size is not stated.", "High")
+    assert split_confidence(
+        "The photo size is not stated with confidence label high"
+    ) == Said("The photo size is not stated", "High")
+
+
+def test_a_level_and_confidence_at_the_end_is_a_label() -> None:
+    assert split_confidence("The crop rule is missing. High confidence.") == Said(
+        "The crop rule is missing.", "High"
+    )
+    assert split_confidence("The crop rule is missing — Medium confidence") == Said(
+        "The crop rule is missing", "Medium"
+    )
+
+
+def test_a_sentence_that_is_really_about_confidence_is_left_alone() -> None:
+    kept = (
+        "We are confident the limit is 2 MB.",
+        "High confidence is not the same as proof.",
+        "Rated [HIGH RISK]",
+    )
+    for line in kept:
+        assert split_confidence(line) == Said(line, ""), line
