@@ -204,3 +204,35 @@ NAVBAR_STORY = (
     "As a reader, I want a navigation bar with a sidebar menu and breadcrumbs "
     "so that I can move around the site."
 )
+
+# The criteria from the nav-bar run, one of each shape the depth rule knows:
+# AC-1 and AC-4 are about how it looks, AC-2 and AC-3 are plain behaviour,
+# and only AC-5 can turn a reader away.
+NAVBAR_CRITERIA = [
+    "The sidebar highlights the item for the page the reader is on",
+    "Breadcrumbs show the path from the home page to the current page",
+    "The menu opens and closes with the menu button on a phone",
+    "The current item is shown in bold",
+    "A reader without the admin role is not shown the admin link "
+    "and cannot open it by URL",
+]
+
+_NAVBAR_CASES = (
+    ("TC-001", "Functional", "AC-1", "The item for the open page is highlighted"),
+    ("TC-002", "Functional", "AC-2", "Breadcrumbs show the path to the current page"),
+    ("TC-003", "Functional", "AC-2", "Breadcrumbs follow a move to another section"),
+    ("TC-004", "Functional", "AC-4", "The current item is bold"),
+    ("TC-005", "Functional", "AC-3", "The menu button opens the menu on a phone"),
+    ("TC-006", "Functional", "AC-3", "The menu closes again on the second press"),
+    ("TC-007", "Negative", "AC-5", "A reader without the admin role is refused the admin URL"),
+    ("TC-008", "Functional", "AC-5", "An admin sees the admin link in the sidebar"),
+)
+
+
+def navbar_run() -> tuple[TestCaseList, list[Criterion]]:
+    """The 8 cases and 5 criteria from the nav-bar run, every criterion sound."""
+    cases = [
+        case(case_id=cid, category=category, traceability=trace, title=title)
+        for cid, category, trace, title in _NAVBAR_CASES
+    ]
+    return suite(*cases), number_criteria(NAVBAR_CRITERIA)

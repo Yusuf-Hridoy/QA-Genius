@@ -19,7 +19,7 @@ from qagenius.models import (
 from qagenius.shadow_qa.boundaries import Boundary, case_text, find_boundaries, missing_values
 from qagenius.shadow_qa.detect import PackHit, detect_hits, mentions, story_text
 from qagenius.shadow_qa.packs import SEVERITY_RANK, Check, PackRisk
-from qagenius.test_case_diff import STOPWORDS, title_score
+from qagenius.test_case_diff import STOPWORDS, normalised_words, title_score
 from qagenius.test_case_refine import next_case_id
 from qagenius.test_cases import Criterion
 
@@ -635,8 +635,10 @@ def risk_titles(story: str, criteria: list[str], limit: int = 6) -> list[str]:
 
 
 def _risk_words(risk: FailureMode) -> str:
-    """What an already-named risk says it does, past its title."""
-    return " ".join([str(risk.effect or ""), str(risk.cause or "")])
+    """Everything an already-named risk says: its name, and what it does."""
+    return " ".join(
+        [str(risk.title or ""), str(risk.effect or ""), str(risk.cause or "")]
+    )
 
 
 def _twin(risk: PackRisk, others: list[FailureMode]) -> FailureMode | None:
@@ -657,11 +659,17 @@ def _twin(risk: PackRisk, others: list[FailureMode]) -> FailureMode | None:
     provider account takes over an existing account with the same email" and
     "OAuth account linking email collision takeover" are one problem written
     twice, and the overlap score alone was too blunt to see it.
+
+    The words are compared in one plain form, so "checks" and "checked" are
+    the same word, and the covered_if words are looked for in the name too:
+    an AI risk often puts the whole problem in its title and leaves the
+    effect and the cause saying something more general.
     """
     for other in others:
         if title_score(risk.title, other.title) >= RISK_TITLE_MATCH:
             return other
-        if len(_tokens(risk.title) & _tokens(other.title)) >= MIN_SHARED_RISK_WORDS:
+        shared_names = normalised_words(risk.title) & normalised_words(other.title)
+        if len(shared_names) >= MIN_SHARED_RISK_WORDS:
             return other
         text = _risk_words(other)
         shared = sum(1 for word in risk.covered_if if mentions(text, word))

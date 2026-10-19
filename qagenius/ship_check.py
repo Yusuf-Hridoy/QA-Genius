@@ -319,8 +319,7 @@ def _depth(inputs: ShipInputs, criteria: list[Criterion]) -> ShipCheckItem:
         return _item(
             "depth",
             "pass",
-            f"All {_criteria_count(total)} have a test for wrong input "
-            "and one at the limits",
+            f"All {_criteria_count(total)} have the tests they need",
             [],
         )
     # "More than half" is the point where the suite stops being a safety net.

@@ -1,7 +1,9 @@
 {# One place for everything QA-Genius's own testing rules draw, so the label
    reads the same on every desk: same words, same colour, same size. #}
 
-{% macro label() %}<span class="pill accent plain small pq-label">Added by senior tester</span>{% endmacro %}
+{# The words say what really happened: most of the time the senior tester
+   added something, and sometimes it only looked. #}
+{% macro label(words="") %}<span class="pill accent plain small pq-label">{{ words or "Added by senior tester" }}</span>{% endmacro %}
 
 {# The epic warning. It sits above the score because a story that is really
    seven features is the first thing to say about it. #}

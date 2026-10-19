@@ -11,6 +11,8 @@ from qagenius import llm
 from qagenius.models import AmbiguityAnalysis, FailureMode, RiskAnalysis
 from tests.factories import (
     BIG_STORY,
+    NAVBAR_CRITERIA,
+    NAVBAR_STORY,
     LOCKOUT_CRITERIA,
     LOCKOUT_STORY,
     PROFILE_STORY,
@@ -211,6 +213,54 @@ def test_the_review_card_and_labels_are_shown(monkeypatch) -> None:
     assert "Added " in body and "the AI missed" in body
     assert body.count("pq-label") >= 2
     assert "Why a senior tester always asks for this" in body
+
+
+NAVBAR_FORM = {
+    "user_story": NAVBAR_STORY,
+    "criteria_json": json.dumps(NAVBAR_CRITERIA),
+    "coverage_focus": ["Functional", "Negative"],
+}
+
+# The nav-bar run, where the AI followed the checklist and tagged every check
+# it answered. Nothing is left for the senior tester to add.
+_COVERED_BY_THE_AI = (
+    ("TC-007", "A reader without the admin role is refused the admin URL",
+     ["qa:permissions.ui_and_api", "qa:permissions.direct_url"]),
+    ("TC-009", "Browser back and forward keep the right item active",
+     ["qa:navigation.back_forward"]),
+    ("TC-010", "Tab order follows the sidebar and the focus ring is visible",
+     ["qa:navigation.keyboard_focus"]),
+    ("TC-011", "A role change takes effect without signing out again",
+     ["qa:permissions.role_change_live"]),
+    ("TC-012", "The active item is still correct after a refresh",
+     ["qa:navigation.active_after_refresh"]),
+)
+
+
+def _navbar_suite():
+    return suite(
+        *[
+            case(case_id=case_id, title=title, tags=tags, traceability="AC-5")
+            for case_id, title, tags in _COVERED_BY_THE_AI
+        ]
+    )
+
+
+def test_the_senior_tester_box_shows_even_when_nothing_was_added(monkeypatch) -> None:
+    """The nav-bar run: the rules ran, found nothing, and have to say so."""
+    monkeypatch.setattr(llm, "generate_json", _fake_cases([], _navbar_suite()))
+    body = client.post(
+        "/requirements/test-cases/run", data=NAVBAR_FORM, headers=KEYS_HEADER
+    ).text
+    assert 'id="pq-review"' in body
+    assert (
+        "The AI already covered all 6 things a senior tester checks for this "
+        "story. Nothing to add." in body
+    )
+    assert not [one for one in _shown_cases(body) if "principal-qa" in one["tags"]]
+    # Nothing was added, so the label does not claim anything was.
+    assert "Checked by senior tester" in body
+    assert "Added by senior tester" not in body
 
 
 def test_remove_buttons_sit_only_on_principal_qa_cases(monkeypatch) -> None:

@@ -885,14 +885,33 @@ def _coverage_pill(percent: int) -> str:
     return "bad"
 
 
+def _nothing_to_add_line(review: CaseReview) -> str:
+    """What the box says when the AI left the senior tester nothing to do.
+
+    The box used to disappear in that case, which reads as "the rules did
+    not run" rather than "the rules ran and found nothing".
+    """
+    checked = len(review.covered)
+    if not checked:
+        return (
+            "A senior tester has nothing to add for this kind of story. "
+            "Nothing to add."
+        )
+    things = "thing" if checked == 1 else "things"
+    return (
+        f"The AI already covered all {checked} {things} a senior tester "
+        "checks for this story. Nothing to add."
+    )
+
+
 def _review_line(review: CaseReview) -> str:
     """The one line on the Principal QA review card, before it is opened."""
-    parts = []
-    if review.added:
-        parts.append(
-            f"Added {len(review.added)} case{'' if len(review.added) == 1 else 's'} "
-            "the AI missed"
-        )
+    if not review.added:
+        return _nothing_to_add_line(review)
+    parts = [
+        f"Added {len(review.added)} case{'' if len(review.added) == 1 else 's'} "
+        "the AI missed"
+    ]
     if review.more:
         parts.append(f"{len(review.more)} more idea{'' if len(review.more) == 1 else 's'}")
     if review.quality:

@@ -4,6 +4,8 @@ import time
 
 from tests.factories import (
     BIG_STORY,
+    NAVBAR_CRITERIA,
+    NAVBAR_STORY,
     LOCKOUT_CRITERIA,
     LOCKOUT_STORY,
     PROFILE_CRITERIA,
@@ -15,6 +17,7 @@ from tests.factories import (
 
 from qagenius.automation_checks import ProjectFile
 from qagenius.models import FailureMode, RiskAnalysis
+from qagenius.risk_radar import score_risks
 from qagenius.shadow_qa.review import (
     MAX_ADDED,
     MAX_ADDED_RISKS,
@@ -410,6 +413,34 @@ def test_a_differently_worded_duplicate_is_still_one_risk():
     assert "takeover" in ai.covered_if
 
 
+def test_the_navbar_duplicate_is_one_risk_linked_to_the_test_that_covers_it():
+    """R1 and R7 of the nav-bar run: one problem, two names, one test.
+
+    The AI's R1 and the rule packs' R7 are both "the menu hides it but the
+    server does not check". Only one of them belongs on the page, and the
+    one that stays has to be the one TC-007 can be matched to.
+    """
+    ai = _risk(
+        "The sidebar hides the admin link client-side only",
+        effect="Anyone who knows the address opens the admin page.",
+        cause="The menu hides the link in the browser and the backend never "
+        "checks the role.",
+    )
+    added = review_risks(NAVBAR_STORY, NAVBAR_CRITERIA, RiskAnalysis(failure_modes=[ai]))
+    assert not any("user interface only" in one.title for one in added)
+    tested = case(
+        case_id="TC-007",
+        title="A reader without the admin role is refused the admin URL",
+        steps=["Open the admin URL directly as a reader"],
+        expected_result="The server answers 403 and changes nothing.",
+    )
+    report = score_risks(RiskAnalysis(failure_modes=[ai] + added), [tested])
+    assert len([one for one in report.risks if "admin" in one.risk.title]) == 1
+    scored = report.risks[0]
+    assert scored.coverage == "covered"
+    assert [row[0] for row in scored.covered_tests] == ["TC-007"]
+
+
 def test_near_duplicate_titles_are_skipped():
     analysis = RiskAnalysis(
         failure_modes=[_risk("Error message reveals whether an email is registered here")]
@@ -602,19 +633,22 @@ def test_one_shared_word_does_not_make_two_risks_one():
     assert any("reveals whether an email is registered" in one.title for one in added)
 
 
-def test_a_word_in_the_ai_title_alone_is_not_a_match():
-    """A title is compared as a title. Its words do not stand in for the rest."""
-    analysis = RiskAnalysis(
-        failure_modes=[
-            _risk(
-                "Enumeration of registered emails",
-                effect="Something bad happens.",
-                cause="It was built that way.",
-            )
-        ]
+def test_two_words_in_the_two_titles_are_enough_to_be_one_risk():
+    """"Enumeration of registered emails" is the pack's risk under a shorter name.
+
+    The AI often puts the whole problem in the title and leaves the effect
+    and the cause saying something general, so the names are compared in
+    their plain form: "registered" and "emails" are "register" and "email".
+    """
+    ai = _risk(
+        "Enumeration of registered emails",
+        effect="Something bad happens.",
+        cause="It was built that way.",
     )
-    added = review_risks(LOCKOUT_STORY, LOCKOUT_CRITERIA, analysis)
-    assert any("reveals whether an email is registered" in one.title for one in added)
+    added = review_risks(LOCKOUT_STORY, LOCKOUT_CRITERIA, RiskAnalysis(failure_modes=[ai]))
+    assert not any("reveals whether an email is registered" in one.title for one in added)
+    # The risk that stayed can now be linked to the test that covers it.
+    assert "enumeration" in ai.covered_if
 
 
 def test_a_genuinely_new_risk_is_still_added():

@@ -17,10 +17,7 @@ _STRENGTHEN_HEAD = (
 _STRENGTHEN_TAIL = (
     "Use exact values (counts, times, lengths) at and around every limit in the story."
 )
-_COVER_LINE = (
-    "cover this criterion with at least one positive, one negative "
-    "and one boundary case"
-)
+_COVER_LINE = "cover this criterion with at least {kinds} case"
 # A reason becomes the words asking for the case that is missing. The screen
 # says "no test for wrong input"; the prompt keeps the QA words the AI knows.
 _REASON_PHRASES = (
@@ -69,7 +66,14 @@ def strengthen_instruction(depth: DepthReport) -> str:
         if not row.thin:
             continue
         if NOT_COVERED in row.reasons:
-            lines.append(f"For {row.id}: {_COVER_LINE}.")
+            # Only the kinds this criterion can really have: a criterion with
+            # nothing to type into has no negative case to write.
+            kinds = ["one positive"]
+            if row.needs_wrong_input:
+                kinds.append("one negative")
+            if row.needs_limit:
+                kinds.append("one boundary")
+            lines.append(f"For {row.id}: {_COVER_LINE.format(kinds=_join_phrases(kinds))}.")
             continue
         phrases = [
             phrase for reason, phrase in _REASON_PHRASES if reason in row.reasons

@@ -237,7 +237,7 @@ def test_example_strengthen_only_adds_cases() -> None:
     assert "~0 changed" in body
     assert "−0 removed" in body
     assert "Criteria needing more tests" in body
-    assert "3 → 0" in body
+    assert "2 → 0" in body
     assert "This only adds tests." in body
 
 

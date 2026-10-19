@@ -3,6 +3,9 @@
 from dataclasses import dataclass
 
 from qagenius.models import TestCaseList
+from qagenius.shadow_qa.boundaries import find_boundaries
+from qagenius.shadow_qa.detect import mentions
+from qagenius.test_case_diff import normalised_words, word_form
 from qagenius.test_cases import (
     CATEGORY_ORDER,
     Criterion,
@@ -12,6 +15,48 @@ from qagenius.test_cases import (
 
 DEPTH_KINDS = ("Negative", "Boundary")  # kinds every criterion should have
 MIN_CASES = 2
+# A criterion with nothing to look at but the way it looks is answered by
+# one test. Asking for three is how a tool loses the reader's trust.
+VISUAL_CASES = 1
+
+# A criterion asks for a test at the limits only when it states a limit:
+# a number with a unit ("5 attempts", "15 minutes"), or one of these.
+LIMIT_PHRASES = (
+    "at least", "at most", "up to", "maximum", "minimum", "below", "above",
+    "under", "over", "within", "more than", "less than",
+)
+# ... and for a wrong-input test only when somebody can put something in, or
+# a rule can turn them away. A breadcrumb trail can do neither.
+INPUT_WORDS = (
+    "enter", "type", "fill", "select", "choose", "upload", "submit",
+    "password", "code", "field", "form", "file", "permission", "role",
+    "admin", "rights", "allowed", "denied", "invalid", "wrong", "limit",
+)
+# A criterion about how something looks, which one test answers.
+VISUAL_WORDS = ("color", "colour", "bold", "hover", "icon", "highlight", "style")
+
+_INPUT_FORMS = frozenset(word_form(word) for word in INPUT_WORDS)
+_VISUAL_FORMS = frozenset(word_form(word) for word in VISUAL_WORDS)
+
+
+def needs_limit_test(text: str) -> bool:
+    """Does this criterion state a limit worth testing either side of?"""
+    said = str(text or "")
+    if any(mentions(said, phrase) for phrase in LIMIT_PHRASES):
+        return True
+    # The same reader of numbers the senior tester's limit cases use, so the
+    # two never disagree about what a limit is.
+    return bool(find_boundaries([Criterion(id="AC-0", text=said)]))
+
+
+def needs_wrong_input_test(text: str) -> bool:
+    """Can a reader put something in here, or be turned away?"""
+    return bool(normalised_words(text) & _INPUT_FORMS)
+
+
+def is_visual(text: str) -> bool:
+    """Is this criterion only about the way something looks?"""
+    return bool(normalised_words(text) & _VISUAL_FORMS)
 
 NOT_COVERED = "no tests yet"
 ONLY_ONE = "only one test"
@@ -32,6 +77,9 @@ class CriterionDepth:
     kinds: list[str]
     reasons: list[str]
     thin: bool
+    # What this criterion asks for, which is not the same for all of them.
+    needs_wrong_input: bool = False
+    needs_limit: bool = False
 
 
 @dataclass(frozen=True)
@@ -49,14 +97,23 @@ def _ordered_kinds(categories: list[str]) -> list[str]:
     return kinds
 
 
-def _reasons(case_count: int, kinds: list[str]) -> list[str]:
+def _reasons(
+    text: str, case_count: int, kinds: list[str], wants: dict[str, bool]
+) -> list[str]:
+    """What this one criterion is still missing, and nothing it never needed.
+
+    A breadcrumb trail has no wrong input to give it and no limit to stand
+    either side of. Asking for those two anyway filled the table with work
+    nobody should do, and buried the criteria that really were thin.
+    """
     if case_count == 0:
         return [NOT_COVERED]
     reasons = []
-    if case_count < MIN_CASES:
+    enough = VISUAL_CASES if is_visual(text) else MIN_CASES
+    if case_count < enough:
         reasons.append(ONLY_ONE)
     for kind in DEPTH_KINDS:
-        if kind not in kinds:
+        if wants[kind] and kind not in kinds:
             reasons.append(NO_KIND[kind])
     return reasons
 
@@ -73,7 +130,11 @@ def compute_depth(result: TestCaseList, criteria: list[Criterion]) -> DepthRepor
     for criterion in criteria:
         cases = cases_by_id[criterion.id]
         kinds = _ordered_kinds([case.category for case in cases])
-        reasons = _reasons(len(cases), kinds)
+        wants = {
+            "Negative": needs_wrong_input_test(criterion.text),
+            "Boundary": needs_limit_test(criterion.text),
+        }
+        reasons = _reasons(criterion.text, len(cases), kinds, wants)
         rows.append(
             CriterionDepth(
                 id=criterion.id,
@@ -82,6 +143,8 @@ def compute_depth(result: TestCaseList, criteria: list[Criterion]) -> DepthRepor
                 kinds=kinds,
                 reasons=reasons,
                 thin=bool(reasons),
+                needs_wrong_input=wants["Negative"],
+                needs_limit=wants["Boundary"],
             )
         )
     return DepthReport(rows=rows, thin_ids=[row.id for row in rows if row.thin])
@@ -113,7 +176,7 @@ def summary_line(report: DepthReport) -> str:
     if not total:
         return ""
     if not thin:
-        return "Every criterion has a test for wrong input and one at the limits."
+        return "Every criterion has the tests it needs."
     parts = [
         f"{count} {'has' if count == 1 else 'have'} {reason}"
         for reason, count in reason_counts(report)[:MAX_REASONS_IN_LINE]

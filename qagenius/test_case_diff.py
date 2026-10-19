@@ -36,6 +36,39 @@ STOPWORDS = frozenset(
 )
 
 
+_WORD_SPLIT = re.compile(r"[^a-z0-9]+")
+# The endings a word changes by without changing what it means. Longest
+# first: "checking" is "check", not "checkin".
+_ENDINGS = ("ing", "ed", "es", "s")
+MIN_WORD = 3
+
+
+def word_form(word: str) -> str:
+    """One spelling for one word: "checks", "checked", "checking" -> "check"."""
+    plain = str(word or "").strip().lower()
+    for ending in _ENDINGS:
+        if plain.endswith(ending) and len(plain) - len(ending) >= MIN_WORD:
+            return plain[: -len(ending)]
+    return plain
+
+
+def normalised_words(text: str) -> set[str]:
+    """What a sentence is about: its words in one form, without the filler.
+
+    Two sentences that say two of these words between them are talking about
+    the same thing. Two that share "the" and "is" are not, which is why the
+    stopwords go before anything is counted.
+    """
+    found = set()
+    for raw in _WORD_SPLIT.split(str(text or "").lower()):
+        if not raw or raw in STOPWORDS:
+            continue
+        plain = word_form(raw)
+        if len(plain) >= MIN_WORD and plain not in STOPWORDS:
+            found.add(plain)
+    return found
+
+
 @dataclass(frozen=True)
 class FieldChange:
     field: str

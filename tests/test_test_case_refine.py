@@ -17,11 +17,10 @@ from tests.factories import case, real_run, suite
 
 REAL_RUN_INSTRUCTION = """Add new test cases only. Do not change or remove any existing test case.
 For AC-1: add a negative case and a boundary case.
-For AC-2: add a negative case, a boundary case and at least one more case.
-For AC-3: add a boundary case.
-For AC-4: add a negative case and at least one more case.
-For AC-5: add a negative case, a boundary case and at least one more case.
-For AC-6: add a negative case, a boundary case and at least one more case.
+For AC-2: add a boundary case and at least one more case.
+For AC-4: add at least one more case.
+For AC-5: add at least one more case.
+For AC-6: add at least one more case.
 Use exact values (counts, times, lengths) at and around every limit in the story."""
 
 
@@ -47,13 +46,21 @@ def test_strengthen_instruction_for_the_real_run() -> None:
 
 
 def test_strengthen_instruction_covers_an_uncovered_criterion() -> None:
-    criteria = number_criteria(["one", "two"])
+    """And asks only for the kinds the criterion can really have."""
+    criteria = number_criteria(
+        [
+            "The name is shown",
+            "The password field takes at most 64 characters",
+            "Breadcrumbs show the path to the current page",
+        ]
+    )
     depth = compute_depth(suite(case("TC-001", "Functional", "AC-1")), criteria)
     text = strengthen_instruction(depth)
     assert (
         "For AC-2: cover this criterion with at least one positive, one negative "
         "and one boundary case." in text
     )
+    assert "For AC-3: cover this criterion with at least one positive case." in text
 
 
 def test_strengthen_instruction_skips_solid_criteria() -> None:
