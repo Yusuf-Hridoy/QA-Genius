@@ -914,8 +914,7 @@ def _review_line(review: CaseReview) -> str:
     if review.conflicts:
         count = len(review.conflicts)
         parts.append(
-            f"{count} test{'' if count == 1 else 's'} "
-            f"{'disagrees' if count == 1 else 'disagree'} with a criterion"
+            f"{count} disagreement{'' if count == 1 else 's'} about a limit"
         )
     if review.added:
         parts.append(

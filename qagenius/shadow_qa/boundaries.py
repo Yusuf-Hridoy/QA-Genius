@@ -371,15 +371,60 @@ def states_value(text: str, value: str) -> bool:
     return _value_in(value, quantities(str(text or "").replace(",", "")))
 
 
-def boundary_covered(b: Boundary, cases: list[TestCase]) -> list[str]:
+# A value a hair past the limit is a different test: "2.01 MB" and
+# "2,097,153 bytes" are both "just over 2 MB", not "2 MB".
+JUST_OVER = 1.05
+
+
+def scan(text: str) -> list[tuple[str, float]]:
+    """Every quantity in a sentence, read once so a caller can ask twice."""
+    return quantities(str(text or "").replace(",", ""))
+
+
+def states(value: str, said: list[tuple[str, float]]) -> bool:
+    """Is this quantity among the ones already read out of a sentence?"""
+    return _value_in(value, said)
+
+
+def over_in(value: str, text: str, said: list[tuple[str, float]]) -> bool:
+    """Is this sentence about a value a hair past the limit, not the limit?"""
+    wanted = _as_quantity(value)
+    if wanted is None:
+        return False
+    unit, amount = wanted
+    lowered = str(text or "").lower()
+    if any(one in lowered for one in _OVER_SIZE):
+        return True
+    return any(
+        other == unit and amount < number <= amount * JUST_OVER
+        for other, number in said
+    )
+
+
+def just_over(text: str, value: str) -> bool:
+    """Is this sentence about a value a hair past the limit, not the limit?"""
+    return over_in(value, text, scan(text))
+
+
+def boundary_covered(
+    b: Boundary,
+    cases: list[TestCase],
+    text: str | None = None,
+    said: list[tuple[str, float]] | None = None,
+) -> list[str]:
     """Which of the boundary's values the cases state, however they spell it.
 
     A tester writes "a 5-digit code '12345'", "5.00 megabytes" or "four
     attempts" and means the value this boundary asks for. Reading the number
     only as it was written here is how a limit test gets added twice.
     """
-    text = " \n ".join(case_text(case) for case in cases or [])
-    said = quantities(text)
+    # The suite is one body of text, and reading its numbers is the slow
+    # part, so a caller with several boundaries may read it once and pass
+    # it in here.
+    if text is None:
+        text = " \n ".join(case_text(case) for case in cases or [])
+    if said is None:
+        said = scan(text)
     lowered = text.lower()
     covered = []
     for index, value in enumerate(b.values):
@@ -390,6 +435,12 @@ def boundary_covered(b: Boundary, cases: list[TestCase]) -> list[str]:
     return covered
 
 
-def missing_values(b: Boundary, cases: list[TestCase]) -> list[str]:
-    covered = set(boundary_covered(b, cases))
+def missing_values(
+    b: Boundary,
+    cases: list[TestCase],
+    text: str | None = None,
+    said: list[tuple[str, float]] | None = None,
+) -> list[str]:
+    """The boundary's values no case states. The suite may be read in once."""
+    covered = set(boundary_covered(b, cases, text, said))
     return [value for value in b.values if value not in covered]

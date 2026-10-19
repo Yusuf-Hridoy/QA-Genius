@@ -286,11 +286,13 @@ def test_a_test_that_disagrees_with_the_limit_is_shown_first(monkeypatch) -> Non
         },
         headers=KEYS_HEADER,
     ).text
-    assert "1 test disagrees with a criterion" in body
-    assert "Tests that disagree with a criterion" in body
+    assert "2 disagreements about a limit" in body
+    assert "Disagreements about a limit" in body
     assert "exactly 2 MB should be refused" in body
+    # The criteria argue with each other about the same limit.
+    assert "Decide which is right." in body
     # It comes before the other detail blocks in the box.
-    assert body.index("Tests that disagree") < body.index("Found by QA-Genius")
+    assert body.index("Disagreements about a limit") < body.index("Found by QA-Genius")
 
 
 def test_remove_buttons_sit_only_on_principal_qa_cases(monkeypatch) -> None:

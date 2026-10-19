@@ -21,6 +21,9 @@ from qagenius.shadow_qa.boundaries import (
     case_text,
     find_boundaries,
     missing_values,
+    over_in,
+    scan,
+    states,
     states_value,
 )
 from qagenius.shadow_qa.detect import PackHit, detect_hits, mentions, story_text
@@ -162,10 +165,16 @@ def _tagged(case_id: str, cases: list[TestCase]) -> bool:
     return any(wanted in _tags(case) for case in cases)
 
 
-def _check_covered(check: Check, cases: list[TestCase], texts: list[str]) -> bool:
+def _check_covered(check: Check, cases: list[TestCase], whole: str) -> bool:
+    """Did the AI already write a case for this check?
+
+    The cases are searched as one body of text: a word that means the check
+    is covered means it wherever it turns up, and one search over the suite
+    beats one search per case while a user waits for the answer.
+    """
     if _tagged(check.id, cases):
         return True
-    return any(mentions(text, word) for text in texts for word in check.covered_if)
+    return any(mentions(whole, word) for word in check.covered_if)
 
 
 def _tokens(text: str) -> set[str]:
@@ -330,6 +339,13 @@ def _object_of(action: str) -> str:
     return words if 1 <= len(words.split()) <= 4 else ""
 
 
+def _says_limit(line: str, limit: str) -> bool:
+    """Does this line state the limit, with or without its leading words?"""
+    return bool(
+        re.search(_LIMIT_LEAD + re.escape(limit), str(line or ""), re.IGNORECASE)
+    )
+
+
 def _at_value(action: str, limit: str, value: str) -> str:
     """The criterion's action with the limit swapped for the value tested."""
     swap = re.compile(_LIMIT_LEAD + re.escape(limit), re.IGNORECASE)
@@ -360,33 +376,200 @@ def _refusing_criterion(
     return None
 
 
+# A criterion written as Given / When / Then, with each "and" continuing the
+# part it follows. Most criteria are one sentence; the ones that are not are
+# already the test, written out, and worth following exactly.
+_GWT_WORD = re.compile(r"(?<![\w-])(given|when|then|and|but)(?![\w-])", re.IGNORECASE)
+MIN_WHEN_WORDS = 3
+# "The user selects…" -> "Select…": who does it is not a step.
+_DOER = re.compile(
+    r"^\s*(?:the\s+|a\s+|an\s+)?(?:user|users|shopper|shoppers|reader|readers|"
+    r"customer|customers|admin|admins|visitor|tester|they|he|she|system)\s+"
+    r"(?:can\s+|may\s+|must\s+|should\s+|is\s+able\s+to\s+|are\s+able\s+to\s+|"
+    r"will\s+|then\s+)?",
+    re.IGNORECASE,
+)
+
+
+def given_when_then(text: str) -> tuple[list[str], list[str], list[str]]:
+    """The criterion's parts, one line each, "and" lines kept where they fell."""
+    parts: dict[str, list[str]] = {"given": [], "when": [], "then": []}
+    said = str(text or "")
+    current: str | None = None
+    position = 0
+    pieces: list[tuple[str, str]] = []
+    for found in _GWT_WORD.finditer(said):
+        word = found.group(1).lower()
+        if word in ("and", "but"):
+            # An "and" before any keyword is just a conjunction in a sentence.
+            if current is None:
+                continue
+            pieces.append((current, said[position:found.start()]))
+        else:
+            if current is not None:
+                pieces.append((current, said[position:found.start()]))
+            current = word
+        position = found.end()
+    if current is not None:
+        pieces.append((current, said[position:]))
+    for key, chunk in pieces:
+        line = chunk.strip().strip(",;:. ")
+        if line:
+            parts[key].append(line)
+    if len(" ".join(parts["when"]).split()) < MIN_WHEN_WORDS:
+        parts["when"] = []
+    return parts["given"], parts["when"], parts["then"]
+
+
+def _imperative(line: str) -> str:
+    """One Given/When line as a step: "the user selects x" -> "Select x"."""
+    said = _DOER.sub("", str(line or "").strip())
+    if not said:
+        return ""
+    head, _, tail = said.partition(" ")
+    # "selects" -> "select", "uploads" -> "upload". Only a plain "s" comes
+    # off, so "address" and "process" are left alone.
+    if head.lower().endswith("s") and not head.lower().endswith("ss"):
+        head = head[:-1]
+    return _sentence(" ".join(filter(None, [head, tail])))
+
+
+def _subject_of(text: str, phrase: str) -> str:
+    """What the criterion is about, from in front of the limit it states."""
+    found = re.search(re.escape(phrase), str(text or ""), re.IGNORECASE)
+    lead = (text[: found.start()] if found else str(text or "")).strip()
+    words = lead.split()
+    if not words:
+        return ""
+    # The last few words before the limit are the thing being limited.
+    kept = " ".join(words[-3:]).strip(" ,.;:")
+    kept = _LIMIT_LEAD_WORDS.sub("", kept).strip()
+    kept = _ARTICLE.sub("", kept)
+    return kept if 1 <= len(kept.split()) <= 3 else ""
+
+
+_LIMIT_LEAD_WORDS = re.compile(
+    r"(?:is|are|of|at|to|than|no|not)?\s*(?:under|over|below|above|larger|"
+    r"bigger|smaller|more|less|fewer|within|up|most|least|maximum|minimum|"
+    r"exactly|than)\s*$",
+    re.IGNORECASE,
+)
+
+
+_A_NUMBER_IN = re.compile(r"\d")
+
+
+_THE_NUMBER = re.compile(r"\d+(?:\.\d+)?")
+
+
+def _phrase_at(boundary: Boundary, value: str) -> str:
+    """The criterion's own phrase with the value's number in it."""
+    number = value.split(" ", 1)[0]
+    return _THE_NUMBER.sub(number, boundary.phrase, count=1)
+
+
+def _then_outcome(criterion: Criterion | None) -> str:
+    """What the criterion says should happen, in its own words."""
+    if criterion is None:
+        return ""
+    _, _, then = given_when_then(criterion.text)
+    return "; ".join(then)
+
+
 def _boundary_outcome(boundary: Boundary, value: str, setting: Setting) -> str:
     """What should happen at this one value, in the criteria's own words."""
     index = boundary.values.index(value)
+    mine = next(
+        (one for one in setting.criteria if one.id == boundary.source), None
+    )
     if index < 2:
+        said = _then_outcome(mine)
+        if said:
+            return said
         at = "at exactly " if index == 1 else "at "
         return f"{boundary.source} still holds {at}{value}"
     refuses = _refusing_criterion(boundary, setting)
     if refuses is not None:
+        said = _then_outcome(refuses)
+        if said:
+            return f"{said} ({refuses.id})"
         tail = refuses.text.strip().rstrip(".")
         return f"{refuses.id} applies at {value}: {tail[0].lower() + tail[1:]}"
     return f"{value} is past the limit {boundary.source} states, so it is refused"
 
 
+def _boundary_expected(
+    boundary: Boundary, missing: list[str], setting: Setting
+) -> str:
+    """What should happen, said once per value when there is more than one."""
+    said = [_boundary_outcome(boundary, value, setting) for value in missing]
+    if len(missing) == 1:
+        return _sentence(said[0])
+    return " ".join(
+        _sentence(f"At {value}: {one}") for value, one in zip(missing, said)
+    )
+
+
 def _boundary_steps(
-    boundary: Boundary, missing: list[str], setting: Setting, action: str
+    boundary: Boundary,
+    missing: list[str],
+    setting: Setting,
+    criterion: Criterion | None,
 ) -> list[str]:
-    """Real steps, from the criterion's own action. Never "exercise it"."""
-    if not action:
-        return [
-            f"Set up the behaviour {boundary.source} describes",
-            *[f"Exercise it at {value}" for value in missing],
+    """Steps anybody can run, out of the criterion's own words.
+
+    The criterion is the test, written in English: its When lines are the
+    steps and its Given lines are what has to be true first. Only a
+    criterion that describes no doing at all falls back to a generic line,
+    and never for a size, a count, a length or a time.
+    """
+    text = criterion.text if criterion else ""
+    _, when, _ = given_when_then(text)
+    if when:
+        # Only the line that states the limit takes the value; "upload the
+        # photo" is the same step whatever the photo weighs.
+        steps = [
+            step
+            for value in missing
+            for line in when
+            if (
+                step := _imperative(
+                    _at_value(line, boundary.phrase, value)
+                    if _says_limit(line, boundary.phrase)
+                    else line
+                )
+            )
         ]
-    opening = f"Open {setting.page}." if setting.page else f"Open the page {boundary.source} is about."
+        if steps:
+            return [*steps, "Check the result."]
+
+    action = _action_phrase(text)
+    if action:
+        opening = (
+            f"Open {setting.page}."
+            if setting.page
+            else f"Open the page {boundary.source} is about."
+        )
+        return [
+            opening,
+            *[_sentence(_at_value(action, boundary.phrase, value)) for value in missing],
+            "Check the result.",
+        ]
+
+    # Nothing is done to a duration: it passes. Waiting it out is the step.
+    if boundary.kind == "duration":
+        return [*[f"Wait {value}." for value in missing], "Check the result."]
+
+    # The criterion's own words for the limit, with the value in them:
+    # "5 failed sign-in attempts" becomes "Reach 4 failed sign-in attempts."
+    if _A_NUMBER_IN.search(boundary.phrase):
+        return [
+            *[_sentence(f"Reach {_phrase_at(boundary, value)}") for value in missing],
+            "Check the result.",
+        ]
     return [
-        opening,
-        *[_sentence(_at_value(action, boundary.phrase, value)) for value in missing],
-        "Check the result.",
+        f"Set up the behaviour {boundary.source} describes",
+        *[f"Exercise it at {value}" for value in missing],
     ]
 
 
@@ -403,8 +586,9 @@ def _case_from_boundary(
     criterion = next(
         (one for one in setting.criteria if one.id == boundary.source), None
     )
-    action = _action_phrase(criterion.text if criterion else "")
-    thing = _object_of(action)
+    text = criterion.text if criterion else ""
+    thing = _object_of(_action_phrase(text))
+    given, _, _ = given_when_then(text)
     listed = ", ".join(missing)
     return TestCase(
         id=case_id,
@@ -413,15 +597,16 @@ def _case_from_boundary(
             f"({boundary.source})"
         ),
         category="Boundary",
-        pre_conditions=(
+        # What has to be true first: the criterion's own Given lines when it
+        # has them, the limit it states when it does not.
+        pre_conditions=_sentence("; ".join(given))
+        if given
+        else (
             f"The system is set up with the limit {boundary.source} states: "
             f"{boundary.phrase}"
         ),
-        steps=_boundary_steps(boundary, missing, setting, action),
-        expected_result=(
-            "; ".join(_boundary_outcome(boundary, value, setting) for value in missing)
-            + "."
-        ),
+        steps=_boundary_steps(boundary, missing, setting, criterion),
+        expected_result=_boundary_expected(boundary, missing, setting),
         priority="High",
         # The card already says "Data to use", so the values say themselves.
         test_data=f"{listed} ({thing})" if thing else listed,
@@ -470,18 +655,20 @@ class LimitRule:
     phrase: str  # "under 2 megabytes"
     allowed: bool  # is a value of exactly `value` allowed?
     thing: str  # "JPEG photo", or ""
+    # How the criterion said it: "excludes", "includes" or "rejects_over".
+    said: str
 
 
-def _limit_allowed(text: str) -> bool | None:
+def _limit_side(text: str) -> str:
     """Is the limit value itself inside the rule, outside it, or unsaid?"""
     if any(mentions(text, word) for word in _LIMIT_EXCLUDES):
-        return False
+        return "excludes"
     if any(mentions(text, word) for word in _LIMIT_INCLUDES):
-        return True
+        return "includes"
     if any(mentions(text, word) for word in _LIMIT_REJECTS_OVER):
         # Only what is past the limit is refused, so the limit itself stands.
-        return True
-    return None
+        return "rejects_over"
+    return ""
 
 
 def _limit_phrase(text: str, boundary: Boundary) -> str:
@@ -500,8 +687,8 @@ def limit_rules(criteria: list[Criterion]) -> list[LimitRule]:
     """Every limit the criteria state, with the side the limit value falls on."""
     rules: list[LimitRule] = []
     for criterion in criteria or []:
-        allowed = _limit_allowed(criterion.text)
-        if allowed is None:
+        side = _limit_side(criterion.text)
+        if not side:
             continue
         for boundary in find_boundaries([criterion]):
             rules.append(
@@ -509,18 +696,33 @@ def limit_rules(criteria: list[Criterion]) -> list[LimitRule]:
                     source=criterion.id,
                     value=boundary.values[1],
                     phrase=_limit_phrase(criterion.text, boundary),
-                    allowed=allowed,
+                    allowed=side != "excludes",
                     thing=_object_of(_action_phrase(criterion.text)),
+                    said=side,
                 )
             )
     return rules
 
 
-def _expects(case: TestCase) -> str:
-    """Does this case expect the thing to go through, or to be turned away?"""
-    text = " ".join([str(case.title or ""), str(case.expected_result or "")])
-    yes = any(mentions(text, word) for word in _EXPECTS_YES)
-    no = any(mentions(text, word) for word in _EXPECTS_NO)
+# One sentence ends and the next begins. A step is a sentence of its own.
+_SENTENCE_END = re.compile(r"(?<=[.!?;])\s+|\n+")
+
+
+def _sentences(parts: list[str]) -> list[str]:
+    """Everything a case says, one sentence at a time."""
+    said: list[str] = []
+    for part in parts:
+        for one in _SENTENCE_END.split(str(part or "")):
+            line = one.strip()
+            if line:
+                said.append(line)
+    return said
+
+
+def _expects_in(sentence: str) -> str:
+    """Does this sentence expect the thing to go through, or be turned away?"""
+    yes = any(mentions(sentence, word) for word in _EXPECTS_YES)
+    no = any(mentions(sentence, word) for word in _EXPECTS_NO)
     if yes and not no:
         return "accepted"
     if no and not yes:
@@ -528,39 +730,97 @@ def _expects(case: TestCase) -> str:
     return ""
 
 
+def _plural(thing: str) -> str:
+    return thing if not thing or thing.endswith("s") else thing + "s"
+
+
+def _criteria_conflicts(rules: list[LimitRule]) -> list[str]:
+    """Criteria that disagree with each other about the limit value itself.
+
+    "Under 2 megabytes" and "larger than 2 megabytes is rejected" cannot both
+    be right about a photo of exactly 2 MB, and every test written from
+    either of them inherits the argument.
+    """
+    notes: list[str] = []
+    settled: set[str] = set()
+    for strict in [one for one in rules if one.said == "excludes"]:
+        if strict.value in settled:
+            continue
+        loose = next(
+            (
+                one
+                for one in rules
+                if one.allowed and one.value == strict.value and one.source != strict.source
+            ),
+            None,
+        )
+        if loose is None:
+            continue
+        settled.add(strict.value)
+        if loose.said == "rejects_over":
+            thing = f"{_plural(loose.thing)} " if loose.thing else ""
+            middle = f'{loose.source} only refuses {thing}"{loose.phrase}"'
+        else:
+            middle = f'{loose.source} allows "{loose.phrase}"'
+        notes.append(
+            f'{strict.source} says "{strict.phrase}" (so exactly {strict.value} '
+            f"is refused) but {middle} (so exactly {strict.value} is accepted). "
+            f"Decide which is right."
+        )
+    return notes
+
+
 def limit_conflicts(criteria: list[Criterion], cases: list[TestCase]) -> list[str]:
-    """Cases that use the limit value itself and expect the opposite of the rule.
+    """Where the limit value itself is argued about: by a test, or by the criteria.
 
     The run this came from: AC-1 said "under 2 megabytes", so exactly 2 MB is
     too big, and the AI still wrote a case expecting a 2 MB photo to be
     accepted. Nobody can tell from the suite which of the two is wrong, which
     is exactly why it is worth saying out loud.
+
+    A case is read one sentence at a time. "A 2.01 MB photo is refused; the
+    2 MB one is saved" says two different things, and only the sentence about
+    the limit itself answers the question.
     """
     rules = limit_rules(criteria)
     if not rules:
         return []
-    notes: list[str] = []
+    notes = _criteria_conflicts(rules)
     for case in cases or []:
-        verdict = _expects(case)
-        if not verdict:
-            continue
-        text = case_text(case)
-        rule = next((one for one in rules if states_value(text, one.value)), None)
-        if rule is None:
-            continue
-        wanted = "accepted" if rule.allowed else "refused"
-        if verdict == wanted:
-            continue
-        thing = f"a {rule.thing}" if rule.thing else "a value"
-        notes.append(
-            f"{case.id} expects {thing} of exactly {rule.value} to be {verdict}, "
-            f'but {rule.source} says "{rule.phrase}", so exactly {rule.value} '
-            f"should be {wanted}. One of them is wrong — ask which is meant, "
-            f"then fix the test or the criterion."
-        )
         if len(notes) >= MAX_QUALITY_NOTES:
             break
-    return notes
+        said = _sentences([case.title, *(case.steps or []), case.expected_result])
+        # Every sentence is read for its numbers once, however many limits
+        # there are to compare it against.
+        scanned = [(one, scan(one)) for one in said if _A_NUMBER_IN.search(one)]
+        if not scanned:
+            continue
+        for rule in rules:
+            about = [
+                one
+                for one, numbers in scanned
+                if states(rule.value, numbers) and not over_in(rule.value, one, numbers)
+            ]
+            if not about:
+                continue
+            # A step names the value, the expected result says what happens
+            # to it: the first sentence about the limit that answers wins,
+            # and a sentence about a hair more is a different test.
+            verdict = next((said for one in about if (said := _expects_in(one))), "")
+            if not verdict:
+                break
+            wanted = "accepted" if rule.allowed else "refused"
+            if verdict != wanted:
+                thing = f"a {rule.thing}" if rule.thing else "a value"
+                notes.append(
+                    f"{case.id} expects {thing} of exactly {rule.value} to be "
+                    f'{verdict}, but {rule.source} says "{rule.phrase}", so '
+                    f"exactly {rule.value} should be {wanted}. One of them is "
+                    f"wrong — ask which is meant, then fix the test or the "
+                    f"criterion."
+                )
+            break
+    return notes[:MAX_QUALITY_NOTES]
 
 
 def _has_checkable_outcome(expected: str) -> bool:
@@ -622,6 +882,10 @@ def review_test_cases(
     hits = detect_hits(text, story)
     cases = list(result.test_cases)
     texts = [case_text(case) for case in cases]
+    # Everything the AI wrote, read once: every check and every limit value
+    # is looked for in this.
+    whole_suite = "\n ".join(texts)
+    suite_numbers = scan(whole_suite)
     # Where this all happens: the story rarely says, the AI's own cases do.
     setting = Setting(
         page=page_in([text, *texts]),
@@ -631,7 +895,7 @@ def review_test_cases(
     covered: list[str] = []
     gaps: list[tuple[Gap, Check]] = []
     for check in _ordered_checks(hits, text):
-        if _check_covered(check, cases, texts):
+        if _check_covered(check, cases, whole_suite):
             covered.append(check.id)
             continue
         gaps.append(
@@ -640,7 +904,7 @@ def review_test_cases(
 
     boundary_gaps: list[tuple[Gap, Boundary, list[str]]] = []
     for boundary in find_boundaries(criteria):
-        missing = missing_values(boundary, cases)
+        missing = missing_values(boundary, cases, whole_suite, suite_numbers)
         if not missing:
             covered.append(f"boundary:{boundary.source}")
             continue

@@ -473,8 +473,11 @@ def test_a_story_with_no_active_pack_adds_no_risk():
 
 def test_every_reviewer_is_under_fifty_milliseconds_on_the_profile_story():
     cases = suite(*[case(case_id=f"TC-{n:03d}") for n in range(1, 13)])
-    # Warm the pack cache first: the budget is per request, not per process.
+    # Warm every cache first: the budget is per request, not per process, and
+    # the first call of all pays for compiling each pack word once.
     checklist_block(PROFILE_STORY, PROFILE)
+    review_test_cases(PROFILE_STORY, PROFILE, cases)
+    review_risks(PROFILE_STORY, PROFILE_CRITERIA, RiskAnalysis())
 
     _, checklist_ms = _timed(lambda: checklist_block(PROFILE_STORY, PROFILE))
     _, cases_ms = _timed(lambda: review_test_cases(PROFILE_STORY, PROFILE, cases))
@@ -723,35 +726,75 @@ def test_an_added_case_is_linked_to_the_criterion_it_is_about():
 # ── a limit case anybody can run ─────────────────────────────────────────────
 
 
-def test_a_limit_case_is_written_from_the_criterion_itself():
-    """Test B: "Exercise it at 1.99 MB" is not a test anybody can run."""
-    criteria = number_criteria(PHOTO_CRITERIA)
-    written = suite(
+def _photo_limit_case(*written):
+    """The limit case the reviewer adds to a photo suite."""
+    review = review_test_cases(
+        PHOTO_STORY, number_criteria(PHOTO_CRITERIA), suite(*written)
+    )
+    added = [one for one in review.added if "pack:boundary" in one.tags]
+    assert added, "no limit case was added"
+    return added[0]
+
+
+def test_a_limit_case_is_the_criterion_written_out_as_steps():
+    """Test B: "Exercise it at 1.99 MB" is not a test anybody can run.
+
+    The criterion is already the test in English, so its When lines are the
+    steps and its Then lines are what should happen.
+    """
+    limit = _photo_limit_case(
         case(
             case_id="TC-001",
             title="Upload a small JPEG photo",
-            pre_conditions="The user is signed in and on the profile page",
-            steps=["Open the profile page", "Choose a 1 MB JPEG photo", "Upload it"],
-            expected_result="The photo is cropped to a square and shown.",
+            steps=["Choose a 1 MB JPEG photo and upload it"],
+            expected_result="The photo is shown.",
             traceability="AC-1",
-        )
+        ),
+        case(
+            case_id="TC-005",
+            title="At the size limit",
+            steps=["Choose a 2 MB JPEG photo and upload it"],
+            expected_result="It is rejected with a message.",
+            traceability="AC-1",
+        ),
+        case(
+            case_id="TC-006",
+            title="Over the size limit",
+            steps=["Choose a 2.01 MB JPEG photo and upload it"],
+            expected_result="It is rejected with a message.",
+            traceability="AC-3",
+        ),
     )
-    review = review_test_cases(PHOTO_STORY, criteria, written)
-    added = [one for one in review.added if "pack:boundary" in one.tags]
-    assert added, "no limit case was added"
-    limit = added[0]
-    assert limit.steps[0] == "Open the profile page."
-    assert "Select a JPEG photo of 1.99 MB and upload it." in limit.steps
-    assert limit.steps[-1] == "Check the result."
-    # The outcome comes from the criteria, not from a guess.
-    assert "AC-1 still holds at 1.99 MB" in limit.expected_result
-    assert "AC-3 applies at 2.01 MB" in limit.expected_result
-    assert "rejected with a message" in limit.expected_result
+    assert limit.steps == [
+        "Select a JPEG photo of 1.99 MB.",
+        "Upload the photo.",
+        "Check the result.",
+    ]
+    # The Given line is what has to be true first, not a step.
+    assert limit.pre_conditions == "The user is on the profile page."
+    for word in ("cropped", "saved", "shown"):
+        assert word in limit.expected_result, word
     assert "JPEG photo" in limit.test_data and "1.99 MB" in limit.test_data
 
 
-def test_a_criterion_with_no_action_still_gets_the_old_generic_steps():
-    criteria = number_criteria(["The lock lasts 15 minutes"])
+def test_the_value_only_goes_in_the_line_that_states_the_limit():
+    limit = _photo_limit_case(
+        case(case_id="TC-001", title="A 1 MB photo", traceability="AC-1")
+    )
+    assert "Upload the photo." in limit.steps
+    assert "Upload the photo at 1.99 MB." not in limit.steps
+
+
+def test_the_outcome_over_the_limit_comes_from_the_rejecting_criterion():
+    limit = _photo_limit_case(
+        case(case_id="TC-001", title="A 1 MB photo", traceability="AC-1")
+    )
+    assert "rejected with a message about the 2 MB limit (AC-3)" in limit.expected_result
+
+
+def test_a_time_limit_is_waited_out_not_exercised():
+    """The lockout example: 29 and 31 minutes have to read as real steps."""
+    criteria = number_criteria(["A locked account stays locked for 30 minutes"])
     review = review_test_cases(
         "As a shopper, I want my account to lock so that it stays safe.",
         criteria,
@@ -759,7 +802,20 @@ def test_a_criterion_with_no_action_still_gets_the_old_generic_steps():
     )
     added = [one for one in review.added if "pack:boundary" in one.tags]
     assert added
-    assert added[0].steps[0] == "Set up the behaviour AC-1 describes"
+    assert added[0].steps == ["Wait 29 minutes.", "Wait 31 minutes.", "Check the result."]
+
+
+def test_a_count_limit_uses_the_criterion_own_words():
+    criteria = number_criteria(["The account locks after 5 failed sign-in attempts"])
+    review = review_test_cases(
+        "As a shopper, I want my account to lock so that it stays safe.",
+        criteria,
+        suite(case(case_id="TC-001", traceability="AC-1")),
+    )
+    added = [one for one in review.added if "pack:boundary" in one.tags]
+    assert added
+    assert "Reach 4 failed sign-in attempts." in added[0].steps
+    assert not any("Exercise it" in step for step in added[0].steps)
 
 
 # ── a test that disagrees with the limit ─────────────────────────────────────
@@ -775,17 +831,78 @@ def _at_the_limit(expected: str):
     )
 
 
+def _about_the_case(notes: list[str]) -> list[str]:
+    """The notes about a test case, not the ones about the criteria."""
+    return [one for one in notes if one.startswith("TC-")]
+
+
 def test_a_test_that_disagrees_with_the_limit_is_called_out():
     """Test B: AC-1 says "under 2 megabytes" and TC-005 accepts exactly 2 MB."""
-    notes = limit_conflicts(number_criteria(PHOTO_CRITERIA), [_at_the_limit(
-        "The exact 2MB file is accepted and saved."
-    )])
+    notes = _about_the_case(
+        limit_conflicts(
+            number_criteria(PHOTO_CRITERIA),
+            [_at_the_limit("The exact 2MB file is accepted and saved.")],
+        )
+    )
     assert len(notes) == 1
     note = notes[0]
     assert "TC-005 expects a JPEG photo of exactly 2 MB to be accepted" in note
     assert 'AC-1 says "under 2 megabytes"' in note
     assert "exactly 2 MB should be refused" in note
     assert "ask which is meant" in note
+
+
+def test_only_the_sentence_about_the_limit_itself_is_read():
+    """"A 2.01 MB photo is rejected" says nothing about a photo of 2 MB."""
+    both = case(
+        case_id="TC-007",
+        title="Around the size limit",
+        steps=["Upload a 2.01 MB photo", "Upload a 2 MB photo"],
+        expected_result=(
+            "The 2.01 MB photo is rejected. The 2 MB photo is accepted and saved."
+        ),
+        traceability="AC-1",
+    )
+    notes = _about_the_case(limit_conflicts(number_criteria(PHOTO_CRITERIA), [both]))
+    assert len(notes) == 1
+    assert "exactly 2 MB to be accepted" in notes[0]
+
+
+def test_a_case_only_about_a_hair_over_the_limit_is_left_alone():
+    """"2 MB and 1 byte" is the value past the limit, not the limit."""
+    over = case(
+        case_id="TC-008",
+        title="Just over the size limit",
+        steps=["Upload a photo of 2 MB and 1 byte"],
+        expected_result="It is rejected with a message about the 2 MB limit.",
+        traceability="AC-3",
+    )
+    assert _about_the_case(
+        limit_conflicts(number_criteria(PHOTO_CRITERIA), [over])
+    ) == []
+
+
+def test_two_criteria_that_disagree_about_the_limit_are_called_out():
+    """AC-1 refuses exactly 2 MB; AC-3 only refuses what is larger."""
+    notes = limit_conflicts(number_criteria(PHOTO_CRITERIA), [])
+    assert len(notes) == 1
+    assert notes[0] == (
+        'AC-1 says "under 2 megabytes" (so exactly 2 MB is refused) but AC-3 '
+        'only refuses photos "larger than 2 megabytes" (so exactly 2 MB is '
+        "accepted). Decide which is right."
+    )
+
+
+def test_criteria_that_agree_about_the_limit_say_nothing():
+    criteria = number_criteria(
+        [
+            "When the user selects a JPEG photo up to 2 megabytes, "
+            "Then the photo is saved",
+            "When the user selects a photo larger than 2 megabytes, "
+            "Then the upload is rejected",
+        ]
+    )
+    assert limit_conflicts(criteria, []) == []
 
 
 def test_a_limit_that_includes_its_own_value_agrees_with_that_test():
@@ -797,8 +914,8 @@ def test_a_limit_that_includes_its_own_value_agrees_with_that_test():
 
 def test_a_test_that_refuses_the_limit_value_agrees_with_under():
     criteria = number_criteria(PHOTO_CRITERIA)
-    assert limit_conflicts(
-        criteria, [_at_the_limit("The 2MB file is rejected with a message.")]
+    assert _about_the_case(
+        limit_conflicts(criteria, [_at_the_limit("The 2MB file is rejected with a message.")])
     ) == []
 
 
@@ -807,5 +924,5 @@ def test_the_conflict_is_a_note_not_a_new_test_case():
     review = review_test_cases(
         PHOTO_STORY, criteria, suite(_at_the_limit("The exact 2MB file is accepted."))
     )
-    assert len(review.conflicts) == 1
+    assert _about_the_case(review.conflicts)
     assert not any("disagree" in one.title.lower() for one in review.added)

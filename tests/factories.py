@@ -212,11 +212,19 @@ PHOTO_CONTEXT = (
     "The photo is cropped to a square."
 )
 
+# As the run wrote them: Given / When / Then, which is the test already.
 PHOTO_CRITERIA = [
-    "The user can select a JPEG photo under 2 megabytes and upload it",
-    "The user can select a PNG photo under 2 megabytes and upload it",
-    "A photo larger than 2 megabytes is rejected with a message",
-    "A file in a format other than JPEG or PNG is rejected with a message",
+    "Given the user is on the profile page, When the user selects a JPEG "
+    "photo under 2 megabytes And uploads the photo, Then the photo is "
+    "cropped to a square And saved And shown on the profile",
+    "Given the user is on the profile page, When the user selects a PNG "
+    "photo under 2 megabytes And uploads the photo, Then the photo is "
+    "cropped to a square And saved And shown on the profile",
+    "Given the user is on the profile page, When the user selects a photo "
+    "larger than 2 megabytes And uploads the photo, Then the upload is "
+    "rejected with a message about the 2 MB limit",
+    "When the user selects a file in a format other than JPEG or PNG, "
+    "Then the upload is rejected with a message",
 ]
 
 

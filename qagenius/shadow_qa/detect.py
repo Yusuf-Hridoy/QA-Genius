@@ -56,6 +56,10 @@ class PackHit:
     in_story: bool  # at least one of them is in the story, not only a criterion
 
 
+# One request asks the same question twice: the checklist before the AI call
+# and the review after it. The packs cannot change in between, so the answer
+# is kept for a few texts. The list it hands back is read, never changed.
+@lru_cache(maxsize=8)
 def detect_hits(text: str, story: str | None = None) -> list[PackHit]:
     """The active packs, in pack order, with the words that activated each.
 
