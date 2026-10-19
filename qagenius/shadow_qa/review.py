@@ -303,6 +303,11 @@ class Setting:
 
     page: str  # "the profile page", or "" when nothing says
     criteria: list[Criterion]
+    # How each criterion reads its own limit value, and the values the
+    # criteria argue about. Written "LimitRule" because the rules are read
+    # further down the file than the case that needs them.
+    rules: "tuple[LimitRule, ...]" = ()
+    disputed: frozenset[str] = frozenset()
 
 
 def page_in(texts: list[str]) -> str:
@@ -476,18 +481,49 @@ def _then_outcome(criterion: Criterion | None) -> str:
     return "; ".join(then)
 
 
-def _boundary_outcome(boundary: Boundary, value: str, setting: Setting) -> str:
-    """What should happen at this one value, in the criteria's own words."""
-    index = boundary.values.index(value)
-    mine = next(
-        (one for one in setting.criteria if one.id == boundary.source), None
-    )
-    if index < 2:
+DISPUTED_OUTCOME = "Depends on which criterion is right — see the note above."
+
+
+def _accepting_criterion(boundary: Boundary, setting: Setting) -> Criterion | None:
+    """A criterion that says what happens when a value inside the limit is used."""
+    for rule in setting.rules:
+        if rule.source == boundary.source or rule.said == "rejects_over":
+            continue
+        if rule.value != boundary.values[1]:
+            continue
+        found = next(
+            (one for one in setting.criteria if one.id == rule.source), None
+        )
+        if found is not None and _then_outcome(found):
+            return found
+    return None
+
+
+def _goes_through(boundary: Boundary, value: str, setting: Setting) -> str:
+    """What the criterion says happens when the value is inside the limit."""
+    rule = _rule_for(boundary, setting)
+    # A criterion written from the refusing side -- "larger than 2 MB is
+    # rejected" -- says what happens past the limit, never what happens
+    # inside it. Its own words would be the opposite of this answer.
+    if rule is None or rule.said != "rejects_over":
+        mine = next(
+            (one for one in setting.criteria if one.id == boundary.source), None
+        )
         said = _then_outcome(mine)
         if said:
             return said
-        at = "at exactly " if index == 1 else "at "
-        return f"{boundary.source} still holds {at}{value}"
+    other = _accepting_criterion(boundary, setting)
+    if other is not None:
+        return f"{_then_outcome(other)} ({other.id})"
+    if rule is not None and rule.said == "rejects_over":
+        return f"{value} is inside the limit {boundary.source} states, so it is accepted"
+    return f"{boundary.source} still holds at {value}"
+
+
+def _is_refused(
+    boundary: Boundary, value: str, setting: Setting, at_limit: bool = False
+) -> str:
+    """What happens when the value is outside it, from the criterion that says so."""
     refuses = _refusing_criterion(boundary, setting)
     if refuses is not None:
         said = _then_outcome(refuses)
@@ -495,7 +531,51 @@ def _boundary_outcome(boundary: Boundary, value: str, setting: Setting) -> str:
             return f"{said} ({refuses.id})"
         tail = refuses.text.strip().rstrip(".")
         return f"{refuses.id} applies at {value}: {tail[0].lower() + tail[1:]}"
+    rule = _rule_for(boundary, setting)
+    # At the limit itself, the criterion's own words say why it is refused.
+    if at_limit and rule is not None:
+        return f'{value} is refused: {boundary.source} says "{rule.phrase}"'
     return f"{value} is past the limit {boundary.source} states, so it is refused"
+
+
+def _rule_for(boundary: Boundary, setting: Setting) -> "LimitRule | None":
+    """How the criterion that states this limit reads its own limit value."""
+    return next(
+        (
+            one
+            for one in setting.rules
+            if one.source == boundary.source and one.value == boundary.values[1]
+        ),
+        None,
+    )
+
+
+def _at_the_limit(boundary: Boundary, value: str, setting: Setting) -> str:
+    """What should happen at the limit value itself.
+
+    The criterion decides, and it is read exactly as the conflict notes read
+    it: "up to 2 MB" accepts a 2 MB photo, "under 2 megabytes" refuses one.
+    Asking for a test that expects the wrong one is the mistake this whole
+    reviewer exists to catch, so it must not make it itself.
+    """
+    if boundary.values[1] in setting.disputed:
+        return DISPUTED_OUTCOME
+    rule = _rule_for(boundary, setting)
+    if rule is None:
+        return f"{boundary.source} still holds at exactly {value}"
+    if rule.allowed:
+        return _goes_through(boundary, value, setting)
+    return _is_refused(boundary, value, setting, at_limit=True)
+
+
+def _boundary_outcome(boundary: Boundary, value: str, setting: Setting) -> str:
+    """What should happen at this one value, in the criteria's own words."""
+    index = boundary.values.index(value)
+    if index == 0:
+        return _goes_through(boundary, value, setting)
+    if index == 1:
+        return _at_the_limit(boundary, value, setting)
+    return _is_refused(boundary, value, setting)
 
 
 def _boundary_expected(
@@ -734,14 +814,14 @@ def _plural(thing: str) -> str:
     return thing if not thing or thing.endswith("s") else thing + "s"
 
 
-def _criteria_conflicts(rules: list[LimitRule]) -> list[str]:
-    """Criteria that disagree with each other about the limit value itself.
+def disputed_pairs(rules: list[LimitRule]) -> list[tuple[LimitRule, LimitRule]]:
+    """Pairs of criteria that disagree about the limit value itself.
 
     "Under 2 megabytes" and "larger than 2 megabytes is rejected" cannot both
     be right about a photo of exactly 2 MB, and every test written from
     either of them inherits the argument.
     """
-    notes: list[str] = []
+    pairs: list[tuple[LimitRule, LimitRule]] = []
     settled: set[str] = set()
     for strict in [one for one in rules if one.said == "excludes"]:
         if strict.value in settled:
@@ -757,6 +837,14 @@ def _criteria_conflicts(rules: list[LimitRule]) -> list[str]:
         if loose is None:
             continue
         settled.add(strict.value)
+        pairs.append((strict, loose))
+    return pairs
+
+
+def _criteria_conflicts(rules: list[LimitRule]) -> list[str]:
+    """What each of those disagreements reads as on the page."""
+    notes: list[str] = []
+    for strict, loose in disputed_pairs(rules):
         if loose.said == "rejects_over":
             thing = f"{_plural(loose.thing)} " if loose.thing else ""
             middle = f'{loose.source} only refuses {thing}"{loose.phrase}"'
@@ -886,10 +974,14 @@ def review_test_cases(
     # is looked for in this.
     whole_suite = "\n ".join(texts)
     suite_numbers = scan(whole_suite)
-    # Where this all happens: the story rarely says, the AI's own cases do.
+    # Where this all happens, and how every limit reads: the added cases and
+    # the notes about them must say the same thing about the same value.
+    rules = limit_rules(list(criteria or []))
     setting = Setting(
         page=page_in([text, *texts]),
         criteria=list(criteria or []),
+        rules=tuple(rules),
+        disputed=frozenset(strict.value for strict, _ in disputed_pairs(rules)),
     )
 
     covered: list[str] = []

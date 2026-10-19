@@ -26,6 +26,7 @@ from qagenius.shadow_qa.review import (
     MAX_QUALITY_NOTES,
     PRINCIPAL_SOURCE,
     PRINCIPAL_TAG,
+    DISPUTED_OUTCOME,
     checklist_block,
     limit_conflicts,
     is_principal,
@@ -926,3 +927,63 @@ def test_the_conflict_is_a_note_not_a_new_test_case():
     )
     assert _about_the_case(review.conflicts)
     assert not any("disagree" in one.title.lower() for one in review.added)
+
+
+# ── the added limit test follows the limit rule ──────────────────────────────
+
+UP_TO_2MB = (
+    "Given the user is on the profile page, When the user selects a JPEG "
+    "photo up to 2 megabytes And uploads the photo, Then the photo is saved"
+)
+
+
+def _limit_case_for(*texts):
+    """The limit case the reviewer adds for these criteria."""
+    review = review_test_cases(
+        PHOTO_STORY,
+        number_criteria(list(texts)),
+        suite(case(case_id="TC-001", title="A 1 MB photo", traceability="AC-1")),
+    )
+    added = [one for one in review.added if "pack:boundary" in one.tags]
+    assert added, "no limit case was added"
+    return added[0]
+
+
+def test_at_the_limit_a_criterion_that_excludes_it_asks_for_a_refusal():
+    """AC-1 says "under 2 megabytes", so the added test must not accept 2 MB."""
+    limit = _limit_case_for(PHOTO_CRITERIA[0])
+    assert 'At 2 MB: 2 MB is refused: AC-1 says "under 2 megabytes"' in (
+        limit.expected_result
+    )
+    assert "At 2 MB: the photo is" not in limit.expected_result
+
+
+def test_at_the_limit_a_criterion_that_includes_it_asks_for_a_success():
+    limit = _limit_case_for(UP_TO_2MB)
+    assert "At 2 MB: the photo is saved" in limit.expected_result
+    assert "At 2 MB: 2 MB is refused" not in limit.expected_result
+
+
+def test_at_the_limit_criteria_that_disagree_send_the_reader_to_the_note():
+    limit = _limit_case_for(PHOTO_CRITERIA[0], PHOTO_CRITERIA[2])
+    assert f"At 2 MB: {DISPUTED_OUTCOME}" in limit.expected_result
+    # And the note it points at is on the card above it.
+    review = review_test_cases(
+        PHOTO_STORY,
+        number_criteria([PHOTO_CRITERIA[0], PHOTO_CRITERIA[2]]),
+        suite(case(case_id="TC-001", title="A 1 MB photo", traceability="AC-1")),
+    )
+    assert any("Decide which is right." in one for one in review.conflicts)
+
+
+def test_a_rejection_rule_leaves_the_limit_value_itself_allowed():
+    """"Larger than 2 megabytes is rejected" accepts a photo of exactly 2 MB.
+
+    And its own words are about the photo that was refused, so they are not
+    the answer for the one that was not.
+    """
+    limit = _limit_case_for(PHOTO_CRITERIA[2])
+    assert "At 2 MB: 2 MB is inside the limit AC-1 states, so it is accepted" in (
+        limit.expected_result
+    )
+    assert "At 2 MB: the upload is rejected" not in limit.expected_result
