@@ -11,6 +11,9 @@ from qagenius import llm
 from qagenius.models import AmbiguityAnalysis, FailureMode, RiskAnalysis
 from tests.factories import (
     BIG_STORY,
+    COUPON_CONTEXT,
+    COUPON_CRITERIA,
+    COUPON_STORY,
     PHOTO_CRITERIA,
     PHOTO_STORY,
     NAVBAR_CRITERIA,
@@ -293,6 +296,48 @@ def test_a_test_that_disagrees_with_the_limit_is_shown_first(monkeypatch) -> Non
     assert "Decide which is right." in body
     # It comes before the other detail blocks in the box.
     assert body.index("Disagreements about a limit") < body.index("Found by QA-Genius")
+
+
+def test_the_story_box_shows_a_limit_nobody_decided(monkeypatch) -> None:
+    """The coupon run: the story page is the cheapest place to fix this."""
+    analysis = STORY_RESULT.model_copy(
+        update={"generated_acceptance_criteria": COUPON_CRITERIA}
+    )
+
+    def fake(keys, system, user, schema):
+        return analysis, 0, []
+
+    monkeypatch.setattr(llm, "generate_json", fake)
+    body = client.post(
+        "/requirements/story/run",
+        data={"user_story": COUPON_STORY, "context": COUPON_CONTEXT},
+        headers=KEYS_HEADER,
+    ).text
+    assert "Disagreements about a limit" in body
+    assert "Nobody says what happens at exactly $50" in body
+    assert "The context says" in body
+
+
+def test_the_test_cases_box_shows_the_same_limit_notes(monkeypatch) -> None:
+    written = suite(case(case_id="TC-001", title="A $90 cart", traceability="AC-1"))
+    monkeypatch.setattr(llm, "generate_json", _fake_cases([], written))
+    body = client.post(
+        "/requirements/test-cases/run",
+        data={
+            "user_story": COUPON_STORY,
+            "context": COUPON_CONTEXT,
+            "criteria_json": json.dumps(COUPON_CRITERIA),
+            "coverage_focus": ["Functional", "Negative"],
+        },
+        headers=KEYS_HEADER,
+    ).text
+    assert "Nobody says what happens at exactly $50" in body
+    assert "The context says" in body
+    # And the limit tests nobody wrote: the $50 edge and the $150 cap.
+    cases = _shown_cases(body)
+    titles = " ".join(one["title"] for one in cases)
+    assert "$49.99" in titles and "$50.01" in titles
+    assert "$149.99" in titles and "$150.01" in titles
 
 
 def test_remove_buttons_sit_only_on_principal_qa_cases(monkeypatch) -> None:

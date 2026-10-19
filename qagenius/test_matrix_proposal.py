@@ -17,6 +17,19 @@ from qagenius.pairwise import (
 )
 from qagenius.test_matrix_defaults import STANDARD_FACTORS, STANDARD_RULES
 
+# A rule that says guests can never do this, on a story that says they can.
+# The AI guesses rules from the factor names alone, and a guess that argues
+# with the story is worse than no rule: it takes real runs off the matrix.
+GUEST_WORDS = ("guest", "guests", "signed in", "signed-in", "logged in", "account")
+GUEST_NO_VALUES = ("no", "none", "guest", "false", "not signed in", "signed out")
+STORY_ALLOWS_GUESTS = (
+    "guests can", "guest can", "guests may", "guest shopper", "guest shoppers",
+    "without an account", "without signing in", "as a guest", "guest checkout",
+)
+GUEST_RULE_NOTE = (
+    "Ignored a suggested rule — your story says guests can use this."
+)
+
 MAX_PROPOSED_FACTORS = 6
 MAX_PROPOSED_VALUES = 5
 FALLBACK_NOTE = "The suggested factors didn't work, so the standard set is used."
@@ -104,6 +117,24 @@ def _with_screen_factors(
     return factors[:room] + missing, [note]
 
 
+def _argues_about_guests(rule: Rule) -> bool:
+    """Does this rule say a guest can never do the thing the story is about?
+
+    The shape the AI writes it in is always the same: one side is the
+    signed-in factor set to "No", and the rule forbids everything else.
+    """
+    if rule.source != "ai":
+        return False
+    for factor, value in (
+        (rule.if_factor, rule.if_value),
+        (rule.then_factor, rule.then_value),
+    ):
+        names_guests = any(mentions(factor, word) for word in GUEST_WORDS)
+        if names_guests and value.strip().lower() in GUEST_NO_VALUES:
+            return True
+    return False
+
+
 def clean_proposal(
     proposal: MatrixProposal, text: str = ""
 ) -> tuple[list[Factor], list[Rule], list[str]]:
@@ -155,6 +186,8 @@ def clean_proposal(
     rules: list[Rule] = []
     seen_rules: set[tuple[str, str, str, str]] = set()
     dropped = 0
+    argued = 0
+    guests_welcome = any(mentions(text, word) for word in STORY_ALLOWS_GUESTS)
     proposed_rules = [
         Rule(
             if_factor=_clean(one.if_factor),
@@ -162,12 +195,16 @@ def clean_proposal(
             then_factor=_clean(one.then_factor),
             then_value=_clean(one.then_value),
             reason=_clean(one.reason),
+            source="ai",
         )
         for one in proposal.rules
     ]
     # The standard rules are facts about the tools, so they apply whenever the
     # factors they talk about are present.
     for rule in proposed_rules + STANDARD_RULES:
+        if guests_welcome and _argues_about_guests(rule):
+            argued += 1
+            continue
         if not usable(rule):
             if rule in proposed_rules:
                 dropped += 1
@@ -188,6 +225,8 @@ def clean_proposal(
             f"Ignored {dropped} rule{'' if dropped == 1 else 's'} that referred to "
             "an unknown value."
         )
+    if argued:
+        notes.append(GUEST_RULE_NOTE)
 
     problems = validate(factors, rules)
     if problems:

@@ -53,9 +53,15 @@
     on a phone. No run will have both.</p>
   <ul class="matrix-rule-list" id="matrix-rule-list">
     {% for rule in rules %}
-    <li class="matrix-rule" data-rule="{{ loop.index0 }}">
+    <li class="matrix-rule" data-rule="{{ loop.index0 }}" data-source="{{ rule.source }}">
       <span><strong>{{ rule.if_factor }}={{ rule.if_value }}</strong> never with
         <strong>{{ rule.then_factor }}={{ rule.then_value }}</strong></span>
+      {# Where it came from, because one of the two is a guess. #}
+      {% if rule.source == "ai" %}
+      <span class="pill warn plain small rule-source">Suggested by AI — check it</span>
+      {% else %}
+      <span class="pill neutral plain small rule-source">Standard</span>
+      {% endif %}
       {% if rule.reason %}<span class="muted small">{{ rule.reason }}</span>{% endif %}
       <span class="spacer"></span>
       <button type="button" class="btn btn-small btn-danger matrix-remove-rule">Remove</button>

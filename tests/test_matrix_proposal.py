@@ -1,10 +1,16 @@
 """The AI proposes factors; this module decides what is usable."""
 
 import qagenius.prompts as prompts
+from tests.factories import (
+    COUPON_CONTEXT,
+    COUPON_CRITERIA,
+    COUPON_STORY,
+)
 from qagenius.models import MatrixProposal, ProposedFactor, ProposedRule
 from qagenius.pairwise import validate
 from qagenius.test_matrix_defaults import STANDARD_FACTORS
 from qagenius.test_matrix_proposal import (
+    GUEST_RULE_NOTE,
     ADDED_NOTE,
     ADDED_ONE_NOTE,
     FALLBACK_NOTE,
@@ -264,3 +270,74 @@ def test_the_six_factor_cap_still_holds_when_two_are_added():
     assert len(factors) == 6
     assert [one.name for one in factors][-2:] == ["Browser", "Device"]
     assert validate(factors, rules) == []
+
+
+# ── a suggested rule is labelled, and checked against the story ──────────────
+
+
+def test_a_suggested_rule_says_it_was_suggested():
+    proposal = MatrixProposal(
+        factors=[
+            ProposedFactor(
+                name="Browser", values=["Chrome", "Firefox", "Safari"], reason="Web."
+            ),
+            ProposedFactor(name="Device", values=["Desktop", "Phone"], reason="Both."),
+        ],
+        rules=[
+            ProposedRule(
+                if_factor="Browser",
+                if_value="Safari",
+                then_factor="Device",
+                then_value="Desktop",
+                reason="A guess worth checking.",
+            )
+        ],
+    )
+    _, rules, _ = clean_proposal(proposal, "A web story.")
+    suggested = [one for one in rules if one.source == "ai"]
+    assert len(suggested) == 1
+    assert all(one.source == "standard" for one in rules if one not in suggested)
+
+
+def test_a_rule_that_argues_with_the_story_about_guests_is_dropped():
+    """The coupon run: the context says guests can use coupons."""
+    proposal = MatrixProposal(
+        factors=[
+            ProposedFactor(name="Signed in", values=["Yes", "No"], reason="Guests too."),
+            ProposedFactor(name="Cart value", values=["Low", "High"], reason="Minimum."),
+        ],
+        rules=[
+            ProposedRule(
+                if_factor="Signed in",
+                if_value="No",
+                then_factor="Cart value",
+                then_value="Low",
+                reason="Guests cannot use coupons.",
+            )
+        ],
+    )
+    text = "\n".join([COUPON_STORY, COUPON_CONTEXT, *COUPON_CRITERIA])
+    _, rules, notes = clean_proposal(proposal, text)
+    assert not any(one.source == "ai" for one in rules)
+    assert GUEST_RULE_NOTE in notes
+
+
+def test_the_same_rule_stays_when_the_story_says_nothing_about_guests():
+    proposal = MatrixProposal(
+        factors=[
+            ProposedFactor(name="Signed in", values=["Yes", "No"], reason="Both."),
+            ProposedFactor(name="Cart value", values=["Low", "High"], reason="Minimum."),
+        ],
+        rules=[
+            ProposedRule(
+                if_factor="Signed in",
+                if_value="No",
+                then_factor="Cart value",
+                then_value="Low",
+                reason="Only members see the cheap tier.",
+            )
+        ],
+    )
+    _, rules, notes = clean_proposal(proposal, "As a member, I want the member price.")
+    assert any(one.source == "ai" for one in rules)
+    assert GUEST_RULE_NOTE not in notes

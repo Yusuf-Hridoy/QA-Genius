@@ -98,7 +98,8 @@
         if_value: item.getAttribute("data-if-value") || "",
         then_factor: item.getAttribute("data-then-factor") || "",
         then_value: item.getAttribute("data-then-value") || "",
-        reason: item.getAttribute("data-reason") || ""
+        reason: item.getAttribute("data-reason") || "",
+        source: item.getAttribute("data-source") || "standard"
       });
     });
     return rules;
@@ -393,6 +394,8 @@
     if (ifFactor.value === thenFactor.value) return;
 
     var row = el("li", "matrix-rule");
+    // A rule somebody typed is theirs, not a guess from the model.
+    row.setAttribute("data-source", "standard");
     row.setAttribute("data-if-factor", ifFactor.value);
     row.setAttribute("data-if-value", ifValue.value);
     row.setAttribute("data-then-factor", thenFactor.value);

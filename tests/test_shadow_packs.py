@@ -228,8 +228,10 @@ def test_the_over_common_words_are_weak_everywhere():
     """The words half the stories in the world contain must never be strong."""
     too_common = {
         "email", "emails", "list", "lists", "page", "link", "links", "file",
-        "files", "image", "images", "card", "cards", "device", "devices",
+        "files", "image", "images", "device", "devices",
         "settings", "admin", "role", "roles", "find", "table", "token",
+        # "Card" is not on this list: a card is the thing a payment is made
+        # with, and the payment pack is the only one that claims the word.
     }
     for pack in load_packs():
         strong = {word.lower() for word in pack.triggers}

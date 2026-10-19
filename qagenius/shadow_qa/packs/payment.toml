@@ -1,8 +1,13 @@
 id = "payment"
 name = "Payment and checkout"
 short = "Payment"
-triggers = ["payment", "payments", "checkout", "billing", "invoice", "invoices", "refund", "refunds", "subscription", "pay", "3-d secure", "3ds"]
-weak_triggers = ["card", "cards", "charge", "charged"]
+# This pack is about money leaving a card: declines, double charges, 3-D
+# Secure, refunds. "Pay", "payment" and "checkout" are said by every story
+# that happens near a till -- a coupon story says "I pay less for my order"
+# -- and none of its checks has anything to offer them, so the words that
+# switch it on are the ones only a paying feature uses.
+triggers = ["card", "cards", "credit card", "debit card", "payment method", "payment details", "pay by", "pay with", "billing", "invoice", "invoices", "refund", "refunds", "refunded", "charge", "charged", "subscription", "3-d secure", "3ds"]
+weak_triggers = ["checkout", "basket", "till"]
 exclude = []
 
 [[checks]]

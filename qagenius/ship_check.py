@@ -20,7 +20,7 @@ from qagenius.models import (
 from qagenius.risk_radar import score_risks
 from qagenius.shadow_qa.story_rules import epic_note, review_story
 from qagenius.story_text import without_criteria_lines
-from qagenius.shadow_qa.review import limit_conflicts
+from qagenius.shadow_qa.review import limit_conflicts, with_context
 from qagenius.test_case_depth import compute_depth
 from qagenius.test_cases import Criterion, compute_coverage, number_criteria
 from qagenius.test_run_metrics import Insights
@@ -119,6 +119,9 @@ class MatrixRun:
 class ShipInputs:
     # The story itself, so the Principal QA rules can be run over it again here.
     story: str = ""
+    # What the story page was told about the feature. Limits live in here as
+    # often as they live in a criterion.
+    context: str = ""
     story_analysis: AmbiguityAnalysis | None = None
     duel: DuelSummary | None = None
     test_cases: TestCaseList | None = None
@@ -319,7 +322,9 @@ def _depth(inputs: ShipInputs, criteria: list[Criterion]) -> ShipCheckItem:
     # A case that expects the opposite of the limit its criterion states is
     # worth more than any count: one of the two is wrong, and the suite
     # cannot say which.
-    conflicts = limit_conflicts(criteria, list(inputs.test_cases.test_cases))
+    conflicts = limit_conflicts(
+        with_context(criteria, inputs.context), list(inputs.test_cases.test_cases)
+    )
     if not thin:
         return _item(
             "depth",

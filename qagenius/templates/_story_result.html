@@ -91,7 +91,7 @@
   <p class="muted">{{ conf.said(result.invest_overall) }}</p>
 </div>
 
-{{ pq.notes(shadow_notes, "" if epic else "Nothing to add — this story names its actor, its benefit, and what happens when something goes wrong.") }}
+{{ pq.notes(shadow_notes, "" if epic else "Nothing to add — this story names its actor, its benefit, and what happens when something goes wrong.", limit_notes) }}
 
 <div class="card card-section">
   <h2>Unclear words</h2>

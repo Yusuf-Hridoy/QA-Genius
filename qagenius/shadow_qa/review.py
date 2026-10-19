@@ -130,9 +130,22 @@ def _ordered_checks(active: list[PackHit], text: str) -> list[Check]:
     )
 
 
-def checklist_block(story: str, criteria: list[Criterion]) -> tuple[str, list[str]]:
+def about_the_feature(story: str, criteria: list[Criterion], context: str = "") -> str:
+    """Everything said about this feature: the story, the context, the criteria.
+
+    The context is where a feature is described -- "guests can use coupons",
+    "used once per account" -- and a rule that waits for those words never
+    hears them if only the story and the criteria are read.
+    """
+    said = str(context or "").strip()
+    return story_text("\n".join([str(story or ""), said]) if said else story, criteria)
+
+
+def checklist_block(
+    story: str, criteria: list[Criterion], context: str = ""
+) -> tuple[str, list[str]]:
     """The lines appended to the user prompt, and the check ids they ask for."""
-    text = story_text(story, criteria)
+    text = about_the_feature(story, criteria, context)
     boundaries = find_boundaries(criteria)[:MAX_CHECKLIST_BOUNDARIES]
     room = MAX_CHECKLIST_LINES - len(boundaries)
     lines: list[str] = []
@@ -481,13 +494,13 @@ def _then_outcome(criterion: Criterion | None) -> str:
     return "; ".join(then)
 
 
-DISPUTED_OUTCOME = "Depends on which criterion is right — see the note above."
+DISPUTED_OUTCOME = "Not decided yet — see the note above."
 
 
 def _accepting_criterion(boundary: Boundary, setting: Setting) -> Criterion | None:
     """A criterion that says what happens when a value inside the limit is used."""
     for rule in setting.rules:
-        if rule.source == boundary.source or rule.said == "rejects_over":
+        if rule.source == boundary.source or rule.rejects_over:
             continue
         if rule.value != boundary.values[1]:
             continue
@@ -505,7 +518,7 @@ def _goes_through(boundary: Boundary, value: str, setting: Setting) -> str:
     # A criterion written from the refusing side -- "larger than 2 MB is
     # rejected" -- says what happens past the limit, never what happens
     # inside it. Its own words would be the opposite of this answer.
-    if rule is None or rule.said != "rejects_over":
+    if rule is None or not rule.rejects_over:
         mine = next(
             (one for one in setting.criteria if one.id == boundary.source), None
         )
@@ -515,7 +528,7 @@ def _goes_through(boundary: Boundary, value: str, setting: Setting) -> str:
     other = _accepting_criterion(boundary, setting)
     if other is not None:
         return f"{_then_outcome(other)} ({other.id})"
-    if rule is not None and rule.said == "rejects_over":
+    if rule is not None and rule.rejects_over:
         return f"{value} is inside the limit {boundary.source} states, so it is accepted"
     return f"{boundary.source} still holds at {value}"
 
@@ -700,85 +713,165 @@ def _case_from_boundary(
 
 # ── a test that disagrees with the limit its criterion states ────────────────
 
-# Words that say the limit value itself is allowed...
+# Words that take the limit value in with everything on its side...
 _LIMIT_INCLUDES = (
     "up to", "at most", "maximum", "maximum of", "max", "no more than",
     "no larger than", "no bigger than", "no longer than", "or less",
-    "or fewer", "or under", "at least", "no fewer than", "minimum", "≤", "<=",
+    "or fewer", "or under", "at least", "no fewer than", "no less than",
+    "minimum", "or more", "≤", "<=", "≥", ">=",
 )
-# ... and words that say it is not.
-_LIMIT_EXCLUDES = (
+# ... and words that stop short of it, from below ...
+_LIMIT_UNDER = (
     "under", "below", "less than", "fewer than", "smaller than",
     "shorter than", "<",
 )
-# A rule written from the other side: "larger than 2 MB is rejected" leaves
-# exactly 2 MB allowed.
-_LIMIT_REJECTS_OVER = (
+# ... or from above.
+_LIMIT_OVER = (
     "more than", "over", "above", "larger than", "bigger than",
-    "greater than", "longer than", "exceeds", "exceed",
+    "greater than", "longer than", "exceeds", "exceed", ">",
 )
-# What a case says it expects to happen.
+# What a case, or a criterion, says it expects to happen.
 _EXPECTS_YES = (
     "accepted", "accept", "accepts", "saved", "saves", "succeeds", "succeed",
     "successful", "success", "uploaded", "uploads", "allowed", "shown",
-    "created", "goes through",
+    "created", "goes through", "applied", "applies", "works", "work",
 )
 _EXPECTS_NO = _REFUSES + ("fails", "failure", "message about", "not saved")
+
+# The context is a rule-maker too, and it is quoted by its own name.
+CONTEXT_ID = "Context"
 
 
 @dataclass(frozen=True)
 class LimitRule:
-    """One limit a criterion states, and whether the limit itself is allowed."""
+    """One limit a criterion states, and what it means at the value itself.
+
+    A limit has two halves, and the words are only one of them: "more than
+    $50" says nothing on its own. With "the discount is applied" after it, it
+    means a $50 order gets nothing; with "the coupon is refused" after it, it
+    means a $50 order is fine.
+    """
 
     source: str  # "AC-1"
-    value: str  # "2 MB"
-    phrase: str  # "under 2 megabytes"
-    allowed: bool  # is a value of exactly `value` allowed?
-    thing: str  # "JPEG photo", or ""
-    # How the criterion said it: "excludes", "includes" or "rejects_over".
-    said: str
+    value: str  # "$50.00"
+    phrase: str  # "more than $50"
+    thing: str  # "valid coupon code", or ""
+    # "includes" takes the value in, "under" and "over" stop short of it.
+    side: str
+    # What the criterion says happens on its own side: accepted | refused | ""
+    outcome: str
+
+    @property
+    def plain(self) -> str:
+        """The value the way a person says it: "$50", not "$50.00"."""
+        written = self.value
+        return written[:-3] if written.endswith(".00") else written
+
+    @property
+    def rejects_over(self) -> bool:
+        """Written from the refusing side: "larger than 2 MB is rejected"."""
+        return self.side == "over" and self.outcome == "refused"
+
+    @property
+    def covers(self) -> bool:
+        """Does the rule's own wording take the limit value in?"""
+        return self.side == "includes"
+
+    @property
+    def verdict(self) -> str:
+        """What this rule means happens at exactly the limit value."""
+        if not self.outcome:
+            return ""
+        if self.covers:
+            return self.outcome
+        # It stops short of the value, so the value gets the other answer.
+        return "refused" if self.outcome == "accepted" else "accepted"
+
+    @property
+    def allowed(self) -> bool:
+        return self.verdict == "accepted"
 
 
 def _limit_side(text: str) -> str:
-    """Is the limit value itself inside the rule, outside it, or unsaid?"""
-    if any(mentions(text, word) for word in _LIMIT_EXCLUDES):
-        return "excludes"
+    """Does the wording take the limit value in, or stop short of it?"""
     if any(mentions(text, word) for word in _LIMIT_INCLUDES):
         return "includes"
-    if any(mentions(text, word) for word in _LIMIT_REJECTS_OVER):
-        # Only what is past the limit is refused, so the limit itself stands.
-        return "rejects_over"
+    if any(mentions(text, word) for word in _LIMIT_UNDER):
+        return "under"
+    if any(mentions(text, word) for word in _LIMIT_OVER):
+        return "over"
     return ""
 
 
+def _limit_outcome(criterion: Criterion) -> str:
+    """Does this criterion end in the thing working, or being turned away?
+
+    Almost every criterion describes the path that works, so a criterion
+    whose words say neither is read that way: "a photo up to 2 MB can be
+    uploaded" is a rule about what is allowed, not about what is refused.
+    """
+    _, _, then = given_when_then(criterion.text)
+    return _expects_in(" ".join(then) if then else criterion.text) or "accepted"
+
+
+_ALL_LIMIT_WORDS = tuple(
+    sorted(_LIMIT_UNDER + _LIMIT_INCLUDES + _LIMIT_OVER, key=len, reverse=True)
+)
+_LOOK_BACK_FOR_A_LIMIT = 30
+
+
 def _limit_phrase(text: str, boundary: Boundary) -> str:
-    """The criterion's own words for the limit: "under 2 megabytes"."""
-    words = _LIMIT_EXCLUDES + _LIMIT_INCLUDES + _LIMIT_REJECTS_OVER
-    for word in words:
-        found = re.search(
-            re.escape(word) + r"\s+" + re.escape(boundary.phrase), text, re.IGNORECASE
-        )
-        if found:
-            return found.group(0)
+    """The criterion's own words for the limit: "more than $50".
+
+    The word that counts is the one in front of the number, not any limit
+    word in the sentence: AC-2 says "less than $50" and then quotes a
+    message that says "at least $50", and only the first one is its rule.
+    """
+    for found in re.finditer(re.escape(boundary.phrase), text, re.IGNORECASE):
+        before = text[max(0, found.start() - _LOOK_BACK_FOR_A_LIMIT): found.start()]
+        for word in _ALL_LIMIT_WORDS:
+            lead = re.search(
+                re.escape(word) + r"\s+(?:a\s+|an\s+|the\s+)?$", before, re.IGNORECASE
+            )
+            if lead:
+                return (before[lead.start():] + found.group(0)).strip()
     return boundary.phrase
 
 
+def with_context(criteria: list[Criterion], context: str) -> list[Criterion]:
+    """The criteria the rules read: the written ones, and the context.
+
+    The context is where the real limits often live -- "orders of at least
+    $50" -- and a criterion that says something else about the same number
+    is worth knowing about before anybody writes a test from either.
+    """
+    said = str(context or "").strip()
+    if not said:
+        return list(criteria or [])
+    return [*(criteria or []), Criterion(id=CONTEXT_ID, text=said)]
+
+
 def limit_rules(criteria: list[Criterion]) -> list[LimitRule]:
-    """Every limit the criteria state, with the side the limit value falls on."""
+    """Every limit the criteria state, with what each means at the value."""
     rules: list[LimitRule] = []
     for criterion in criteria or []:
         side = _limit_side(criterion.text)
         if not side:
             continue
+        outcome = _limit_outcome(criterion)
+        thing = _object_of(_action_phrase(criterion.text))
         for boundary in find_boundaries([criterion]):
+            phrase = _limit_phrase(criterion.text, boundary)
             rules.append(
                 LimitRule(
                     source=criterion.id,
                     value=boundary.values[1],
-                    phrase=_limit_phrase(criterion.text, boundary),
-                    allowed=side != "excludes",
-                    thing=_object_of(_action_phrase(criterion.text)),
-                    said=side,
+                    phrase=phrase,
+                    thing=thing,
+                    # The words in front of this number, not the ones in
+                    # front of some other number in the same sentence.
+                    side=_limit_side(phrase) or side,
+                    outcome=outcome,
                 )
             )
     return rules
@@ -814,45 +907,116 @@ def _plural(thing: str) -> str:
     return thing if not thing or thing.endswith("s") else thing + "s"
 
 
-def disputed_pairs(rules: list[LimitRule]) -> list[tuple[LimitRule, LimitRule]]:
-    """Pairs of criteria that disagree about the limit value itself.
+def gap_pairs(rules: list[LimitRule]) -> list[tuple[LimitRule, LimitRule]]:
+    """Values that one rule steps over and another stops short of.
 
-    "Under 2 megabytes" and "larger than 2 megabytes is rejected" cannot both
-    be right about a photo of exactly 2 MB, and every test written from
-    either of them inherits the argument.
+    "More than $50 works" and "less than $50 is refused" leave exactly $50
+    in neither. Nobody wrote the answer down, so nobody can test it, and the
+    first shopper with a $50 cart finds out what the code happens to do.
     """
     pairs: list[tuple[LimitRule, LimitRule]] = []
     settled: set[str] = set()
-    for strict in [one for one in rules if one.said == "excludes"]:
-        if strict.value in settled:
+    for over in [one for one in rules if one.side == "over" and one.outcome == "accepted"]:
+        if over.value in settled:
             continue
-        loose = next(
+        under = next(
             (
                 one
                 for one in rules
-                if one.allowed and one.value == strict.value and one.source != strict.source
+                if one.side == "under"
+                and one.outcome == "refused"
+                and one.value == over.value
+                and one.source != over.source
             ),
             None,
         )
-        if loose is None:
+        if under is None:
             continue
-        settled.add(strict.value)
-        pairs.append((strict, loose))
+        settled.add(over.value)
+        pairs.append((over, under))
     return pairs
+
+
+def disputed_pairs(rules: list[LimitRule]) -> list[tuple[LimitRule, LimitRule]]:
+    """Pairs of rules that say the opposite about the limit value itself.
+
+    "Under 2 megabytes" and "larger than 2 megabytes is rejected" cannot both
+    be right about a photo of exactly 2 MB, and every test written from
+    either of them inherits the argument. A value already reported as a gap
+    is not reported again here.
+    """
+    pairs: list[tuple[LimitRule, LimitRule]] = []
+    # The pair already reported as a gap is not reported again, but another
+    # rule about the same value still has something of its own to say. One
+    # note per value is enough, and the context gets one of its own, because
+    # "the context says otherwise" is a different thing to go and fix.
+    gapped = {
+        (one.value, frozenset({one.source, two.source}))
+        for one, two in gap_pairs(rules)
+    }
+    settled: set[tuple[str, bool]] = set()
+    for refused in [one for one in rules if one.verdict == "refused"]:
+        for accepted in rules:
+            if accepted.verdict != "accepted" or accepted.value != refused.value:
+                continue
+            if accepted.source == refused.source:
+                continue
+            sources = frozenset({accepted.source, refused.source})
+            if (refused.value, sources) in gapped:
+                continue
+            from_context = CONTEXT_ID in sources
+            if (refused.value, from_context) in settled:
+                continue
+            settled.add((refused.value, from_context))
+            pairs.append((refused, accepted))
+            break
+    return pairs
+
+
+def undecided_values(rules: list[LimitRule]) -> set[str]:
+    """Every limit value nobody has settled: a gap or an argument."""
+    found = {one.value for one, _ in gap_pairs(rules)}
+    found.update(one.value for one, _ in disputed_pairs(rules))
+    return found
+
+
+def _gap_notes(rules: list[LimitRule]) -> list[str]:
+    notes = []
+    for over, under in gap_pairs(rules):
+        notes.append(
+            f'{over.source} covers "{over.phrase}" and {under.source} covers '
+            f'"{under.phrase}". Nobody says what happens at exactly '
+            f"{over.plain}. Decide, then add it to a criterion."
+        )
+    return notes
 
 
 def _criteria_conflicts(rules: list[LimitRule]) -> list[str]:
     """What each of those disagreements reads as on the page."""
     notes: list[str] = []
-    for strict, loose in disputed_pairs(rules):
-        if loose.said == "rejects_over":
-            thing = f"{_plural(loose.thing)} " if loose.thing else ""
-            middle = f'{loose.source} only refuses {thing}"{loose.phrase}"'
+    for refused, accepted in disputed_pairs(rules):
+        # The context is quoted as the context, and it leads: it is the rule
+        # everything else was supposed to be written from.
+        if accepted.source == CONTEXT_ID or refused.source == CONTEXT_ID:
+            context = accepted if accepted.source == CONTEXT_ID else refused
+            other = refused if context is accepted else accepted
+            works = "works" if context.allowed else "doesn't"
+            then = "doesn't" if context.allowed else "works"
+            notes.append(
+                f'The context says "{context.phrase}" (so exactly '
+                f'{context.plain} {works}) but {other.source} says '
+                f'"{other.phrase}" (so exactly {context.plain} {then}). '
+                f"Decide which is right."
+            )
+            continue
+        if accepted.rejects_over:
+            thing = f"{_plural(accepted.thing)} " if accepted.thing else ""
+            middle = f'{accepted.source} only refuses {thing}"{accepted.phrase}"'
         else:
-            middle = f'{loose.source} allows "{loose.phrase}"'
+            middle = f'{accepted.source} allows "{accepted.phrase}"'
         notes.append(
-            f'{strict.source} says "{strict.phrase}" (so exactly {strict.value} '
-            f"is refused) but {middle} (so exactly {strict.value} is accepted). "
+            f'{refused.source} says "{refused.phrase}" (so exactly {refused.plain} '
+            f"is refused) but {middle} (so exactly {refused.plain} is accepted). "
             f"Decide which is right."
         )
     return notes
@@ -873,7 +1037,8 @@ def limit_conflicts(criteria: list[Criterion], cases: list[TestCase]) -> list[st
     rules = limit_rules(criteria)
     if not rules:
         return []
-    notes = _criteria_conflicts(rules)
+    # A gap first: nobody deciding is worse than two people disagreeing.
+    notes = _gap_notes(rules) + _criteria_conflicts(rules)
     for case in cases or []:
         if len(notes) >= MAX_QUALITY_NOTES:
             break
@@ -963,10 +1128,14 @@ def _quality_notes(cases: list[TestCase]) -> list[str]:
 
 
 def review_test_cases(
-    story: str, criteria: list[Criterion], result: TestCaseList
+    story: str, criteria: list[Criterion], result: TestCaseList, context: str = ""
 ) -> CaseReview:
-    """What a principal QA would add to the AI's suite, and what is weak in it."""
-    text = story_text(story, criteria)
+    """What a principal QA would add to the AI's suite, and what is weak in it.
+
+    The context counts as a criterion here: "orders of at least $50" is a
+    limit whether it was written as AC-6 or as a line about the feature.
+    """
+    text = about_the_feature(story, criteria, context)
     hits = detect_hits(text, story)
     cases = list(result.test_cases)
     texts = [case_text(case) for case in cases]
@@ -976,12 +1145,13 @@ def review_test_cases(
     suite_numbers = scan(whole_suite)
     # Where this all happens, and how every limit reads: the added cases and
     # the notes about them must say the same thing about the same value.
-    rules = limit_rules(list(criteria or []))
+    ruled = with_context(criteria, context)
+    rules = limit_rules(ruled)
     setting = Setting(
         page=page_in([text, *texts]),
-        criteria=list(criteria or []),
+        criteria=ruled,
         rules=tuple(rules),
-        disputed=frozenset(strict.value for strict, _ in disputed_pairs(rules)),
+        disputed=frozenset(undecided_values(rules)),
     )
 
     covered: list[str] = []
@@ -995,7 +1165,7 @@ def review_test_cases(
         )
 
     boundary_gaps: list[tuple[Gap, Boundary, list[str]]] = []
-    for boundary in find_boundaries(criteria):
+    for boundary in find_boundaries(ruled):
         missing = missing_values(boundary, cases, whole_suite, suite_numbers)
         if not missing:
             covered.append(f"boundary:{boundary.source}")
@@ -1039,7 +1209,7 @@ def review_test_cases(
         more=more,
         quality=_quality_notes(cases),
         covered=covered,
-        conflicts=limit_conflicts(criteria, cases),
+        conflicts=limit_conflicts(ruled, cases),
     )
 
 
@@ -1088,6 +1258,17 @@ _JS_TEST = re.compile(r"(?<![\w.$])(?:test|it)(?:\.(?!" + _NOT_A_TEST + r")\w+)*
 _PY_TEST = re.compile(r"^\s*(?:async\s+)?def\s+(test_\w+)", re.MULTILINE)
 _ONLY = re.compile(r"(?<![\w.$])(?:test|describe|it)\.only\s*\(|(?<![\w.$])fit\s*\(")
 _ASSERTION = re.compile(r"(?<![\w.$])(?:expect|assert|should|verify)\b")
+# A method named for checking is checking: expectError, assertTotal,
+# verifyMessage, shouldShow, checkTotal, validateForm.
+_CHECKING_NAME = re.compile(r"^(?:expect|assert|verify|should|check|validate)", re.IGNORECASE)
+# Something the test calls on an object: `checkout.expectErrorMessage(`.
+_CALLED_METHOD = re.compile(r"\.\s*([A-Za-z_$][\w$]*)\s*\(")
+# A method in any project file, with its body, so a name can be looked
+# up: `async expectErrorMessage(text) { … }` or `def expect_error(self):`.
+_METHOD_BODY = re.compile(
+    r"(?:async\s+)?(?:def\s+)?(?P<name>[A-Za-z_$][\w$]*)\s*\([^)]*\)\s*"
+    r"(?::\s*[^\n{]*)?[{:](?P<body>(?:[^{}]|\{[^{}]*\})*)"
+)
 _SECRET_NAME = re.compile(
     r"(?<![\w.$])([\w$]*(?:password|passwd|token|secret|apikey|api_key)[\w$]*)"
     r"\s*[:=]\s*(?:f|r|b|u)?[\"'`]([^\"'`\n]{1,200})[\"'`]",
@@ -1159,10 +1340,37 @@ def _test_chunks(code: str) -> list[tuple[int, str]]:
     return chunks
 
 
-def _assertion_findings(file: ProjectFile) -> list[Finding]:
+def _checking_methods(files: list[ProjectFile]) -> set[str]:
+    """Methods anywhere in the project that do the checking themselves.
+
+    A page object is the normal way to write this: the test calls
+    `checkout.expectErrorMessage(...)` and the `expect(` lives in
+    `pages/checkout_page.ts`. Calling that an unasserted test is a false
+    alarm, and a false alarm is worse than no check at all.
+    """
+    found: set[str] = set()
+    for file in files or []:
+        for match in _METHOD_BODY.finditer(file.code):
+            if _ASSERTION.search(match.group("body")):
+                found.add(match.group("name"))
+    return found
+
+
+def _asserts(body: str, checking: set[str]) -> bool:
+    """Does this test check anything, itself or through something it calls?"""
+    if _ASSERTION.search(body):
+        return True
+    for match in _CALLED_METHOD.finditer(body):
+        name = match.group(1)
+        if _CHECKING_NAME.match(name) or name in checking:
+            return True
+    return False
+
+
+def _assertion_findings(file: ProjectFile, checking: set[str]) -> list[Finding]:
     findings = []
     for start, body in _test_chunks(file.code):
-        if _ASSERTION.search(body) is None:
+        if not _asserts(body, checking):
             findings.append(
                 _finding(file, start, "this test never asserts anything", "error")
             )
@@ -1240,9 +1448,11 @@ def _selector_findings(file: ProjectFile) -> list[Finding]:
 def review_automation(script: AutomationScript, files: list[ProjectFile]) -> list[Finding]:
     """What a senior tester would send back on this project. Only ever adds."""
     findings: list[Finding] = []
+    # Read every file first: the check a test calls may live in another one.
+    checking = _checking_methods(files)
     for file in files or []:
         findings.extend(_only_findings(file))
-        findings.extend(_assertion_findings(file))
+        findings.extend(_assertion_findings(file, checking))
         findings.extend(_secret_findings(file))
         findings.extend(_selector_findings(file))
     findings.sort(key=lambda one: (one.file, one.line, one.message))

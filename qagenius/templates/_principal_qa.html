@@ -34,14 +34,23 @@
 
 {# The quieter notes: no actor, no benefit, no negative criterion. A clean
    story still says so, so the reader knows the rules ran. #}
-{% macro notes(items, empty="") %}
-{% if not items %}
+{% macro notes(items, empty="", limits=None) %}
+{% if not items and not limits %}
 {% if empty %}
 <p class="row pq-clean">{{ label() }}<span class="muted">{{ empty }}</span></p>
 {% endif %}
 {% else %}
 <div class="card card-section">
   <h2>Notes from the senior tester</h2>
+  {# An argument about a limit, or a value nobody decided, comes first:
+     every test written from either side inherits it. #}
+  {% if limits %}
+  <p class="pq-review-line"><strong>Disagreements about a limit</strong></p>
+  <ul class="pq-conflicts">
+    {% for note in limits %}<li>{{ note }}</li>{% endfor %}
+  </ul>
+  {% endif %}
+  {% if items %}
   <ul class="pq-notes">
     {% for note in items %}
     <li class="pq-note {{ note.level }}">
@@ -51,6 +60,7 @@
     </li>
     {% endfor %}
   </ul>
+  {% endif %}
   <p class="muted small">Written by QA-Genius's own testing rules, not by the AI. No key needed.</p>
 </div>
 {% endif %}

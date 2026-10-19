@@ -189,6 +189,35 @@ BIG_CRITERIA = [
     "Deleting the account asks for the password again",
 ]
 
+# The coupon run: money, a percentage cap, and a limit nobody wrote down.
+COUPON_STORY = (
+    "As a shopper, I want to apply a discount coupon at checkout so that I "
+    "pay less for my order."
+)
+
+COUPON_CONTEXT = (
+    "Aurora Storefront checkout. Coupons give a percentage off the order "
+    "total, up to a maximum discount of $30. A coupon works only on orders "
+    "of at least $50. Each coupon can be used once per account and has an "
+    "expiry date. Only one coupon per order. Guests can use coupons too."
+)
+
+COUPON_CRITERIA = [
+    "Given a shopper has items worth more than $50 in the cart When they "
+    "enter a valid coupon code Then the discount is applied to the order "
+    "total And the new total is shown before payment",
+    "Given a shopper has items worth less than $50 in the cart When they "
+    "enter a valid coupon code Then the coupon is refused with the message "
+    "\"This coupon needs an order of at least $50.\"",
+    "Given a coupon gives 20% off When the order total is $200 Then the "
+    "discount is $30, not $40",
+    "Given a coupon has already been used by this account When the shopper "
+    "enters it Then it is refused with \"You have already used this coupon.\"",
+    "Given a coupon has expired When the shopper enters it Then it is "
+    "refused with \"This coupon has expired.\"",
+]
+
+
 LOCKOUT_STORY = (
     "As a shopper, I want my Aurora Storefront account to lock quickly after "
     "too many wrong passwords so that my account stays safe."

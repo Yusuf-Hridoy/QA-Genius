@@ -38,6 +38,8 @@ class Rule:
     then_factor: str
     then_value: str
     reason: str = ""
+    # "standard" (a fact about the tools) or "ai" (a guess worth checking).
+    source: str = "standard"
 
 
 @dataclass(frozen=True)

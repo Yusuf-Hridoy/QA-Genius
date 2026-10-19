@@ -573,6 +573,8 @@
       var latest = readRun() || run;
       event.detail.parameters.user_story = latest.story || "";
       event.detail.parameters.criteria_json = JSON.stringify(nonEmpty(latest));
+      /* The limits often live in the context, not in a criterion. */
+      event.detail.parameters.context = latest.context || "";
     });
 
     if (run.autorun_test_cases) {
@@ -1304,6 +1306,7 @@
     var box = document.getElementById("refine-instruction");
     if (source === "refine-submit" && box) instruction = box.value;
     detail.parameters.user_story = run.story || "";
+    detail.parameters.context = run.context || "";
     detail.parameters.criteria_json = JSON.stringify(
       current.criteria || nonEmpty(run)
     );

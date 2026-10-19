@@ -5,6 +5,9 @@ from pathlib import Path
 
 from tests.factories import (
     BIG_STORY,
+    COUPON_CONTEXT,
+    COUPON_CRITERIA,
+    COUPON_STORY,
     LOCKOUT_CRITERIA,
     NAVBAR_STORY,
     LOCKOUT_STORY,
@@ -16,13 +19,15 @@ from tests.factories import (
 from qagenius.shadow_qa.boundaries import (
     MAX_BOUNDARIES,
     boundary_covered,
+    cap_boundary,
     find_boundaries,
     missing_values,
 )
 from qagenius.shadow_qa.detect import detect_hits, detect_packs, mentions, story_text
 from qagenius.shadow_qa.packs import load_packs
+from qagenius.shadow_qa.review import applies
 from qagenius.shadow_qa.story_rules import count_capabilities, epic_note, review_story
-from qagenius.test_cases import number_criteria
+from qagenius.test_cases import Criterion, number_criteria
 
 
 def _ids(text: str, story: str | None = None) -> list[str]:
@@ -447,3 +452,110 @@ def test_a_story_about_the_fields_themselves_is_a_profile_form():
         "it is up to date."
     )
     assert "profile_form" in _ids(story)
+
+
+# ── money ─────────────────────────────────────────────────────────────────────
+
+
+def test_a_money_limit_gets_the_cent_either_side():
+    boundary = find_boundaries(_criteria(["The cart must be worth at least $50"]))[0]
+    assert boundary.kind == "money"
+    assert boundary.values == ["$49.99", "$50.00", "$50.01"]
+
+
+def test_money_is_read_however_the_criterion_writes_it():
+    written = ("at least $50", "at least $50.00", "at least 50 dollars",
+               "at least USD 50", "at least €50", "at least £50", "at least 50 EUR")
+    for text in written:
+        found = find_boundaries(_criteria([f"The cart is worth {text}"]))
+        assert found, text
+        assert found[0].kind == "money", text
+        assert found[0].values[1].endswith("50.00"), text
+
+
+def test_an_amount_that_is_not_a_limit_is_not_a_boundary():
+    """"The order total is $200" is an example, not a rule."""
+    assert find_boundaries(_criteria(["When the order total is $200"])) == []
+
+
+def test_the_coupon_criteria_give_the_fifty_and_the_cap_boundaries():
+    """The $150 where a 20% coupon stops growing is written down nowhere."""
+    found = find_boundaries(_criteria(COUPON_CRITERIA))
+    values = [one.values for one in found]
+    assert ["$49.99", "$50.00", "$50.01"] in values
+    assert ["$149.99", "$150.00", "$150.01"] in values
+    cap = next(one for one in found if one.values[1] == "$150.00")
+    assert cap.source == "AC-3"
+    assert cap.phrase == "the $30 cap starts at a $150 order (20% of $150 = $30)"
+
+
+def test_the_cap_can_be_read_from_the_context_and_the_rate_from_a_criterion():
+    criteria = _criteria(["Given a coupon gives 20% off When a code is entered"])
+    criteria.append(Criterion(id="Context", text="Coupons give up to $30 off."))
+    cap = cap_boundary(criteria)
+    assert cap is not None
+    assert cap.values == ["$149.99", "$150.00", "$150.01"]
+    assert cap.source == "AC-1"
+
+
+def test_a_case_covers_a_money_value_however_it_writes_it():
+    boundary = find_boundaries(_criteria(["The cart must be worth at least $50"]))[0]
+    for written in ("$50", "50.00", "50 dollars", "cart_total=50.00"):
+        covered = boundary_covered(boundary, [case(case_id="TC-001", title=f"Cart of {written}")])
+        assert "$50.00" in covered, written
+
+
+# ── coupons ───────────────────────────────────────────────────────────────────
+
+
+def test_the_coupon_story_activates_the_coupon_pack():
+    whole = story_text("\n".join([COUPON_STORY, COUPON_CONTEXT]), COUPON_CRITERIA)
+    assert "coupon" in _ids(whole, COUPON_STORY)
+    assert "coupon" in _ids("The shopper enters a promo code at the till")
+    assert "coupon" in _ids("A voucher takes 10% off")
+
+
+def test_a_discount_on_its_own_is_not_a_coupon_feature():
+    """"Discount" is a word every shop says; a coupon is a thing you type."""
+    assert "coupon" not in _ids("The sale page shows a discount on every item")
+
+
+def test_the_guest_check_waits_for_a_story_that_mentions_guests():
+    pack = next(one for one in load_packs() if one.id == "coupon")
+    guest = next(one for one in pack.checks if one.short_id == "guest_reuse")
+    assert applies(guest, "Guests can use coupons too.")
+    assert not applies(guest, "A signed-in shopper enters a coupon code.")
+
+
+def test_every_coupon_check_is_a_test_somebody_could_run():
+    pack = next(one for one in load_packs() if one.id == "coupon")
+    assert len(pack.checks) == 10
+    for check in pack.checks:
+        assert len(check.test.steps) >= 2, check.short_id
+        assert check.test.test_data.strip(), check.short_id
+        assert check.test.expected_result.strip().endswith("."), check.short_id
+
+
+def test_a_coupon_story_is_not_a_payment_story():
+    """It says "pay less" and "before payment" and never touches a card."""
+    whole = story_text("\n".join([COUPON_STORY, COUPON_CONTEXT]), COUPON_CRITERIA)
+    assert "payment" not in _ids(whole, COUPON_STORY)
+
+
+def test_paying_by_card_is_still_a_payment_story():
+    assert "payment" in _ids(
+        "As a shopper, I want to pay by card at checkout so that I get my order."
+    )
+    assert "payment" in _ids("Checkout takes a card payment and shows the invoice.")
+    assert "payment" in _ids("A refund puts the money back on the card.")
+
+
+def test_no_pack_is_switched_on_by_a_word_that_names_a_place():
+    """Checkout, cart, order, profile: every story near them says them."""
+    flow_words = {
+        "checkout", "cart", "carts", "order", "orders", "basket", "profile",
+        "profiles", "settings", "dashboard", "account", "accounts", "page",
+    }
+    for pack in load_packs():
+        strong = {word.lower() for word in pack.triggers} & flow_words
+        assert not strong, f"{pack.id}: {sorted(strong)}"

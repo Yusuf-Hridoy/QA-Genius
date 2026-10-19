@@ -4,6 +4,9 @@ import time
 
 from tests.factories import (
     BIG_STORY,
+    COUPON_CONTEXT,
+    COUPON_CRITERIA,
+    COUPON_STORY,
     PHOTO_CRITERIA,
     PHOTO_STORY,
     NAVBAR_CRITERIA,
@@ -29,6 +32,7 @@ from qagenius.shadow_qa.review import (
     DISPUTED_OUTCOME,
     checklist_block,
     limit_conflicts,
+    with_context,
     is_principal,
     reason_for,
     review_automation,
@@ -987,3 +991,160 @@ def test_a_rejection_rule_leaves_the_limit_value_itself_allowed():
         limit.expected_result
     )
     assert "At 2 MB: the upload is rejected" not in limit.expected_result
+
+
+# ── nobody decided what happens at the limit ─────────────────────────────────
+
+
+def test_a_value_both_criteria_step_around_is_called_a_gap():
+    """The coupon run: AC-1 starts above $50, AC-2 stops below it."""
+    notes = limit_conflicts(number_criteria(COUPON_CRITERIA), [])
+    assert notes == [
+        'AC-1 covers "more than $50" and AC-2 covers "less than $50". Nobody '
+        "says what happens at exactly $50. Decide, then add it to a criterion."
+    ]
+
+
+def test_the_context_is_read_as_a_rule_of_its_own():
+    criteria = with_context(number_criteria(COUPON_CRITERIA), COUPON_CONTEXT)
+    notes = limit_conflicts(criteria, [])
+    assert any(
+        one
+        == 'The context says "at least $50" (so exactly $50 works) but AC-1 '
+        'says "more than $50" (so exactly $50 doesn\'t). Decide which is right.'
+        for one in notes
+    ), notes
+
+
+def test_criteria_that_meet_at_the_value_leave_no_gap():
+    criteria = number_criteria(
+        [
+            "Given a cart of $50 or more When a coupon is entered Then the "
+            "discount is applied",
+            "Given a cart of less than $50 When a coupon is entered Then it "
+            "is refused",
+        ]
+    )
+    assert limit_conflicts(criteria, []) == []
+
+
+def test_a_limit_test_at_an_undecided_value_says_so():
+    """Asking for a test at $50 would be asking for a guess."""
+    review = review_test_cases(
+        COUPON_STORY,
+        number_criteria(COUPON_CRITERIA),
+        suite(case(case_id="TC-001", title="A $90 cart", traceability="AC-1")),
+        COUPON_CONTEXT,
+    )
+    limit = next(
+        one
+        for one in review.added
+        if "pack:boundary" in one.tags and "$50" in one.title
+    )
+    assert f"At $50.00: {DISPUTED_OUTCOME}" in limit.expected_result
+    assert DISPUTED_OUTCOME == "Not decided yet — see the note above."
+
+
+def test_the_cap_nobody_wrote_down_becomes_a_test():
+    """20% off, capped at $30, changes behaviour at a $150 order."""
+    review = review_test_cases(
+        COUPON_STORY,
+        number_criteria(COUPON_CRITERIA),
+        suite(case(case_id="TC-001", title="A $90 cart", traceability="AC-1")),
+        COUPON_CONTEXT,
+    )
+    titles = [one.title for one in review.added if "pack:boundary" in one.tags]
+    assert any("$149.99" in one and "$150.01" in one for one in titles), titles
+
+
+# ── a check inside a page object is still a check ────────────────────────────
+
+_PAGE_OBJECT = """
+export class CheckoutPage {
+  async expectErrorMessage(text) {
+    await expect(this.page.getByRole('alert')).toHaveText(text);
+  }
+  async applyCoupon(code) {
+    await this.page.getByLabel('Coupon').fill(code);
+  }
+}
+"""
+
+_POM_SPEC = """
+test('TC-002: a short cart refuses the coupon', async ({ page }) => {
+  const checkout = new CheckoutPage(page);
+  await checkout.applyCoupon('SAVE20');
+  await checkout.expectErrorMessage('This coupon needs an order of at least $50.');
+});
+"""
+
+_CLICK_ONLY = """
+test('TC-003: the apply button is there', async ({ page }) => {
+  await page.getByRole('button', { name: 'Apply' }).click();
+});
+"""
+
+
+def test_a_test_that_checks_through_a_page_object_is_not_flagged():
+    """The false alarm from the coupon run: the expect( is one file over."""
+    findings = review_automation(
+        script(),
+        [
+            _file("pages/checkout_page.ts", _PAGE_OBJECT),
+            _file("tests/coupon.spec.ts", _POM_SPEC),
+        ],
+    )
+    assert [one for one in findings if "never asserts" in one.message] == []
+
+
+def test_a_test_that_only_clicks_is_still_flagged():
+    findings = review_automation(
+        script(),
+        [
+            _file("pages/checkout_page.ts", _PAGE_OBJECT),
+            _file("tests/coupon.spec.ts", _CLICK_ONLY),
+        ],
+    )
+    assert [one for one in findings if "never asserts" in one.message]
+
+
+def test_a_method_named_for_checking_counts_even_without_its_file():
+    """`verifyTotal(...)` says what it does; the file it lives in may be the AI's."""
+    spec = """
+test('TC-004: the total is right', async ({ page }) => {
+  await cart.verifyTotal('$47.99');
+});
+"""
+    findings = review_automation(script(), [_file("tests/cart.spec.ts", spec)])
+    assert [one for one in findings if "never asserts" in one.message] == []
+
+
+def test_the_context_switches_on_the_checks_it_describes():
+    """"Guests can use coupons too" is in the context, not in a criterion."""
+    ai = suite(
+        case(case_id="TC-001", title="A valid coupon on a $90 cart", traceability="AC-1")
+    )
+    criteria = number_criteria(COUPON_CRITERIA)
+    without = review_test_cases(COUPON_STORY, criteria, ai)
+    with_it = review_test_cases(COUPON_STORY, criteria, ai, COUPON_CONTEXT)
+    titles = " | ".join(one.title for one in with_it.added)
+    assert "guest" in titles.lower()
+    assert "Two tabs" in titles
+    assert "guest" not in " | ".join(one.title for one in without.added).lower()
+
+
+def test_the_coupon_run_adds_the_tests_the_senior_tester_missed():
+    """The owner's re-test, in one place."""
+    ai = suite(
+        case(case_id="TC-001", title="A valid coupon on a $90 cart", traceability="AC-1"),
+        case(case_id="TC-002", title="A $30 cart is refused", traceability="AC-2"),
+    )
+    review = review_test_cases(
+        COUPON_STORY, number_criteria(COUPON_CRITERIA), ai, COUPON_CONTEXT
+    )
+    titles = " | ".join(one.title for one in review.added)
+    for wanted in ("$49.99", "$149.99", "Removing items after the coupon", "15% of $59.99"):
+        assert wanted in titles or wanted.lower() in titles.lower(), wanted
+    # And nothing about a card: this story never pays for anything.
+    assert "declined" not in titles.lower()
+    assert "double click" not in titles.lower()

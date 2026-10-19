@@ -50,7 +50,9 @@
   /* ---------- what the server is asked to judge ---------- */
 
   function body(run) {
-    var payload = { story: run.story || "" };
+    /* The context carries limits the criteria do not, so Ship check reads
+     * it the same way the test-cases desk does. */
+    var payload = { story: run.story || "", context: run.context || "" };
     if (run.story_analysis) payload.story_analysis = run.story_analysis;
     if (run.duel_summary) payload.duel_summary = run.duel_summary;
     if (run.test_cases && run.test_cases.result) {

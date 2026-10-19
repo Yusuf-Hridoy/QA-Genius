@@ -15,7 +15,16 @@ from qagenius.test_cases import Criterion
 # More than this and the checklist stops being a glance.
 MAX_BOUNDARIES = 12
 
-KINDS = ("count", "size", "duration", "length", "digits")
+KINDS = ("count", "size", "duration", "length", "digits", "money")
+
+# Money as people write it. The symbol stays in the value, because "$49.99"
+# is what a tester types into a cart and "49.99 money" is not.
+_SYMBOLS = {"$": "$", "usd": "$", "dollar": "$", "dollars": "$",
+            "€": "€", "eur": "€", "euro": "€", "euros": "€",
+            "£": "£", "gbp": "£", "pound": "£", "pounds": "£"}
+CURRENCIES = frozenset({"$", "€", "£"})
+# A bare "50.00" in test data is money too, whichever currency the shop uses.
+MONEY_ANY = "money"
 
 # Things that look like numbers but are not quantities: ids, years, versions.
 _ID = re.compile(r"\b[A-Za-z]{1,6}[-_]\d+\b")
@@ -78,6 +87,39 @@ _LENGTH_RE = re.compile(
     re.IGNORECASE,
 )
 _DIGITS_RE = re.compile(_NUMBER + _GAP + r"(digits?)\b", re.IGNORECASE)
+# "$50", "$50.00", "€50" | "USD 50" | "50 dollars", "50 EUR"
+_MONEY_SYMBOL = re.compile(r"([$€£])\s?" + _NUMBER)
+_MONEY_CODE = re.compile(r"(?<![\w])(USD|EUR|GBP)\s?" + _NUMBER, re.IGNORECASE)
+_MONEY_WORD = re.compile(
+    _NUMBER + r"\s?(dollars?|euros?|pounds?|USD|EUR|GBP)(?![\w])", re.IGNORECASE
+)
+# A money amount is a limit only when the criterion says it is one. "The
+# order total is $200" is an example, not a rule worth three tests.
+_LIMIT_BEFORE_MONEY = re.compile(
+    r"(?:at least|at most|more than|less than|greater than|no more than|"
+    r"no less than|not more than|up to|under|over|below|above|minimum|"
+    r"maximum|min|max|starting at|from|worth|totalling|totaling)\s+"
+    r"(?:a\s+|an\s+|the\s+)?$",
+    re.IGNORECASE,
+)
+_LIMIT_AFTER_MONEY = re.compile(
+    r"^\s*(?:or more|or less|or above|or below|or over|or under|and above|"
+    r"and over|minimum|maximum|or higher|or lower)(?![\w])",
+    re.IGNORECASE,
+)
+_LOOK_BACK = 34
+_LOOK_ON = 14
+# The rate and the cap a "percentage off, up to $30" rule is made of.
+_PERCENT = re.compile(r"(\d+(?:\.\d+)?)\s*(?:%|percent)", re.IGNORECASE)
+_CAP_BEFORE = re.compile(
+    r"(?:maximum|max|cap(?:ped)?(?:\s+at)?|up to|no more than|at most|"
+    r"not more than)\b[^.;]{0,30}?$",
+    re.IGNORECASE,
+)
+# "the discount is $30, not $40": the first amount is the cap.
+_CAP_NOT = re.compile(
+    r"([$€£]\s?\d+(?:\.\d+)?)\s*,?\s+not\s+[$€£]\s?\d+(?:\.\d+)?", re.IGNORECASE
+)
 # "5 failed verification attempts": the number, up to three words, then the noun.
 _COUNT_RE = re.compile(
     _NUMBER
@@ -154,6 +196,90 @@ def _duration_values(amount: float, unit: str) -> list[str]:
     return _step_values(amount, unit)
 
 
+def _money_values(amount: float, symbol: str) -> list[str]:
+    """One cent under, exactly, one cent over — written the way a till does."""
+    return [
+        f"{symbol}{amount - 0.01:.2f}",
+        f"{symbol}{amount:.2f}",
+        f"{symbol}{amount + 0.01:.2f}",
+    ]
+
+
+def _money_mentions(text: str) -> list[tuple[int, int, str, float]]:
+    """Every money amount in the text as (start, end, symbol, amount)."""
+    found: list[tuple[int, int, str, float]] = []
+    for pattern, symbol_group, number_group in (
+        (_MONEY_SYMBOL, 1, 2),
+        (_MONEY_CODE, 1, 2),
+        (_MONEY_WORD, 2, 1),
+    ):
+        for match in pattern.finditer(text):
+            symbol = _SYMBOLS.get(match.group(symbol_group).lower())
+            if symbol is None:
+                continue
+            spot = (match.start(), match.end(), symbol, float(match.group(number_group)))
+            if not any(one[0] < spot[1] and spot[0] < one[1] for one in found):
+                found.append(spot)
+    found.sort()
+    return found
+
+
+def _is_a_limit(text: str, start: int, end: int) -> bool:
+    """Does the sentence call this amount a limit, or just mention it?"""
+    before = text[max(0, start - _LOOK_BACK): start]
+    after = text[end: end + _LOOK_ON]
+    return bool(_LIMIT_BEFORE_MONEY.search(before) or _LIMIT_AFTER_MONEY.search(after))
+
+
+def _cap_amount(text: str) -> tuple[str, float] | None:
+    """The most a percentage rule will ever take off, when it says so."""
+    capped = _CAP_NOT.search(text)
+    if capped:
+        money = _money_mentions(capped.group(1))
+        if money:
+            return money[0][2], money[0][3]
+    for start, _, symbol, amount in _money_mentions(text):
+        if _CAP_BEFORE.search(text[max(0, start - _LOOK_BACK): start]):
+            return symbol, amount
+    return None
+
+
+def cap_boundary(criteria: list[Criterion]) -> Boundary | None:
+    """Where a "percentage off, up to $30" rule stops being a percentage.
+
+    A 20% coupon takes $30 off a $150 order and $30 off a $200 one, so $150
+    is the only total where the rule changes. Nobody writes that number down,
+    which is exactly why nobody tests it.
+    """
+    rate: tuple[str, float] | None = None
+    cap: tuple[str, float] | None = None
+    for criterion in criteria or []:
+        if rate is None:
+            found = _PERCENT.search(criterion.text)
+            if found and float(found.group(1)) > 0:
+                rate = (criterion.id, float(found.group(1)))
+        if cap is None:
+            money = _cap_amount(criterion.text)
+            if money is not None:
+                cap = money
+    if rate is None or cap is None:
+        return None
+    source, percent = rate
+    symbol, amount = cap
+    total = round(amount / (percent / 100), 2)
+    return Boundary(
+        source=source,
+        # Said the way a person would say it: "$30", not "$30.00".
+        phrase=(
+            f"the {symbol}{_number_text(amount)} cap starts at a "
+            f"{symbol}{_number_text(total)} order ({_number_text(percent)}% of "
+            f"{symbol}{_number_text(total)} = {symbol}{_number_text(amount)})"
+        ),
+        values=_money_values(total, symbol),
+        kind="money",
+    )
+
+
 def _found(text: str, source: str) -> list[Boundary]:
     masked = _mask(text)
     found: list[tuple[int, Boundary]] = []
@@ -164,6 +290,18 @@ def _found(text: str, source: str) -> list[Boundary]:
             return False
         taken.append((start, end))
         return True
+
+    # Money first, and on the text as written: the version mask would blank
+    # the cents out of "$50.00", and a currency symbol is never ambiguous.
+    for start, end, symbol, amount in _money_mentions(text):
+        if not _is_a_limit(text, start, end) or not claim(start, end):
+            continue
+        found.append(
+            (
+                start,
+                Boundary(source, text[start:end].strip(), _money_values(amount, symbol), "money"),
+            )
+        )
 
     # Most specific first: "6-digit" is digits, never a count of sixes.
     for pattern, kind, units in (
@@ -201,10 +339,24 @@ def _found(text: str, source: str) -> list[Boundary]:
     return [boundary for _, boundary in found]
 
 
+def _capped_value(cap: Boundary) -> str:
+    """The cap amount as a boundary value, so it is not also tested on its own."""
+    found = _money_mentions(cap.phrase)
+    return f"{found[0][2]}{found[0][3]:.2f}" if found else ""
+
+
 def find_boundaries(criteria: list[Criterion]) -> list[Boundary]:
-    """Every testable number in the criteria, in criterion order, at most 12."""
+    """Every testable number in the criteria, in criterion order, at most 12.
+
+    Plus the one number none of them writes down: where a capped percentage
+    stops going up.
+    """
     boundaries: list[Boundary] = []
     seen: set[tuple[str, str]] = set()
+    cap = cap_boundary(criteria)
+    if cap is not None:
+        # The cap amount itself is tested from the order side, below.
+        seen.add(("money", _capped_value(cap)))
     for criterion in criteria or []:
         for boundary in _found(criterion.text, criterion.id):
             key = (boundary.kind, boundary.values[1])
@@ -214,6 +366,8 @@ def find_boundaries(criteria: list[Criterion]) -> list[Boundary]:
             boundaries.append(boundary)
             if len(boundaries) >= MAX_BOUNDARIES:
                 return boundaries
+    if cap is not None and len(boundaries) < MAX_BOUNDARIES:
+        boundaries.append(cap)
     return boundaries
 
 
@@ -322,6 +476,12 @@ def quantities(text: str) -> list[tuple[str, float]]:
         said.append(
             _one_quantity(float(match.group(1)) + float(match.group(2)) / 60.0, "minutes")
         )
+    for _, _, symbol, amount in _money_mentions(text):
+        said.append((symbol, amount))
+    # "cart_total=50.00" is money, whatever the shop's currency is: nothing
+    # else is written to the cent.
+    for match in _TO_THE_CENT.finditer(text):
+        said.append((MONEY_ANY, float(match.group(1))))
     return said
 
 
@@ -339,8 +499,16 @@ def case_text(case: TestCase) -> str:
     )
 
 
+# A number written to the cent, with no unit of its own: test data for money.
+_TO_THE_CENT = re.compile(r"(?<![\w.$€£])(\d+\.\d\d)(?![\d])")
+
+
 def _as_quantity(value: str) -> tuple[str, float] | None:
-    """One of a boundary's own values -- "4.99 MB" -- in the same spelling."""
+    """One of a boundary's own values -- "4.99 MB", "$50.00" -- the same way."""
+    head = str(value or "")[:1]
+    if head in CURRENCIES:
+        amount = _amount_of(value[1:])
+        return None if amount is None else (head, amount)
     number, _, unit = value.partition(" ")
     amount = _amount_of(number)
     if amount is None or not unit:
@@ -358,7 +526,10 @@ def _value_in(value: str, said: list[tuple[str, float]]) -> bool:
     if wanted is None:
         return False
     unit, amount = wanted
-    return any(other == unit and _same(number, amount) for other, number in said)
+    # A bare amount to the cent answers for any currency: the suite says
+    # "cart_total=50.00" and the criterion says "$50".
+    wanted_units = {unit, MONEY_ANY} if unit in CURRENCIES else {unit}
+    return any(other in wanted_units and _same(number, amount) for other, number in said)
 
 
 def states_value(text: str, value: str) -> bool:

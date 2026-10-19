@@ -82,10 +82,12 @@ from qagenius.shadow_qa.review import (
     checklist_block,
     is_principal,
     reason_for,
+    limit_conflicts,
     review_automation,
     review_risks,
     review_test_cases,
     risk_titles,
+    with_context,
 )
 from qagenius.shadow_qa.story_rules import StoryNote, review_story
 from qagenius.story_text import (
@@ -461,6 +463,7 @@ def _story_result_context(
     result: AmbiguityAnalysis,
     notes: list[str],
     provider_name: str,
+    context: str = "",
 ) -> dict:
     rows, passes = _invest_rows(result)
     clarity = max(0, 100 - result.ambiguity_score)
@@ -469,6 +472,14 @@ def _story_result_context(
     return {
         "epic": epic,
         "shadow_notes": shadow_notes,
+        # A limit two criteria disagree about, or none of them decides, is
+        # worth saying here: it is cheaper to fix a criterion than a suite.
+        "limit_notes": limit_conflicts(
+            with_context(
+                number_criteria(result.generated_acceptance_criteria), context
+            ),
+            [],
+        ),
         "result": result,
         "clarity_score": clarity,
         "score_tone": _score_tone(clarity),
@@ -729,7 +740,9 @@ def story_run(
     return templates.TemplateResponse(
         request,
         "_story_result.html",
-        _story_result_context(request, user_story, result, notes, provider_name),
+        _story_result_context(
+            request, user_story, result, notes, provider_name, context
+        ),
     )
 
 
@@ -996,6 +1009,7 @@ def test_cases_run(
     user_story: str = Form(default=""),
     criteria_json: str = Form(default="[]"),
     coverage_focus: list[str] = Form(default=[]),
+    context: str = Form(default=""),
 ) -> HTMLResponse:
     user_story = user_story.strip()
     if not user_story:
@@ -1022,7 +1036,7 @@ def test_cases_run(
     user = build_user_text(base_user, list(coverage_focus), criteria)
     # The checklist rides along with the request the user already made. The v1
     # prompt text is untouched; this is appended to the user text.
-    user = with_plain_words(user + checklist_block(user_story, criteria)[0])
+    user = with_plain_words(user + checklist_block(user_story, criteria, context)[0])
     try:
         result, used_index, notes = llm.generate_json(keys, system, user, TestCaseList)
     except llm.NoKeysError:
@@ -1055,7 +1069,9 @@ def test_cases_run(
     except llm.BadOutputError as e:
         return _error_card(request, str(e))
     provider = get_provider(keys[used_index]["provider"])
-    merged, review = _with_principal_cases(user_story, criteria, result)
+    merged, review = _with_principal_cases(
+        user_story, criteria, result, context
+    )
     return templates.TemplateResponse(
         request,
         "_test_cases_result.html",
@@ -1070,10 +1086,10 @@ def test_cases_run(
 
 
 def _with_principal_cases(
-    story: str, criteria: list[Criterion], result: TestCaseList
+    story: str, criteria: list[Criterion], result: TestCaseList, context: str = ""
 ) -> tuple[TestCaseList, CaseReview]:
     """The AI's cases plus the ones it missed. Every count is then taken from this."""
-    review = review_test_cases(story, criteria, result)
+    review = review_test_cases(story, criteria, result, context)
     merged = TestCaseList(
         test_cases=list(result.test_cases) + list(review.added),
         summary=result.summary,
@@ -1331,6 +1347,7 @@ def test_cases_refine(
     instruction: str = Form(default=""),
     risks_json: str = Form(default="[]"),
     coverage_focus: list[str] = Form(default=[]),
+    context: str = Form(default=""),
 ) -> HTMLResponse:
     bad_input = "Please check the test cases and instruction."
     user_story = user_story.strip()
@@ -1382,7 +1399,7 @@ def test_cases_refine(
     else:
         asked = strengthen_instruction(depth)
     user = refine_user_text(base, current, criteria, asked)
-    user = with_plain_words(user + checklist_block(user_story, criteria)[0])
+    user = with_plain_words(user + checklist_block(user_story, criteria, context)[0])
     try:
         ai_result, used_index, notes = llm.generate_json(
             keys, system, user, TestCaseList
@@ -1429,7 +1446,7 @@ def test_cases_refine(
             current, proposed, [item.risk.id for item in asked_risks]
         )
     # Principal QA cases join the proposal, so they show as added in the diff.
-    proposed, _ = _with_principal_cases(user_story, criteria, proposed)
+    proposed, _ = _with_principal_cases(user_story, criteria, proposed, context)
     provider = get_provider(keys[used_index]["provider"])
     return templates.TemplateResponse(
         request,
@@ -2571,6 +2588,7 @@ def _ship_inputs(raw: dict) -> tuple[ShipInputs, list[str]]:
     return (
         ShipInputs(
             story=_ship_story(raw),
+            context=str(raw.get("context") or "")[:CONTEXT_LIMIT],
             story_analysis=_ship_part(
                 raw, "story_analysis", AmbiguityAnalysis.model_validate, ignored
             ),
@@ -2732,6 +2750,7 @@ class MatrixRuleBody(BaseModel):
     then_factor: str
     then_value: str
     reason: str = ""
+    source: str = "standard"
 
 
 class MatrixBody(BaseModel):
@@ -2776,6 +2795,7 @@ class MatrixBody(BaseModel):
                 then_factor=one.then_factor,
                 then_value=one.then_value,
                 reason=one.reason,
+                source="ai" if one.source == "ai" else "standard",
             )
             for one in self.rules
         ]

@@ -1,0 +1,209 @@
+id = "coupon"
+name = "Coupons and discounts"
+short = "Coupon"
+# A coupon is its own feature, not a part of paying: the code is checked, the
+# total changes, and both can be wrong without a card ever being touched.
+triggers = ["coupon", "coupons", "promo code", "promotion code", "discount code", "voucher", "vouchers", "gift code"]
+weak_triggers = ["discount", "promo", "% off"]
+exclude = []
+
+[[checks]]
+id = "code_case_spaces"
+title = "The code works in any capitals and with spaces around it"
+severity = "medium"
+why = "People paste codes out of emails. A trailing space is not a wrong code."
+covered_if = ["lowercase", "uppercase", "capital", "trailing space", "leading space", "trimmed", "spaces around", "case-insensitive", "case insensitive"]
+  [checks.test]
+  title = "A pasted code with spaces and small letters still works"
+  category = "Edge Case"
+  priority = "Medium"
+  pre_conditions = "The coupon SAVE20 is valid and the cart is above the minimum"
+  steps = ["Open the cart and paste ' save20 ' into the coupon box, spaces and all", "Apply it", "Look at the total and the message"]
+  expected_result = "The coupon is accepted, the discount is taken off the total, and no message about a wrong code is shown."
+  test_data = "code typed as ' save20 ' (two spaces, small letters)"
+
+[[checks]]
+id = "cart_drops_below_minimum"
+title = "The cart is edited below the minimum after the coupon is applied"
+severity = "high"
+why = "The check runs when the code is entered. Nothing runs when the cart changes afterwards, so the discount stays on an order that should not have it."
+covered_if = ["below the minimum", "under the minimum", "removes an item", "remove items", "edits the cart", "changes the cart", "after applying", "no longer qualifies", "discount is removed"]
+only_if = ["minimum", "at least", "more than", "orders of"]
+  [checks.test]
+  title = "Removing items after the coupon is applied takes the discount away"
+  category = "Edge Case"
+  priority = "High"
+  pre_conditions = "A cart worth more than the stated minimum and a valid coupon"
+  steps = ["Apply the coupon and note the new total", "Remove items until the cart is below the minimum", "Open the payment step and read the total"]
+  expected_result = "The discount is taken off again, or the shopper is told the coupon no longer applies; the amount asked for at payment matches what the screen says."
+  test_data = "cart of $60 reduced to $40 with the coupon still applied"
+
+[[checks]]
+id = "discount_bigger_than_total"
+title = "A discount bigger than the order never takes the total below zero"
+severity = "high"
+why = "A fixed or capped discount on a small order can end in a $0 or a negative total, and a negative total is money going the wrong way."
+covered_if = ["negative", "below zero", "less than zero", "zero total", "$0", "0.00", "bigger than the total", "more than the order"]
+  [checks.test]
+  title = "A discount worth more than the cart leaves a sensible total"
+  category = "Boundary"
+  priority = "High"
+  pre_conditions = "A coupon worth more than the cheapest item in the shop"
+  steps = ["Put one cheap item in the cart", "Apply the coupon", "Read the total and open the payment step"]
+  expected_result = "The total is zero or the smallest amount the shop allows, never below zero, and payment asks for the same amount the cart shows."
+  test_data = "cart of $5.00 with a coupon worth $30"
+
+[[checks]]
+id = "cents_rounding"
+title = "A percentage of an odd amount rounds the same way everywhere"
+severity = "high"
+why = "The cart rounds one way and the payment the other, and the shopper is charged a cent more than the screen promised."
+covered_if = ["rounding", "rounds", "rounded", "cent", "cents", "decimal", "0.5", "half a cent", "two decimal"]
+only_if = ["%", "percent"]
+  [checks.test]
+  title = "15% of $59.99 is the same number in the cart, at payment and on the receipt"
+  category = "Boundary"
+  priority = "High"
+  pre_conditions = "A 15% coupon and a cart of $59.99"
+  steps = ["Apply the coupon and write down the discount and the total", "Go to the payment step and write down the amount asked for", "Finish the order and open the receipt"]
+  expected_result = "The discount is the same amount in all three places, to the cent, and the three totals agree."
+  test_data = "cart=59.99, coupon=15%"
+
+[[checks]]
+id = "cap_boundary"
+title = "Orders just under, at and over the total where the cap starts"
+severity = "high"
+why = "A capped percentage stops growing at one order total. Nobody writes that total down, so nobody tests it."
+covered_if = ["cap", "capped", "maximum discount", "the cap starts", "up to", "never more than"]
+only_if = ["maximum", "up to", "cap"]
+  [checks.test]
+  title = "The discount stops growing where the cap starts"
+  category = "Boundary"
+  priority = "High"
+  pre_conditions = "A percentage coupon with a stated maximum discount"
+  steps = ["Work out the order total where the percentage equals the cap", "Order one cent under that total and note the discount", "Order exactly that total, then one cent over, and note each discount"]
+  expected_result = "The discount grows with the order until the cap and then stays at the cap; it is never more than the cap and never drops at the limit."
+  test_data = "three orders: one cent under the cap total, exactly it, one cent over"
+
+[[checks]]
+id = "one_coupon_replace"
+title = "A second coupon is refused or replaces the first, and the screen says which"
+severity = "medium"
+why = "Two coupons that quietly stack cost real money; one that quietly replaces the other costs the shopper's trust."
+covered_if = ["second coupon", "another coupon", "two coupons", "replaces", "stack", "stacking", "only one coupon"]
+only_if = ["one coupon", "only one", "single coupon"]
+  [checks.test]
+  title = "Entering a second coupon says what happened to the first"
+  category = "Negative"
+  priority = "Medium"
+  pre_conditions = "A cart with one coupon already applied"
+  steps = ["Enter a second valid coupon", "Read the message and the total", "Reload the page and read the total again"]
+  expected_result = "Either the second coupon is refused with a message naming the one already applied, or it replaces the first and the screen says so; only one discount is in the total, before and after the reload."
+  test_data = "coupons SAVE20 and SAVE10 on one order"
+
+[[checks]]
+id = "single_use_two_tabs"
+title = "The same single-use coupon in two tabs at the same moment"
+severity = "high"
+why = "Both tabs read \"unused\", both get the discount, and the shop pays twice for one coupon."
+covered_if = ["two tabs", "second tab", "at the same time", "same moment", "race", "concurrent", "twice"]
+only_if = ["once", "single-use", "single use", "one time"]
+  [checks.test]
+  title = "Two tabs applying one single-use coupon end with one discounted order"
+  category = "Edge Case"
+  priority = "High"
+  pre_conditions = "A single-use coupon that has not been used, and two tabs signed in as the same shopper"
+  steps = ["Fill a cart in each tab and apply the same coupon in both", "Press pay in the first tab, then within a second press pay in the second", "Open the order list and the coupon's usage record"]
+  expected_result = "Exactly one order carries the discount; the other is refused with a message about the coupon being used, and the coupon is recorded as used once."
+  test_data = "coupon ONCE50, two tabs, same account"
+
+[[checks]]
+id = "guest_reuse"
+title = "A guest cannot reuse a once-per-account coupon"
+severity = "high"
+why = "\"Once per account\" means nothing to a guest, so the same email orders again and again."
+covered_if = ["guest", "guests", "without an account", "not signed in", "same email", "again as a guest"]
+only_if = ["guest", "guests"]
+  [checks.test]
+  title = "A guest who already used the coupon is refused the second time"
+  category = "Negative"
+  priority = "High"
+  pre_conditions = "A once-per-account coupon already used by a guest order for shopper@example.com"
+  steps = ["Start a new guest checkout with shopper@example.com", "Enter the same coupon", "Read the message and the total"]
+  expected_result = "The coupon is refused with the same message a signed-in shopper would see, and the total has no discount."
+  test_data = "email shopper@example.com used twice as a guest"
+
+[[checks]]
+id = "expiry_exact_moment"
+title = "The coupon at one minute either side of its expiry"
+severity = "medium"
+why = "Expiry is usually a date, not a moment, so nobody agrees which minute is the last one."
+covered_if = ["23:59", "00:01", "midnight", "last minute", "expiry", "expires", "expired", "timezone"]
+only_if = ["expir"]
+  [checks.test]
+  title = "A coupon works at 23:59 on its last day and is refused at 00:01 the next"
+  category = "Boundary"
+  priority = "Medium"
+  pre_conditions = "A coupon whose last day is stated, and the shop's timezone"
+  steps = ["Set the clock to 23:59 on the last day in the shop's timezone and apply the coupon", "Set the clock to 00:01 the next day and apply it again", "Read both messages"]
+  expected_result = "The first is accepted and the second is refused with a message about expiry; both use the shop's timezone, not the browser's."
+  test_data = "last day 2030-01-31, shop timezone, two attempts"
+
+[[checks]]
+id = "removed_coupon_restores_total"
+title = "Removing the coupon puts the total back exactly"
+severity = "low"
+why = "A total that comes back a cent out is the kind of thing nobody notices until a customer does."
+covered_if = ["remove the coupon", "removes the coupon", "removed", "back to", "original total", "restores"]
+  [checks.test]
+  title = "The total after removing the coupon matches the total before it"
+  category = "Functional"
+  priority = "Medium"
+  pre_conditions = "A cart with a known total and a valid coupon"
+  steps = ["Write down the total before the coupon", "Apply the coupon, then remove it", "Compare the total with the one written down"]
+  expected_result = "The total is exactly what it was, to the cent, and no discount line is left on the order."
+  test_data = "cart of $59.99 with coupon SAVE20 applied and removed"
+
+[[risks]]
+title = "A cart edited after the coupon keeps a discount it no longer earns"
+category = "data"
+severity = 4
+likelihood = 4
+detectability = 4
+effect = "Orders ship below the minimum the shop set, and the loss only shows up in the month's numbers."
+cause = "The minimum is checked when the code is entered and never again."
+covered_if = ["below the minimum", "under the minimum", "remove items", "edits the cart", "after applying", "no longer qualifies", "discount is removed"]
+tested_by = ["cart_drops_below_minimum"]
+
+[[risks]]
+title = "A guest reuses a once-per-account coupon"
+category = "security"
+severity = 4
+likelihood = 4
+detectability = 3
+effect = "One coupon is used as many times as the shopper has patience for."
+cause = "The usage record hangs off the account, and a guest has none."
+covered_if = ["guest", "guests", "without an account", "same email", "again as a guest", "reuse"]
+tested_by = ["guest_reuse"]
+
+[[risks]]
+title = "A single-use coupon is used twice at the same moment"
+category = "data"
+severity = 4
+likelihood = 3
+detectability = 4
+effect = "Two orders carry a discount the shop meant to give once."
+cause = "Both requests read the coupon as unused before either marks it used."
+covered_if = ["two tabs", "at the same time", "same moment", "race", "concurrent", "twice"]
+tested_by = ["single_use_two_tabs"]
+
+[[risks]]
+title = "The discount rounds one way in the cart and the other at payment"
+category = "data"
+severity = 3
+likelihood = 3
+detectability = 4
+effect = "The shopper is charged a cent more than the screen promised, and the receipt proves it."
+cause = "The cart rounds the percentage and the payment service rounds the total."
+covered_if = ["rounding", "rounds", "cent", "cents", "two decimal", "the same amount"]
+tested_by = ["cents_rounding"]
