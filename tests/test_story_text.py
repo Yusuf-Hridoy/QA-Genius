@@ -19,9 +19,9 @@ def test_the_case_of_the_tag_does_not_matter() -> None:
         assert split_confidence(f"No retry limit {written}").level == "Low"
 
 
-def test_a_full_stop_after_the_tag_goes_too() -> None:
+def test_the_sentence_keeps_its_full_stop() -> None:
     said = split_confidence("Sessions are never ended [MEDIUM CONFIDENCE].")
-    assert said == Said("Sessions are never ended", "Medium")
+    assert said == Said("Sessions are never ended.", "Medium")
 
 
 def test_a_line_without_a_tag_is_left_alone() -> None:
@@ -30,10 +30,30 @@ def test_a_line_without_a_tag_is_left_alone() -> None:
     )
 
 
-def test_a_tag_in_the_middle_is_not_a_tag() -> None:
-    """Only a trailing tag is the model labelling its own answer."""
-    text = "The phrase [HIGH CONFIDENCE] appears in their copy"
-    assert split_confidence(text) == Said(text, "")
+def test_a_tag_in_the_middle_goes_as_well() -> None:
+    """Models drop the label mid-sentence too, and it reads as nonsense there."""
+    said = split_confidence("The limit [Confidence: HIGH] is never stated.")
+    assert said == Said("The limit is never stated.", "High")
+
+
+def test_every_shape_a_model_writes_the_label_in() -> None:
+    written = (
+        "No lockout limit [HIGH CONFIDENCE]",
+        "No lockout limit [Confidence: HIGH]",
+        "No lockout limit (confidence: high)",
+        "No lockout limit. Confidence: High.",
+    )
+    for line in written:
+        said = split_confidence(line)
+        assert said.level == "High", line
+        assert "confidence" not in said.text.lower(), line
+        assert said.text.startswith("No lockout limit"), line
+
+
+def test_the_sentence_before_a_bare_label_keeps_one_full_stop() -> None:
+    assert split_confidence("The code can be replayed. Confidence: High.") == Said(
+        "The code can be replayed.", "High"
+    )
 
 
 def test_confidence_is_not_invented_from_similar_words() -> None:

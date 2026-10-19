@@ -74,4 +74,5 @@ likelihood = 4
 detectability = 5
 effect = "The setting the user sees is not the one that was stored, and it flips back on the next page load."
 cause = "Each toggle fires its own request and a slower earlier save lands after a faster later one."
-covered_if = ["out of order", "race", "race condition", "rapid", "quick succession", "last write", "last value wins", "debounce"]
+covered_if = ["out of order", "race", "race condition", "rapid", "quickly", "quick succession", "several times", "last write", "last value", "last value wins", "debounce"]
+tested_by = ["rapid_toggles"]

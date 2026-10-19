@@ -92,3 +92,4 @@ detectability = 4
 effect = "The customer is charged twice for one basket and asks for a refund and an apology."
 cause = "The payment call carries no idempotency key, so a retry after a timeout is a new charge."
 covered_if = ["idempotent", "idempotency", "idempotency key", "double charge", "charged twice", "double click", "duplicate charge", "one charge", "charged once"]
+tested_by = ["double_click_pay"]

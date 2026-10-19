@@ -1015,9 +1015,9 @@
     }
   });
 
-  /* While a request runs, the button that started it says so: the label
-   * becomes the busy label and a spinner joins it. The width is pinned to
-   * what it was first, so the row never jumps as the word changes. */
+  /* While a request runs, the button that started it says so. What that
+   * looks like lives in busy.js, which the source card and the hand-written
+   * fetches use as well, so every button behaves the same way. */
   function busyButton(node) {
     if (!node || !node.tagName) {
       return null;
@@ -1032,34 +1032,21 @@
   }
 
   document.body.addEventListener("htmx:beforeRequest", function (event) {
-    var btn = busyButton(event.detail.elt);
-    if (!btn || btn.getAttribute("aria-busy") === "true") {
-      return;
-    }
-    btn.style.minWidth = Math.ceil(btn.getBoundingClientRect().width) + "px";
-    btn.setAttribute("aria-busy", "true");
-    var label = btn.querySelector(".btn-label");
-    var busy = btn.getAttribute("data-busy-label");
-    if (label && busy) {
-      btn.setAttribute("data-idle-label", label.textContent);
-      label.textContent = busy;
+    if (window.QAGBusy) {
+      window.QAGBusy.start(busyButton(event.detail.elt));
     }
   });
 
-  document.body.addEventListener("htmx:afterRequest", function (event) {
-    var btn = busyButton(event.detail.elt);
-    if (!btn) {
-      return;
+  /* Stop on the answer and on the error alike, and stop every button this
+   * click made busy: a source card's button starts the desk's own button,
+   * and the two have to go back to normal together. */
+  ["htmx:afterRequest", "htmx:responseError", "htmx:sendError", "htmx:timeout"].forEach(
+    function (name) {
+      document.body.addEventListener(name, function () {
+        if (window.QAGBusy) window.QAGBusy.stopAll();
+      });
     }
-    btn.removeAttribute("aria-busy");
-    btn.style.minWidth = "";
-    var label = btn.querySelector(".btn-label");
-    var idle = btn.getAttribute("data-idle-label");
-    if (label && idle !== null) {
-      label.textContent = idle;
-      btn.removeAttribute("data-idle-label");
-    }
-  });
+  );
 
   /* On a phone the rail is a scrolling strip. The desk you are on is scrolled
    * into view, so it is never half a word cut off at the edge. */

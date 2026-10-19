@@ -3,6 +3,7 @@
 import pytest
 
 from qagenius.shadow_qa import packs as packs_module
+from qagenius.shadow_qa.detect import mentions
 from qagenius.shadow_qa.packs import (
     PACKS_DIR,
     SEVERITIES,
@@ -251,3 +252,70 @@ def test_the_permissions_pack_splits_its_triggers_as_the_brief_says():
         "forbidden", "access control", "privileges",
     }
     assert set(pack.weak_triggers) == {"admin", "admins", "role", "roles"}
+
+
+def test_a_risk_can_only_name_a_check_its_own_pack_has(tmp_path):
+    body = GOOD_PACK + """
+[[risks]]
+title = "Something goes wrong"
+category = "security"
+severity = 4
+likelihood = 3
+detectability = 3
+effect = "People lose work."
+cause = "Nobody checked."
+covered_if = ["demo word"]
+tested_by = ["not_a_check"]
+"""
+    with pytest.raises(PackError) as error:
+        read_pack(_write(tmp_path, body))
+    assert "not_a_check" in str(error.value)
+
+
+def test_every_risk_shares_its_words_with_the_check_that_tests_it():
+    """A risk whose own test case it cannot recognise reads as untested.
+
+    That is the bug this guard exists for: QA-Genius adds the check's test
+    case, the risk's words never turn up in it, and Risk radar says "no test
+    for this yet" about the test it wrote itself.
+    """
+    for pack in load_packs():
+        checks = {check.short_id: check for check in pack.checks}
+        for risk in pack.risks:
+            for named in risk.tested_by:
+                check = checks[named]
+                shared = {word.lower() for word in risk.covered_if} & {
+                    word.lower() for word in check.covered_if
+                }
+                assert shared, f"{pack.id}: {risk.title!r} and {named!r} share no word"
+                written = check.test
+                text = " ".join(
+                    [
+                        written.title,
+                        written.pre_conditions,
+                        *written.steps,
+                        written.expected_result,
+                        written.test_data,
+                    ]
+                )
+                assert any(mentions(text, word) for word in risk.covered_if), (
+                    f"{pack.id}: {risk.title!r} would not recognise the test "
+                    f"{named!r} writes for it"
+                )
+
+
+def test_every_pack_risk_that_has_a_check_names_it():
+    """The link is data, not a guess, so a new risk has to say which check."""
+    linked = {
+        ("account_deletion", "Deletion leaves orphaned data behind"): False,
+        ("file_upload", "A file at the size limit exhausts server memory while it is processed"): False,
+        ("login", "Response time differs between a known and an unknown email"): False,
+        ("two_factor", "Verification codes are not rate limited"): False,
+    }
+    for pack in load_packs():
+        for risk in pack.risks:
+            expected = linked.get((pack.id, risk.title), True)
+            assert bool(risk.tested_by) == expected, (
+                f"{pack.id}: {risk.title!r} — a risk with no check of its own "
+                "belongs in this list, and one with a check must name it"
+            )

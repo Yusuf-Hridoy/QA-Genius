@@ -2445,9 +2445,9 @@ SHIP_STATUS_TONES = {
 }
 SHIP_STATUS_LABELS = {
     "pass": "fine",
-    "warn": "have a look",
+    "warn": "check this",
     "fail": "needs fixing",
-    "accepted": "accepted risk",
+    "accepted": "accepted",
     "not_checked": "not done yet",
 }
 STORY_IN_BANNER = 160
@@ -2526,6 +2526,10 @@ def _ship_acceptances(raw: dict, ignored: list[str]) -> dict[str, str]:
 
 def _ship_inputs(raw: dict) -> tuple[ShipInputs, list[str]]:
     ignored: list[str] = []
+    # Ship check quotes the same sentences the story page shows, and a model
+    # writes its confidence in every shape it can think of. The story page and
+    # this share one helper, so a tag never reaches a detail line here either.
+    raw = strip_confidence_deep(raw)
 
     suite = _ship_part(
         raw, "test_cases", lambda part: _SuiteBody.model_validate(part), ignored
@@ -2602,6 +2606,34 @@ def ship_page(request: Request) -> HTMLResponse:
                 "it into one decision you can defend. Nothing is sent to an AI."
             ),
             "eyebrow": "Ship check",
+        },
+    )
+
+
+RING_VALUES = (0, 7, 44, 100)
+RING_TONES = {0: "bad", 7: "bad", 44: "warn", 100: "ok"}
+
+
+@app.get("/dev/rings", response_class=HTMLResponse)
+def dev_rings(request: Request) -> HTMLResponse:
+    """A check page: every round score at the values that used to overflow.
+
+    Not a desk and not in the rail. It exists so the number inside the circle
+    can be seen at 1366px and at 390px without running a desk first.
+    """
+    return templates.TemplateResponse(
+        request,
+        "dev_rings.html",
+        {
+            "rings": [
+                {
+                    "pct": value,
+                    "tone": RING_TONES[value],
+                    "label": "tested",
+                    "title": f"{value} percent of this is tested",
+                }
+                for value in RING_VALUES
+            ],
         },
     )
 

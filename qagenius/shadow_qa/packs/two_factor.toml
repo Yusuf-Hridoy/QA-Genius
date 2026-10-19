@@ -104,7 +104,8 @@ likelihood = 3
 detectability = 4
 effect = "Anyone who reads one code can sign in again until the window closes."
 cause = "The code is checked against the time-based algorithm but never marked as used."
-covered_if = ["replay", "replayed", "used twice", "reuse the code", "one-time", "single use", "already used"]
+covered_if = ["replay", "replayed", "same code", "used twice", "second time", "already used", "reuse", "reuse the code", "one-time", "single use"]
+tested_by = ["code_reuse"]
 
 [[risks]]
 title = "Verification codes are not rate limited"

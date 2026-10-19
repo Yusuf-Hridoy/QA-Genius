@@ -103,13 +103,18 @@ def _case_words(case: TestCase) -> str:
 
 
 def _by_words(risk: FailureMode, cases: list[TestCase]) -> list[TestCase]:
-    """Cases a senior-tester risk names its own words in.
+    """Cases a risk names its own words in.
 
     The AI guesses which test covers which risk and is checked on shared
     words. A risk from the rule packs does not guess: it was written with the
     words that mean the test exists, so finding one of them is the match.
+
+    An AI risk carries those words only when it turned out to be the same
+    risk as one of the packs' and the reviewer lent them to it, so a risk
+    that swallowed a pack risk can still be matched to the test that covers
+    them both.
     """
-    if str(risk.source or "") != PRINCIPAL_SOURCE or not risk.covered_if:
+    if not risk.covered_if:
         return []
     found = []
     for case in cases:

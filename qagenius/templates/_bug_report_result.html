@@ -7,7 +7,7 @@
    so they lead instead of sitting in two separate cards of equal weight. #}
 <div class="verdict" id="bug-report-card" style="--pct:{{ score }};--ring-color:var(--{{ 'ok' if score >= 75 else ('warn' if score >= 50 else 'bad') }}-line)">
   <div class="score-ring" role="img" aria-label="Report quality {{ score }} percent">
-    <span class="score-num">{{ score }}<span style="font-size:16px">%</span></span>
+    <span class="score-num">{{ score }}<span class="pct">%</span></span>
     <span class="score-of">quality</span>
   </div>
   <div>

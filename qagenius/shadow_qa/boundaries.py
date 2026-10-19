@@ -14,8 +14,6 @@ from qagenius.test_cases import Criterion
 
 # More than this and the checklist stops being a glance.
 MAX_BOUNDARIES = 12
-# How far apart a number and its unit may sit and still be one mention.
-_NEAR = 28
 
 KINDS = ("count", "size", "duration", "length", "digits")
 
@@ -224,7 +222,107 @@ def find_boundaries(criteria: list[Criterion]) -> list[Boundary]:
 # ──────────────────────────────────────────────────────────────────────────────
 
 # What a tester writes instead of "5.01 MB".
-_OVER_SIZE = ("1 byte over", "one byte over", "byte over the limit", "byte above")
+_OVER_SIZE = (
+    "1 byte over", "one byte over", "byte over the limit", "byte above",
+    "+1 byte", "and 1 byte", "and one byte", "1 byte more", "one byte more",
+    "byte past the limit", "byte too many", "1 byte larger", "one byte larger",
+)
+
+# "four attempts" is "4 attempts" said out loud.
+_WORD_NUMBERS = {
+    "zero": 0.0, "one": 1.0, "two": 2.0, "three": 3.0, "four": 4.0,
+    "five": 5.0, "six": 6.0, "seven": 7.0, "eight": 8.0, "nine": 9.0,
+    "ten": 10.0, "eleven": 11.0, "twelve": 12.0, "thirteen": 13.0,
+    "fourteen": 14.0, "fifteen": 15.0, "sixteen": 16.0, "seventeen": 17.0,
+    "eighteen": 18.0, "nineteen": 19.0, "twenty": 20.0, "thirty": 30.0,
+    "forty": 40.0, "fifty": 50.0, "sixty": 60.0, "ninety": 90.0,
+    "hundred": 100.0,
+}
+
+# One spelling per quantity, so "5 MB", "5.00 megabytes" and "5120 KB" are
+# one number and "14 min", "14 minutes" and "14:00" are another.
+_BYTES = {"B": 1.0, "KB": 1024.0, "MB": 1024.0**2, "GB": 1024.0**3}
+_SECONDS = {
+    "ms": 0.001, "seconds": 1.0, "minutes": 60.0, "hours": 3600.0,
+    "days": 86400.0, "weeks": 604800.0,
+}
+# The unit a value is counted in -> the family it is measured in.
+_FAMILY = {name: "bytes" for name in _BYTES}
+_FAMILY.update({name: "seconds" for name in _SECONDS})
+
+# Written as a word or as digits, with or without a space or hyphen before
+# the unit: "5MB", "5 MB", "5-digit", "four attempts".
+_AMOUNT = r"(?<![\w.])(\d+(?:\.\d+)?|" + "|".join(sorted(_WORD_NUMBERS, key=len, reverse=True)) + r")"
+_JOIN = r"[\s-]*"
+
+
+def _unit_group(units) -> str:
+    return r"(" + "|".join(sorted(units, key=len, reverse=True)) + r")\b"
+
+
+_SAID_SIZE = re.compile(
+    _AMOUNT + _JOIN + _unit_group(list(_SIZE_UNITS) + ["byte", "bytes"]),
+    re.IGNORECASE,
+)
+_SAID_DURATION = re.compile(_AMOUNT + _JOIN + _unit_group(_DURATION_UNITS), re.IGNORECASE)
+_SAID_LENGTH = re.compile(_AMOUNT + _JOIN + _unit_group(_LENGTH_UNITS), re.IGNORECASE)
+_SAID_DIGITS = re.compile(_AMOUNT + _JOIN + r"(digits?)\b", re.IGNORECASE)
+_SAID_COUNT = re.compile(
+    _AMOUNT
+    + r"\s+((?:[A-Za-z][A-Za-z-]*\s+){0,3}?)"
+    + _unit_group(_COUNT_UNITS),
+    re.IGNORECASE,
+)
+# A quoted code says its own length: '12345' is five digits.
+_QUOTED_CODE = re.compile(r"[\"'‘’“”](\d{2,})[\"'‘’“”]")
+# "locked for 14:00" is fourteen minutes.
+_CLOCK = re.compile(r"(?<![\w:.])(\d{1,3}):([0-5]\d)(?![\d:])")
+
+
+def _amount_of(written: str) -> float | None:
+    word = written.strip().lower()
+    if word in _WORD_NUMBERS:
+        return _WORD_NUMBERS[word]
+    try:
+        return float(word)
+    except ValueError:
+        return None
+
+
+def _one_quantity(amount: float, unit: str) -> tuple[str, float]:
+    """The quantity in the one spelling everything is compared in."""
+    family = _FAMILY.get(unit)
+    if family == "bytes":
+        return ("bytes", amount * _BYTES[unit])
+    if family == "seconds":
+        return ("seconds", amount * _SECONDS[unit])
+    return (unit, amount)
+
+
+def quantities(text: str) -> list[tuple[str, float]]:
+    """Every quantity this text states, however it chose to write it."""
+    said: list[tuple[str, float]] = []
+
+    def take(pattern, units, unit_group: int) -> None:
+        for match in pattern.finditer(text):
+            amount = _amount_of(match.group(1))
+            if amount is None:
+                continue
+            written = match.group(unit_group).lower()
+            said.append(_one_quantity(amount, units.get(written, written)))
+
+    take(_SAID_SIZE, {**_SIZE_UNITS, "byte": "B", "bytes": "B"}, 2)
+    take(_SAID_DURATION, _DURATION_UNITS, 2)
+    take(_SAID_LENGTH, _LENGTH_UNITS, 2)
+    take(_SAID_DIGITS, {"digit": "digits", "digits": "digits"}, 2)
+    take(_SAID_COUNT, _COUNT_UNITS, 3)
+    for match in _QUOTED_CODE.finditer(text):
+        said.append(("digits", float(len(match.group(1)))))
+    for match in _CLOCK.finditer(text):
+        said.append(
+            _one_quantity(float(match.group(1)) + float(match.group(2)) / 60.0, "minutes")
+        )
+    return said
 
 
 def case_text(case: TestCase) -> str:
@@ -241,27 +339,41 @@ def case_text(case: TestCase) -> str:
     )
 
 
-def _value_in(value: str, text: str) -> bool:
-    """The number and its unit, close enough together to be one statement."""
+def _as_quantity(value: str) -> tuple[str, float] | None:
+    """One of a boundary's own values -- "4.99 MB" -- in the same spelling."""
     number, _, unit = value.partition(" ")
-    if not unit:
+    amount = _amount_of(number)
+    if amount is None or not unit:
+        return None
+    return _one_quantity(amount, unit)
+
+
+def _same(left: float, right: float) -> bool:
+    return abs(left - right) <= max(abs(right), 1.0) * 1e-9
+
+
+def _value_in(value: str, said: list[tuple[str, float]]) -> bool:
+    """Did the cases state this quantity, in any of the ways people write it?"""
+    wanted = _as_quantity(value)
+    if wanted is None:
         return False
-    number_re = re.compile(r"(?<![\d.])" + re.escape(number) + r"(?![\d])")
-    unit_re = re.compile(r"(?<![\w-])" + re.escape(unit.rstrip("s")), re.IGNORECASE)
-    spots = [match.start() for match in number_re.finditer(text)]
-    if not spots:
-        return False
-    units = [match.start() for match in unit_re.finditer(text)]
-    return any(abs(spot - other) <= _NEAR for spot in spots for other in units)
+    unit, amount = wanted
+    return any(other == unit and _same(number, amount) for other, number in said)
 
 
 def boundary_covered(b: Boundary, cases: list[TestCase]) -> list[str]:
-    """Which of the boundary's values appear in at least one of the cases."""
+    """Which of the boundary's values the cases state, however they spell it.
+
+    A tester writes "a 5-digit code '12345'", "5.00 megabytes" or "four
+    attempts" and means the value this boundary asks for. Reading the number
+    only as it was written here is how a limit test gets added twice.
+    """
     text = " \n ".join(case_text(case) for case in cases or [])
+    said = quantities(text)
     lowered = text.lower()
     covered = []
     for index, value in enumerate(b.values):
-        if _value_in(value, text):
+        if _value_in(value, said):
             covered.append(value)
         elif b.kind == "size" and index == 2 and any(one in lowered for one in _OVER_SIZE):
             covered.append(value)

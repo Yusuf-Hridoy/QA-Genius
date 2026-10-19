@@ -3,6 +3,7 @@
 import time
 
 from tests.factories import (
+    BIG_STORY,
     LOCKOUT_CRITERIA,
     LOCKOUT_STORY,
     PROFILE_CRITERIA,
@@ -184,6 +185,60 @@ def test_an_uncovered_boundary_becomes_one_case_listing_the_missing_values():
     assert boundary_cases[0].traceability == "AC-1"
 
 
+def test_no_boundary_case_is_added_when_the_ai_already_wrote_the_values():
+    """The AI's own words for the limit count, whichever way it wrote them."""
+    criteria = number_criteria(
+        [
+            "Enabling two-factor shows a 6-digit verification code step",
+            "An avatar must be a JPEG, PNG or WebP image under 5MB",
+        ]
+    )
+    written = suite(
+        case(
+            case_id="TC-011",
+            title="Verification codes of the wrong length are refused",
+            steps=[
+                "Enter a 5-digit code '12345'",
+                "Enter the correct code '123456'",
+                "Enter a 7-digit code '1234567'",
+            ],
+            expected_result="Only the six-digit code is accepted.",
+        ),
+        case(
+            case_id="TC-012",
+            title="An avatar at the size limit",
+            steps=[
+                "Upload an avatar of 4.99 MB",
+                "Upload an avatar of exactly 5.00 megabytes",
+                "Upload an avatar of 5.00 megabytes and 1 byte",
+            ],
+            expected_result="The first two are saved and the third is refused.",
+        ),
+    )
+    review = review_test_cases(BIG_STORY, criteria, written)
+    assert [one for one in review.added if "pack:boundary" in one.tags] == []
+
+
+def test_only_the_missing_value_is_asked_for_and_named():
+    criteria = number_criteria(["An avatar must be an image under 5MB"])
+    written = suite(
+        case(
+            case_id="TC-001",
+            title="An avatar at the size limit",
+            steps=["Upload 4.99 MB", "Upload exactly 5 MB"],
+            expected_result="Both are saved.",
+        )
+    )
+    review = review_test_cases(BIG_STORY, criteria, written)
+    added = [one for one in review.added if "pack:boundary" in one.tags]
+    assert len(added) == 1
+    text = " ".join([added[0].title, added[0].test_data, *added[0].steps])
+    assert "5.01 MB" in text
+    assert "4.99 MB" not in text
+    # "Data to use" is the card's own label; the value says itself.
+    assert added[0].test_data == "5.01 MB"
+
+
 def test_the_ai_cases_are_never_modified():
     original = case(case_id="TC-001")
     before = original.model_dump()
@@ -338,6 +393,21 @@ def test_a_risk_the_ai_already_named_is_not_added_again():
     )
     added = review_risks(LOCKOUT_STORY, LOCKOUT_CRITERIA, analysis)
     assert not any("reveals whether an email" in one.title for one in added)
+
+
+def test_a_differently_worded_duplicate_is_still_one_risk():
+    """R9 and R2 of the real run: one problem, two names, two words in common."""
+    ai = _risk("OAuth account linking email collision takeover")
+    analysis = RiskAnalysis(failure_modes=[ai])
+    story = (
+        "As a registered user, I want to link my Google or GitHub account "
+        "so that I can sign in with either."
+    )
+    added = review_risks(story, [], analysis)
+    assert not any("takes over an existing account" in one.title for one in added)
+    # The risk that stayed carries the words that mean a test reaches it.
+    assert "same email" in ai.covered_if
+    assert "takeover" in ai.covered_if
 
 
 def test_near_duplicate_titles_are_skipped():

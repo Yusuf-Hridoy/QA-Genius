@@ -6,7 +6,7 @@
 {% endif %}
 <div class="verdict" style="--pct:{{ (covered / report.counts.total * 100) | round | int if report.counts.total else 0 }};--ring-color:var(--{{ 'ok' if not report.counts.untested_high else 'bad' }}-line)">
   <div class="score-ring">
-    <span class="score-num">{{ (covered / report.counts.total * 100) | round | int if report.counts.total else 0 }}<span style="font-size:16px">%</span></span>
+    <span class="score-num">{{ (covered / report.counts.total * 100) | round | int if report.counts.total else 0 }}<span class="pct">%</span></span>
     <span class="score-of">tested</span>
   </div>
   <div>
@@ -34,7 +34,11 @@
       <tbody>
         {% for row in heat_rows %}
         <tr>
-          <th class="heat-axis" scope="row">S{{ row.severity }}</th>
+          {# The words, not initials. Below 420px there is only room for the
+             short form, and the full one stays in the label a reader hears. #}
+          <th class="heat-axis" scope="row" aria-label="Bad {{ row.severity }}">
+            <span class="axis-long">Bad {{ row.severity }}</span><span class="axis-short" aria-hidden="true">B{{ row.severity }}</span>
+          </th>
           {% for cell in row.cells %}
           <td class="heat-cell {{ cell.tone }}{% if cell.ids %} has-risk{% endif %}"
               data-cell="{{ cell.severity }}-{{ cell.likelihood }}"
@@ -55,7 +59,9 @@
         {% endfor %}
         <tr>
           <th class="heat-axis"></th>
-          {% for likelihood in [1, 2, 3, 4, 5] %}<th class="heat-axis">L{{ likelihood }}</th>{% endfor %}
+          {% for likelihood in [1, 2, 3, 4, 5] %}<th class="heat-axis" aria-label="Likely {{ likelihood }}">
+            <span class="axis-long">Likely {{ likelihood }}</span><span class="axis-short" aria-hidden="true">L{{ likelihood }}</span>
+          </th>{% endfor %}
         </tr>
       </tbody>
     </table>
@@ -115,9 +121,16 @@
       {% endif %}
       <details>
         <summary>Why these scores</summary>
+        {# A risk from QA-Genius's own rules has one reason for all three
+           numbers, so it says it once instead of three times. #}
+        {% if item.risk.source == "principal-qa" %}
+        <p class="small"><strong>How bad {{ item.risk.severity }} · how likely {{ item.risk.likelihood }} · how hard to notice {{ item.risk.detectability }}</strong>
+          — {{ item.risk.severity_reason or "Typical scores for this kind of problem." }}</p>
+        {% else %}
         <p class="small"><strong>How bad {{ item.risk.severity }}</strong> — {{ item.risk.severity_reason or "no reason given" }}</p>
         <p class="small"><strong>How likely {{ item.risk.likelihood }}</strong> — {{ item.risk.likelihood_reason or "no reason given" }}</p>
         <p class="small"><strong>How hard to notice {{ item.risk.detectability }}</strong> — {{ item.risk.detectability_reason or "no reason given" }}</p>
+        {% endif %}
         {% if item.risk.test_idea %}
         <p class="small"><strong>Test idea:</strong> {{ item.risk.test_idea }}</p>
         {% endif %}
@@ -131,7 +144,11 @@
             {% endfor %}
           </div>
         </div>
+        {% if item.risk.source == "principal-qa" %}
+        <p class="muted small">These scores come from QA-Genius's testing rules. Change any of them to your own.</p>
+        {% else %}
         <p class="muted small">These scores are the AI's guess. Change any of them to your own.</p>
+        {% endif %}
       </details>
     </div>
     {% endfor %}

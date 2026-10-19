@@ -75,4 +75,5 @@ likelihood = 3
 detectability = 4
 effect = "A session the user believes is gone keeps working on some servers for as long as the cache lives."
 cause = "Revocation writes to the database but each server keeps its own in-memory session cache."
-covered_if = ["cache", "cached", "every server", "all servers", "other servers", "immediately", "propagated", "propagation", "propagates", "still accepted", "token is rejected"]
+covered_if = ["cache", "cached", "every server", "all servers", "other servers", "immediately", "propagated", "propagation", "propagates", "still accepted", "token is rejected", "401", "no longer accepted"]
+tested_by = ["revoked_token_refused"]

@@ -37,6 +37,9 @@ EXAMPLE = 'button:has-text("Load example")'
 # Ship check comes first: its Load example button is part of the empty
 # state, and every later example writes a run into sessionStorage.
 SHOTS: list[tuple[str, str, str | None]] = [
+    # The rings at 0, 7, 44 and 100 percent: the number has to sit inside the
+    # circle at both widths, so this one is shot before any desk runs.
+    ("rings", "/dev/rings", None),
     ("ship-check-example", "/ship", EXAMPLE),
     ("story-empty", "/requirements/story", None),
     ("story-example", "/requirements/story", "#load-example"),

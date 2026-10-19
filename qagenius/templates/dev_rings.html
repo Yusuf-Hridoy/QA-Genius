@@ -1,0 +1,28 @@
+{# A check page, not a desk: every ring at the values that used to overflow.
+   The screenshot script shoots it at 1366px and at 390px, light and dark, so
+   "100%" inside the circle is something anyone can see for themselves. #}
+{% extends "base.html" %}
+{% block title %}Rings — QA-Genius{% endblock %}
+{% block top_title %}Rings{% endblock %}
+{% block content %}
+<div class="page-head">
+  <span class="eyebrow">Check page</span>
+  <h1>Every ring, every number</h1>
+  <p class="lede">The number and its sign have to sit inside the circle at
+    every width, in light and in dark. Nothing here calls an AI.</p>
+</div>
+{% for ring in rings %}
+<div class="verdict" style="--pct:{{ ring.pct }};--ring-color:var(--{{ ring.tone }}-line)">
+  <div class="score-ring" role="img" aria-label="{{ ring.label }} {{ ring.pct }} percent">
+    <span class="score-num">{{ ring.pct }}<span class="pct">%</span></span>
+    <span class="score-of">{{ ring.label }}</span>
+  </div>
+  <div>
+    <span class="pill {{ ring.tone }}">{{ ring.pct }}%</span>
+    <h2>{{ ring.title }}</h2>
+    <p>The ring is {{ ring.pct }}% full. The number keeps one width per digit,
+      the sign is smaller than the number, and neither wraps.</p>
+  </div>
+</div>
+{% endfor %}
+{% endblock %}

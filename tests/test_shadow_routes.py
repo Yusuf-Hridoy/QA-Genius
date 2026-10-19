@@ -1,6 +1,7 @@
 """Shadow QA inside the real routes: same click, one AI call, no extra step."""
 
 import json
+import re
 from pathlib import Path
 
 from fastapi.testclient import TestClient
@@ -9,6 +10,7 @@ import main
 from qagenius import llm
 from qagenius.models import AmbiguityAnalysis, FailureMode, RiskAnalysis
 from tests.factories import (
+    BIG_STORY,
     LOCKOUT_CRITERIA,
     LOCKOUT_STORY,
     PROFILE_STORY,
@@ -51,9 +53,24 @@ def test_the_profile_story_shows_the_epic_banner(monkeypatch) -> None:
     assert "pq-epic" in body
     assert "This story is really" in body
     assert body.count('class="pill warn plain"') >= 7
-    assert "Test cases will be shallow" in body
+    assert "This is too much for one story" in body
     # Same click, still exactly one AI call.
     assert len(calls) == 1
+
+
+def test_the_big_story_names_every_feature_it_counts(monkeypatch) -> None:
+    """The number in the title and the pills under it are one list."""
+    monkeypatch.setattr(llm, "generate_json", _fake_story([]))
+    response = client.post(
+        "/requirements/story/run",
+        data={"user_story": BIG_STORY},
+        headers=KEYS_HEADER,
+    )
+    body = response.text
+    counted = re.search(r"This story is really (\d+) features", body)
+    assert counted, body
+    assert body.count('class="pill warn plain"') == int(counted.group(1))
+    assert ">Two-factor</span>" in body
 
 
 def test_the_banner_sits_above_the_score(monkeypatch) -> None:
@@ -372,6 +389,15 @@ def test_principal_qa_risks_are_added_scored_and_labelled(monkeypatch) -> None:
     # Scored and numbered like every other risk.
     assert "Risk score " in body
     assert "R2" in body
+
+
+def test_a_senior_tester_risk_says_where_its_scores_come_from(monkeypatch) -> None:
+    """They are not a guess, and the three reasons were one sentence apart."""
+    monkeypatch.setattr(llm, "generate_json", _fake_risks([]))
+    body = client.post("/risks/run", data=RISK_FORM, headers=KEYS_HEADER).text
+    assert "These scores come from QA-Genius's testing rules." in body
+    assert "Typical scores for this kind of problem." in body
+    assert "A senior tester's rule" not in body
 
 
 def test_a_risk_the_ai_already_named_is_not_doubled(monkeypatch) -> None:

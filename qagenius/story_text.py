@@ -9,12 +9,25 @@ criteria exist.
 import re
 from typing import NamedTuple
 
-# Models end a line with "[HIGH CONFIDENCE]" (any case, sometimes before the
-# full stop). The words belong to the sentence; the tag does not.
+# Models label their own confidence in every shape they can think of:
+# "[HIGH CONFIDENCE]", "[Confidence: HIGH]", "(confidence: high)" and a bare
+# "Confidence: High." They do it at the end of a line and in the middle of
+# one. The words belong to the sentence; the tag never does.
+_LEVEL = r"high|medium|low"
 _CONFIDENCE = re.compile(
-    r"\s*\[\s*(high|medium|low)\s+confidence\s*\]\s*[.;,]?\s*$",
+    r"\s*(?:"
+    rf"\[\s*(?:confidence\s*[:=-]?\s*(?:{_LEVEL})|(?:{_LEVEL})\s+confidence)\s*\]"
+    rf"|\(\s*(?:confidence\s*[:=-]?\s*(?:{_LEVEL})|(?:{_LEVEL})\s+confidence)\s*\)"
+    rf"|(?<![\w-])confidence\s*[:=-]\s*(?:{_LEVEL})(?![\w-])"
+    r")",
     re.IGNORECASE,
 )
+_FOUND_LEVEL = re.compile(_LEVEL, re.IGNORECASE)
+# What is left after a tag comes out: a space in front of the full stop, the
+# sentence's own full stop followed by the tag's, two spaces mid-sentence.
+_SPACE_BEFORE_STOP = re.compile(r"\s+([.,;:!?])")
+_DOUBLED_STOP = re.compile(r"([.!?])\s*[.,;:]+")
+_RUN_OF_SPACES = re.compile(r"\s{2,}")
 
 LEVELS: tuple[str, ...] = ("High", "Medium", "Low")
 
@@ -26,13 +39,29 @@ class Said(NamedTuple):
     level: str  # "High", "Medium", "Low", or "" when nothing was tagged
 
 
+def _tidy(text: str) -> str:
+    """The sentence after a tag was cut out of it, with its own stop kept."""
+    text = _RUN_OF_SPACES.sub(" ", text)
+    text = _SPACE_BEFORE_STOP.sub("\\1", text)
+    text = _DOUBLED_STOP.sub("\\1", text)
+    return text.strip()
+
+
 def split_confidence(value: object) -> Said:
-    """The line without its trailing confidence tag, plus the level."""
+    """The line with every confidence tag cut out of it, plus the level.
+
+    A tag at the end and a tag mid-sentence both go. The level comes from the
+    last one, which is the one a model means when it writes two.
+    """
     text = "" if value is None else str(value)
-    match = _CONFIDENCE.search(text)
-    if match is None:
+    found = list(_CONFIDENCE.finditer(text))
+    if not found:
         return Said(text.strip(), "")
-    return Said(text[: match.start()].strip(), match.group(1).capitalize())
+    level = _FOUND_LEVEL.search(found[-1].group(0))
+    return Said(
+        _tidy(_CONFIDENCE.sub(" ", text)),
+        level.group(0).capitalize() if level else "",
+    )
 
 
 def strip_confidence(value: object) -> str:

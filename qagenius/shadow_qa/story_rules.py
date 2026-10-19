@@ -7,14 +7,16 @@ gets seven shallow test cases, and nobody notices until the sprint is over.
 import re
 from dataclasses import dataclass, field
 
-from qagenius.shadow_qa.detect import detect_packs, mentions, story_text
+from qagenius.shadow_qa.detect import detect_hits, mentions, phrase_pattern, story_text
 
 # Any one of these makes the story an epic.
 EPIC_PACKS = 5
 EPIC_CAPABILITIES = 6
 EPIC_CRITERIA = 10
-# More features than this in the sentence and the pill row stops being readable.
-MAX_FEATURE_PILLS = 10
+# More features than this in the sentence and the pill row stops being
+# readable. Past it the row keeps this many and counts the rest, so the
+# number in the title and the names under it always come from one list.
+MAX_FEATURE_PILLS = 12
 
 NEGATIVE_WORDS = (
     "invalid", "error", "errors", "reject", "rejects", "rejected", "fail",
@@ -39,6 +41,8 @@ class StoryNote:
     advice: str = ""
     # The epic warning shows these as pills; every other note leaves it empty.
     features: tuple[str, ...] = field(default=())
+    # Features past the pill row, counted so the row can say "and 3 more".
+    more: int = 0
 
 
 def count_capabilities(story: str) -> int:
@@ -56,8 +60,8 @@ def count_capabilities(story: str) -> int:
 
 
 _SHALLOW = (
-    "Test cases will be shallow. Split it first, or continue knowing depth "
-    "will suffer."
+    "This is too much for one story. Tests for each part will be thin. "
+    "Split it first, or carry on knowing that."
 )
 
 
@@ -65,9 +69,13 @@ def _epic_note(features: list[str], capabilities: int, criteria: int) -> StoryNo
     """The warning, worded by whichever rule caught the story."""
     shown = features[:MAX_FEATURE_PILLS]
     if features:
+        # The count and the names are one list: the title says how many were
+        # found, the row shows every one of them, and only a row too long to
+        # read keeps the first twelve and counts the rest.
+        more = len(features) - len(shown)
         listed = ", ".join(shown)
-        if len(features) > len(shown):
-            listed += f", and {len(features) - len(shown)} more"
+        if more:
+            listed += f", and {more} more"
         return StoryNote(
             level="warn",
             title=f"This story is really {len(features)} features",
@@ -75,6 +83,7 @@ def _epic_note(features: list[str], capabilities: int, criteria: int) -> StoryNo
             advice=_SHALLOW,
             epic=True,
             features=tuple(shown),
+            more=more,
         )
     if capabilities >= EPIC_CAPABILITIES:
         return StoryNote(
@@ -97,12 +106,26 @@ def _epic_note(features: list[str], capabilities: int, criteria: int) -> StoryNo
     )
 
 
+def _said_at(text: str, words: tuple[str, ...] | list[str]) -> int:
+    """Where in the text the first of these words turns up."""
+    spots = [
+        found.start()
+        for word in words
+        if (found := phrase_pattern(word).search(text)) is not None
+    ]
+    return min(spots) if spots else len(text)
+
+
 def review_story(story: str, criteria: list[str]) -> list[StoryNote]:
     """What a principal QA would say about this story. No AI, no key."""
     story = str(story or "")
     texts = [str(one or "") for one in (criteria or []) if str(one or "").strip()]
     whole = story_text(story, texts)
-    packs = [pack for pack, _ in detect_packs(whole, story)]
+    # Reading order, not pack order: the pills then follow the sentence, so a
+    # reader can check them off against the story as they go. The story comes
+    # first in `whole`, so what it named out loud leads anyway.
+    hits = sorted(detect_hits(whole, story), key=lambda hit: _said_at(whole, hit.triggers))
+    packs = [hit.pack for hit in hits]
     features = [pack.short for pack in packs]
 
     notes: list[StoryNote] = []

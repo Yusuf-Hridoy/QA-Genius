@@ -540,6 +540,7 @@
     var generate = el("button", "btn btn-primary");
     generate.id = "tc-generate";
     generate.type = "submit";
+    generate.setAttribute("data-busy-label", "Writing tests…");
     generate.appendChild(el("span", "btn-label", "Generate test cases"));
     actions.appendChild(generate);
 
@@ -802,6 +803,7 @@
     var generate = el("button", "btn btn-primary");
     generate.id = "automation-generate";
     generate.type = "submit";
+    generate.setAttribute("data-busy-label", "Writing code…");
     generate.appendChild(el("span", "btn-label", "Generate automation"));
     actions.appendChild(generate);
     actions.appendChild(exampleButton());

@@ -114,4 +114,5 @@ likelihood = 3
 detectability = 4
 effect = "An uploaded HTML or SVG file runs script in the browser of everyone who views it."
 cause = "The stored file is served from the application's own origin with the type the uploader supplied."
-covered_if = ["content type", "mime type", "svg", "served back", "separate domain", "content-disposition", "stored file is opened"]
+covered_if = ["content type", "mime type", "svg", "served back", "separate domain", "content-disposition", "stored file is opened", "renamed", "disguised", "file type"]
+tested_by = ["renamed_file"]

@@ -13,8 +13,10 @@
     <strong>{{ epic.title }}</strong>
   </p>
   {% if epic.features %}
+  {# Every name the title counted, wrapping onto as many lines as it takes. #}
   <p class="row pq-pills">
     {% for feature in epic.features %}<span class="pill warn plain">{{ feature }}</span>{% endfor %}
+    {% if epic.more %}<span class="pill warn plain">and {{ epic.more }} more</span>{% endif %}
   </p>
   {% endif %}
   {# The pills already name the features, so the sentence does not. #}

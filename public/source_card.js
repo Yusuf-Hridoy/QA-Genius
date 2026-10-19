@@ -20,6 +20,14 @@
     test_cases: { build: "Generate test cases", update: "Update to my latest work", button: "#tc-generate" },
     automation: { build: "Generate automation", update: "Update to my latest work", button: "#automation-generate" }
   };
+  /* What the card's own button says while the desk it pressed is working. */
+  var BUSY_LABELS = {
+    risks: "Finding risks…",
+    matrix: "Building…",
+    test_cases: "Writing tests…",
+    automation: "Writing code…"
+  };
+  var UPDATE_LABEL = "Updating…";
   var DESK_NAMES = {
     risks: "Risk radar",
     matrix: "Test matrix",
@@ -216,6 +224,7 @@
     var actions = el("div", "source-actions");
     var update = el("button", "btn btn-primary source-action", ACTIONS[desk].update);
     update.type = "button";
+    update.setAttribute("data-update", "yes");
     actions.appendChild(update);
     addExampleLink(actions, desk);
     if (desk === "matrix") {
@@ -426,7 +435,17 @@
     if (!card || !event.target || !event.target.closest) return;
     var desk = card.getAttribute("data-desk");
 
-    if (event.target.closest(".source-action")) {
+    var action = event.target.closest(".source-action");
+    if (action) {
+      /* The card's button is the one that was pressed, so it is the one that
+       * has to look busy — the desk's own button says so too, through the
+       * same helper. A second press while it runs does nothing. */
+      if (window.QAGBusy) {
+        var label = action.getAttribute("data-update") === "yes"
+          ? UPDATE_LABEL
+          : BUSY_LABELS[desk];
+        if (!window.QAGBusy.start(action, label)) return;
+      }
       pressDesk(desk);
       return;
     }

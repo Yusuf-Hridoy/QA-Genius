@@ -170,6 +170,25 @@ PROFILE_CRITERIA = [
     "Account deletion requires the password and offers a 30-day grace period",
 ]
 
+# The settings story from the real run that these fixes came out of. It says
+# "password" without ever signing anybody in, and it names eight features.
+BIG_STORY = (
+    "As a registered user, I want to manage my profile, change my password, "
+    "set up two-factor authentication with an authenticator app, see and "
+    "revoke my active sessions, link my Google or GitHub account, choose "
+    "light or dark theme with auto-saving, upload an avatar up to 5 MB, and "
+    "permanently delete my account, so that my account is accurate and secure."
+)
+
+BIG_CRITERIA = [
+    "The profile page shows the full name, email, phone number and bio",
+    "Changing the password requires the current password",
+    "Enabling two-factor shows a 6-digit verification code step",
+    "An avatar must be a JPEG, PNG or WebP image under 5MB",
+    "Active sessions list each device and can be revoked",
+    "Deleting the account asks for the password again",
+]
+
 LOCKOUT_STORY = (
     "As a shopper, I want my Aurora Storefront account to lock quickly after "
     "too many wrong passwords so that my account stays safe."

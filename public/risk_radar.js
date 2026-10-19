@@ -182,6 +182,7 @@
     var find = el("button", "btn btn-primary");
     find.id = "risk-paste-find";
     find.type = "submit";
+    find.setAttribute("data-busy-label", "Finding risks…");
     find.appendChild(el("span", "btn-label", "Find risks"));
     actions.appendChild(find);
     actions.appendChild(exampleButton());
@@ -288,6 +289,7 @@
     var find = el("button", "btn btn-primary");
     find.id = "risk-find";
     find.type = "submit";
+    find.setAttribute("data-busy-label", "Finding risks…");
     find.appendChild(el("span", "btn-label", "Find risks"));
     actions.appendChild(find);
     actions.appendChild(exampleButton());

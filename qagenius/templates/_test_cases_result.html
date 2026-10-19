@@ -7,7 +7,7 @@
 {% endif %}
 <div class="verdict" style="--pct:{{ coverage.percent }};--ring-color:var(--{{ coverage_pill }}-line)">
   <div class="score-ring" role="img" aria-label="Coverage {{ coverage.percent }} percent">
-    <span class="score-num">{{ coverage.percent }}<span style="font-size:16px">%</span></span>
+    <span class="score-num">{{ coverage.percent }}<span class="pct">%</span></span>
     <span class="score-of">tested</span>
   </div>
   <div>

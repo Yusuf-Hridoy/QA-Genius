@@ -73,4 +73,5 @@ likelihood = 3
 detectability = 4
 effect = "Anyone who can create a provider account with a known email reaches that user's data."
 cause = "The callback matches on the email address alone and signs the visitor into the existing account."
-covered_if = ["collision", "same email", "same address", "already exists", "existing account", "verified email", "takeover", "take over", "merge"]
+covered_if = ["collision", "email collision", "same email", "same address", "already exists", "existing account", "verified email", "takeover", "take over", "merge", "links to the existing account", "already registered", "two accounts", "before linking"]
+tested_by = ["email_collision"]

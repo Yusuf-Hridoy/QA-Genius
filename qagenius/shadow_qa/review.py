@@ -237,28 +237,41 @@ def _case_from_check(
     )
 
 
+def _boundary_outcome(boundary: Boundary, value: str) -> str:
+    """What should happen at this one value."""
+    index = boundary.values.index(value)
+    if index == 1:
+        return f"the limit takes effect at exactly {value} and not before it"
+    side = "under" if index == 0 else "over"
+    return f"{value} behaves as {side} the limit"
+
+
 def _case_from_boundary(boundary: Boundary, case_id: str, missing: list[str]) -> TestCase:
+    """A case for the values the AI left out -- and for no others.
+
+    Naming all three when the AI already wrote two of them is how the
+    reviewer ends up asking for a test that is already in the suite.
+    """
     listed = ", ".join(missing)
     return TestCase(
         id=case_id,
-        title=f"Boundary values at {boundary.label} ({boundary.source})",
+        title=(
+            f"Boundary value{'s' if len(missing) > 1 else ''} at {' / '.join(missing)} "
+            f"({boundary.source})"
+        ),
         category="Boundary",
         pre_conditions=(
             f"The system is set up with the limit {boundary.source} states: "
             f"{boundary.phrase}"
         ),
-        steps=[
-            f"Exercise the behaviour at {boundary.values[0]}",
-            f"Exercise it again at exactly {boundary.values[1]}",
-            f"Exercise it once more at {boundary.values[2]}",
-        ],
+        steps=[f"Set up the behaviour {boundary.source} describes"]
+        + [f"Exercise it at {value}" for value in missing],
         expected_result=(
-            f"The limit takes effect at exactly {boundary.values[1]} and not before it; "
-            f"{boundary.values[0]} behaves as under the limit and {boundary.values[2]} "
-            f"as over it."
+            "; ".join(_boundary_outcome(boundary, value) for value in missing) + "."
         ),
         priority="High",
-        test_data=f"Values to use: {listed}",
+        # The card already says "Data to use", so the values say themselves.
+        test_data=listed,
         bdd_scenario=None,
         automation_feasibility="High",
         automation_effort="Low",
@@ -596,6 +609,9 @@ def review_automation(script: AutomationScript, files: list[ProjectFile]) -> lis
 # ──────────────────────────────────────────────────────────────────────────────
 
 PRINCIPAL_SOURCE = "principal-qa"
+# Three different sentences said one thing between them: these numbers are
+# the usual ones for this kind of problem. One line says it once.
+PACK_SCORE_REASON = "Typical scores for this kind of problem."
 
 
 def pack_risks(text: str, story: str | None = None) -> list[PackRisk]:
@@ -623,8 +639,8 @@ def _risk_words(risk: FailureMode) -> str:
     return " ".join([str(risk.effect or ""), str(risk.cause or "")])
 
 
-def _already_named(risk: PackRisk, others: list[FailureMode]) -> bool:
-    """Is this risk already in the list, under its own name or another one?
+def _twin(risk: PackRisk, others: list[FailureMode]) -> FailureMode | None:
+    """The risk already in the list that is this one, under whatever name.
 
     The AI called one of these "Timing side-channel attack distinguishes valid
     vs invalid email addresses" and the pack calls it "Response time differs
@@ -636,15 +652,35 @@ def _already_named(risk: PackRisk, others: list[FailureMode]) -> bool:
     enough to swallow the quite separate risk that the error message names a
     registered email. So the words in the effect and the cause have to agree
     at least twice before a risk is dropped as a repeat.
+
+    Two titles that say the same two words are the same risk as well: "A
+    provider account takes over an existing account with the same email" and
+    "OAuth account linking email collision takeover" are one problem written
+    twice, and the overlap score alone was too blunt to see it.
     """
     for other in others:
         if title_score(risk.title, other.title) >= RISK_TITLE_MATCH:
-            return True
+            return other
+        if len(_tokens(risk.title) & _tokens(other.title)) >= MIN_SHARED_RISK_WORDS:
+            return other
         text = _risk_words(other)
         shared = sum(1 for word in risk.covered_if if mentions(text, word))
         if shared >= MIN_SHARED_RISK_WORDS:
-            return True
-    return False
+            return other
+    return None
+
+
+def _lend_words(twin: FailureMode, risk: PackRisk) -> None:
+    """Give the risk that stayed the words that mean a test reaches it.
+
+    The AI's sentences are never touched: `covered_if` is QA-Genius's own
+    field, and without it the risk that survived the de-duplication would be
+    the only one on the page that no test could ever be matched to.
+    """
+    known = {word.lower() for word in twin.covered_if}
+    twin.covered_if = list(twin.covered_if) + [
+        word for word in risk.covered_if if word.lower() not in known
+    ]
 
 
 def review_risks(
@@ -652,11 +688,19 @@ def review_risks(
 ) -> list[FailureMode]:
     """The classic failure modes this analysis is missing. Never edits the AI's."""
     existing = list(analysis.failure_modes)
+    # `covered_if` is QA-Genius's own field. A model that fills it in would be
+    # claiming its own coverage, so whatever it put there goes before the
+    # packs lend their words to the risks that turn out to be theirs.
+    for risk in existing:
+        if str(risk.source or "") != PRINCIPAL_SOURCE:
+            risk.covered_if = []
     added: list[FailureMode] = []
     for risk in pack_risks(story_text(story, criteria), story):
         if len(added) >= MAX_ADDED_RISKS:
             break
-        if _already_named(risk, existing + added):
+        twin = _twin(risk, existing + added)
+        if twin is not None:
+            _lend_words(twin, risk)
             continue
         added.append(
             FailureMode(
@@ -668,9 +712,9 @@ def review_risks(
                 severity=risk.severity,
                 likelihood=risk.likelihood,
                 detectability=risk.detectability,
-                severity_reason="A senior tester's rule: this is how bad it usually is here.",
-                likelihood_reason="A senior tester's rule: it happens on most builds of this feature.",
-                detectability_reason="A senior tester's rule: nobody sees it until someone reports it.",
+                severity_reason=PACK_SCORE_REASON,
+                likelihood_reason=PACK_SCORE_REASON,
+                detectability_reason=PACK_SCORE_REASON,
                 source=PRINCIPAL_SOURCE,
                 # Carried through so the risk page can see for itself whether
                 # a test already reaches this one.

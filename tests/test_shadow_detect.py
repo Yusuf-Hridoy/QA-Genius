@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 
 from tests.factories import (
+    BIG_STORY,
     LOCKOUT_CRITERIA,
     NAVBAR_STORY,
     LOCKOUT_STORY,
@@ -98,7 +99,16 @@ def test_the_profile_story_activates_at_least_seven_packs():
 
 
 def test_the_lockout_story_activates_login_and_rate_limiting_only():
-    assert _ids(LOCKOUT_STORY) == ["login", "rate_limiting"]
+    # "Wrong passwords" alone is not a sign-in story; the criteria say so.
+    assert _ids(story_text(LOCKOUT_STORY, LOCKOUT_CRITERIA), LOCKOUT_STORY) == [
+        "login",
+        "rate_limiting",
+    ]
+
+
+def test_a_settings_story_that_only_says_password_gets_no_login_pack():
+    assert "login" not in _ids(BIG_STORY)
+    assert "password_change" in _ids(BIG_STORY)
 
 
 # ── boundaries ────────────────────────────────────────────────────────────────
@@ -209,6 +219,33 @@ def test_a_size_over_the_limit_counts_as_covered_when_written_as_one_byte_over()
     assert "5.01 MB" in boundary_covered(boundary, cases)
 
 
+def test_a_value_counts_however_the_case_chose_to_write_it():
+    """The ways a tester really writes the limit, from the big-story run."""
+    written = {
+        "a 6-digit code": ("Enabling two-factor needs a 6-digit code", "6 digits"),
+        "a quoted code": ("The code '12345' is refused", "5 digits"),
+        "no space": ("Upload 5MB", "5 MB"),
+        "the long unit": ("Upload exactly 5.00 megabytes", "5 MB"),
+        "another unit": ("Upload 5120 KB", "5 MB"),
+        "a byte over": ("Upload the file +1 byte over", "5.01 MB"),
+        "a number in words": ("Fail four attempts", "4 attempts"),
+        "a short unit": ("Wait 14 min", "14 minutes"),
+        "a clock": ("The lock still reads 14:00", "14 minutes"),
+    }
+    limits = {
+        "5 digits": "Enabling two-factor shows a 6-digit verification code",
+        "6 digits": "Enabling two-factor shows a 6-digit verification code",
+        "5 MB": "An avatar must be under 5MB",
+        "5.01 MB": "An avatar must be under 5MB",
+        "4 attempts": "The account locks after 5 failed attempts",
+        "14 minutes": "A locked account stays locked for 15 minutes",
+    }
+    for how, (sentence, value) in written.items():
+        boundary = find_boundaries(_criteria([limits[value]]))[0]
+        covered = boundary_covered(boundary, [case(case_id="TC-001", title=sentence)])
+        assert value in covered, f"{how}: {sentence!r} did not count as {value}"
+
+
 def test_nothing_is_covered_when_the_cases_are_about_something_else():
     boundary = find_boundaries(_criteria(["after 5 failed attempts"]))[0]
     cases = [case(case_id="TC-001", title="Sign in with a correct password")]
@@ -224,7 +261,9 @@ def test_the_profile_story_gets_the_epic_warning():
     assert note is not None
     assert note.level == "warn"
     assert len(note.features) >= 7
-    assert "Test cases will be shallow" in note.detail
+    # The title counts what the pills name: one list, one number.
+    assert note.title == f"This story is really {len(note.features) + note.more} features"
+    assert "This is too much for one story" in note.detail
     assert notes[0] is note  # the epic warning always comes first
 
 

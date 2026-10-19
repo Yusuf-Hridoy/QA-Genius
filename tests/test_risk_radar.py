@@ -14,6 +14,8 @@ from qagenius.risk_radar import (
     risk_level,
     score_risks,
 )
+from qagenius.shadow_qa.packs import load_packs
+from qagenius.shadow_qa.review import review_risks
 from qagenius.test_cases import number_criteria
 from tests.factories import case
 
@@ -418,6 +420,20 @@ def test_a_senior_tester_risk_is_covered_by_a_case_that_says_its_words():
     assert [row[0] for row in report.risks[0].covered_tests] == ["TC-003"]
 
 
+def test_the_replay_risk_sees_the_case_that_tests_it():
+    """R12 and TC-020 of the real run: the words have to meet in the middle."""
+    pack = next(one for one in load_packs() if one.id == "two_factor")
+    replay = next(one for one in pack.risks if "replayed" in one.title)
+    risk = _pack_risk(replay.title, list(replay.covered_if))
+    tested = case(
+        case_id="TC-020",
+        title="A code that already signed someone in is refused the second time",
+    )
+    report = score_risks(RiskAnalysis(failure_modes=[risk]), [tested])
+    assert report.risks[0].coverage == "covered"
+    assert [row[0] for row in report.risks[0].covered_tests] == ["TC-020"]
+
+
 def test_a_senior_tester_risk_is_covered_by_a_case_that_says_its_words_in_a_step():
     risk = _pack_risk(
         "The attempt limit is counted per IP address rather than per account",
@@ -443,9 +459,15 @@ def test_a_senior_tester_risk_no_case_mentions_stays_untested():
     assert report.risks[0].covered_tests == []
 
 
-def test_the_ai_s_own_risk_is_never_matched_by_words_alone():
-    """Only a rule-pack risk carries words that mean a test reaches it."""
+def test_words_the_ai_put_in_the_field_itself_never_reach_the_score():
+    """A model could claim its own coverage; the reviewer drops what it wrote.
+
+    The words only mean something when the rule packs lent them, which is
+    what review_risks does when an AI risk turns out to be a pack risk.
+    """
     risk = mode(title="Anything", covered_if=["enumeration"], covered_by=[])
+    review_risks("As a shopper, I want to browse.", [], RiskAnalysis(failure_modes=[risk]))
+    assert risk.covered_if == []
     tested = case(case_id="TC-003", title="System prevents email enumeration")
     report = score_risks(RiskAnalysis(failure_modes=[risk]), [tested])
     assert report.risks[0].coverage == "none"

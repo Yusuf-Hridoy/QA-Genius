@@ -2,7 +2,11 @@ id = "login"
 name = "Login"
 short = "Login"
 # A pack is active when ANY trigger matches the story + criteria text (case-insensitive, whole words/phrases).
-triggers = ["log in", "logs in", "logging in", "login", "logins", "sign in", "signs in", "signing in", "sign-in", "signin", "password", "passwords", "credentials"]
+# Only words about signing in are strong here. "Password" is said by every
+# settings story ever written, so on its own it brought sign-in checks to a
+# story that never signs anybody in; it needs company now (see weak_triggers).
+triggers = ["log in", "logs in", "logging in", "login", "logins", "log on", "sign in", "signs in", "signing in", "sign-in", "signin"]
+weak_triggers = ["password", "passwords", "credentials"]
 # Optional: words that must NOT appear for this pack to activate.
 exclude = []
 
@@ -106,6 +110,7 @@ detectability = 3
 effect = "Attackers can list which emails have accounts."
 cause = "Different messages for unknown email and wrong password."
 covered_if = ["enumeration", "enumerate", "same message", "same error", "does not reveal", "generic error", "identical message", "different message", "reveals whether"]
+tested_by = ["enumeration"]
 
 [[risks]]
 title = "Response time differs between a known and an unknown email"

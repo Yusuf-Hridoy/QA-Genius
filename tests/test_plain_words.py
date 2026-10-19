@@ -210,6 +210,12 @@ BANNED = (
     "manual only",
     "brittle selector",
     "fixed wait",
+    # The words the big-story run turned up, which also mean nothing to a
+    # tester in their first month.
+    "shallow",
+    "depth will suffer",
+    "have a look",
+    "[confidence",
 )
 
 PAGES = (

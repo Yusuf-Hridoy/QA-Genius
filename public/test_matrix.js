@@ -218,6 +218,11 @@
         var card = el("div", "card error-card");
         card.appendChild(el("p", null, "Could not suggest what to vary. Reload the page and try again."));
         root.appendChild(card);
+      })
+      // The answer replaces the editor, button and all; an error leaves it
+      // where it was. Either way nothing is working any more.
+      .then(function () {
+        if (window.QAGBusy) window.QAGBusy.stopAll();
       });
   }
 
@@ -435,8 +440,11 @@
     var target = event.target;
     if (!target || !target.closest) return;
 
-    if (target.closest("#matrix-suggest")) {
-      // An explicit click is the one time the model is asked.
+    var ask = target.closest("#matrix-suggest");
+    if (ask) {
+      // An explicit click is the one time the model is asked. The button says
+      // so while it runs, and a second click on it does nothing.
+      if (window.QAGBusy && !window.QAGBusy.start(ask, "Thinking…")) return;
       suggest();
       return;
     }

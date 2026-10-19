@@ -101,3 +101,11 @@ def test_the_matrix_page_marks_itself_active_in_the_sidebar() -> None:
     body = client.get("/requirements/matrix").text
     assert '<a href="/requirements/matrix" class="active">' in body
     assert "<b>Test matrix</b>" in body
+
+
+def test_the_ring_check_page_shows_every_awkward_value() -> None:
+    """0, 7, 44 and 100 percent, which is where "100%" used to overflow."""
+    body = client.get("/dev/rings").text
+    for value in (0, 7, 44, 100):
+        assert f'<span class="score-num">{value}<span class="pct">%</span>' in body
+    assert body.count("score-ring") == 4

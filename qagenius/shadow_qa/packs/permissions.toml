@@ -59,3 +59,4 @@ detectability = 4
 effect = "Any signed-in user can perform an admin action by calling the endpoint directly."
 cause = "The role decides which controls are rendered, and the endpoint trusts whoever reaches it."
 covered_if = ["403", "api refuses", "api rejects", "server side", "server-side check", "endpoint directly", "direct call", "hidden button is not a check"]
+tested_by = ["ui_and_api"]

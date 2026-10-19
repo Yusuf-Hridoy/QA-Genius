@@ -74,3 +74,4 @@ detectability = 4
 effect = "An attacker spreading guesses over several addresses is never locked out."
 cause = "The counter key is the client address, which costs an attacker nothing to change."
 covered_if = ["per account", "per ip", "ip address", "different ip", "different addresses", "distributed", "two devices", "multiple devices", "different devices", "across devices", "same account"]
+tested_by = ["per_account"]

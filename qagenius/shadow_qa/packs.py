@@ -69,6 +69,10 @@ class PackRisk:
     effect: str
     cause: str
     covered_if: tuple[str, ...]
+    # The checks in this pack whose test cases cover this risk, by short id.
+    # Empty when the pack has no check about it. A named check has to exist,
+    # and its words and the risk's have to agree -- see test_shadow_packs.
+    tested_by: tuple[str, ...] = ()
 
     @property
     def rpn(self) -> int:
@@ -193,6 +197,9 @@ def _risk(raw: object, pack_id: str, file_name: str, index: int) -> PackRisk:
         effect=_text(raw.get("effect"), file_name, f"{where}.effect"),
         cause=_text(raw.get("cause"), file_name, f"{where}.cause"),
         covered_if=_words(raw.get("covered_if"), file_name, f"{where}.covered_if"),
+        tested_by=_words(
+            raw.get("tested_by"), file_name, f"{where}.tested_by", required=False
+        ),
     )
 
 
@@ -214,6 +221,14 @@ def _pack(data: dict, file_name: str) -> Pack:
     if not isinstance(raw_risks, list):
         _fail(file_name, "risks must be a list of [[risks]] tables")
     risks = [_risk(raw, pack_id, file_name, index) for index, raw in enumerate(raw_risks)]
+    for risk in risks:
+        for named in risk.tested_by:
+            if named not in seen:
+                _fail(
+                    file_name,
+                    f"risk {risk.title!r} says it is tested by {named!r}, "
+                    "which is not a check in this pack",
+                )
 
     name = _text(data.get("name"), file_name, "name")
     strong = _words(data.get("triggers"), file_name, "triggers", required=False)

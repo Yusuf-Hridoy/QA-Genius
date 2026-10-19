@@ -113,3 +113,25 @@ def test_the_api_key_is_a_password_field() -> None:
     match = re.search(r"<input[^>]*id=\"drawer-key\"[^>]*>", drawer)
     assert match, "the drawer has no #drawer-key input"
     assert 'type="password"' in match.group(0)
+
+
+# ── the number inside the round score ────────────────────────────────────────
+
+STYLE = (ROOT / "public" / "style.css").read_text(encoding="utf-8")
+
+
+def test_the_number_in_a_ring_is_sized_from_the_ring() -> None:
+    """"100%" used to run over the edge of the circle at every width."""
+    assert "--ring-size:104px" in STYLE
+    assert "font-size:clamp(17px,calc(var(--ring-size) * .25),26px)" in STYLE
+    assert "font-variant-numeric:tabular-nums" in STYLE
+    assert "white-space:nowrap" in STYLE
+    # The sign is a footnote to the number, not half of it.
+    assert ".score-ring .score-num .pct{font-size:.55em" in STYLE
+
+
+def test_no_ring_sizes_its_percent_sign_by_hand() -> None:
+    """A fixed 16px "%" is what broke the fit; the class owns the size now."""
+    for path in TEMPLATES:
+        body = path.read_text(encoding="utf-8")
+        assert 'style="font-size:16px"' not in body, path.name

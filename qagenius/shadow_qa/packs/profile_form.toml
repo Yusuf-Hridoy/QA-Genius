@@ -106,3 +106,4 @@ detectability = 4
 effect = "An edit the user made and saw saved disappears without any message."
 cause = "The save sends every field from the form it was loaded with, so stale values replace newer ones."
 covered_if = ["two tabs", "second tab", "conflict", "stale", "last write", "last save wins", "concurrent", "overwrite"]
+tested_by = ["two_tabs"]

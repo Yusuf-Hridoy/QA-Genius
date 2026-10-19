@@ -361,3 +361,34 @@ def test_the_note_sits_under_its_own_row():
     nxt = text.find('data-check="', start + 20)
     row = text[start : nxt if nxt != -1 else len(text)]
     assert "Built from older work" in row
+
+
+def test_a_confidence_label_never_reaches_a_detail_line() -> None:
+    """Ship check and the story page strip it with the same helper."""
+    body = sample()
+    body["story_analysis"]["missing_elements"] = [
+        "No lockout limit [HIGH CONFIDENCE]",
+        "The avatar limit is not stated. Confidence: Medium.",
+        "The reset link [Confidence: LOW] never expires.",
+    ]
+    page = post(body).text
+    assert "confidence" not in page.lower()
+    assert "Missing: No lockout limit" in page
+    # The sentence keeps its own full stop and reads as one sentence.
+    assert "Missing: The avatar limit is not stated." in page
+    assert "Missing: The reset link never expires." in page
+
+
+def test_the_big_story_warning_is_said_in_plain_words() -> None:
+    body = sample()
+    body["story"] = (
+        "As a registered user, I want to manage my profile, change my password, "
+        "set up two-factor authentication with an authenticator app, see and "
+        "revoke my active sessions, link my Google or GitHub account, choose "
+        "light or dark theme with auto-saving, upload an avatar up to 5 MB, and "
+        "permanently delete my account, so that my account is accurate and secure."
+    )
+    page = post(body).text
+    assert "This is too much for one story." in page
+    assert "shallow" not in page.lower()
+    assert "depth will suffer" not in page.lower()

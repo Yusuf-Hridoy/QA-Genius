@@ -255,16 +255,28 @@ a{color:var(--accent);text-underline-offset:2px}
   background:radial-gradient(520px 200px at 100% 0%,var(--accent-soft),transparent 72%);
   opacity:.75}
 .verdict>*{position:relative;z-index:1}
-.score-ring{width:104px;height:104px;flex:0 0 104px;border-radius:50%;
+/* The ring sizes itself from one number, and the number inside sizes itself
+ * from the ring, so "100%" fits the same way "7%" does at every width. */
+.score-ring{--ring-size:104px;
+  width:var(--ring-size);height:var(--ring-size);flex:0 0 var(--ring-size);
+  border-radius:50%;
   display:grid;place-items:center;position:relative;
   background:conic-gradient(var(--ring-color,var(--accent)) calc(var(--pct,0)*1%),
     var(--card-3) 0)}
 .score-ring::before{content:"";position:absolute;inset:9px;border-radius:50%;
   background:var(--card);box-shadow:inset 0 1px 3px rgba(28,24,16,.07)}
 .score-ring .score-num{position:relative;font-family:"Plus Jakarta Sans",sans-serif;
-  font-size:30px;font-weight:700;letter-spacing:-.03em;line-height:1}
+  font-size:clamp(17px,calc(var(--ring-size) * .25),26px);
+  font-weight:700;letter-spacing:-.03em;line-height:1;
+  /* Same width for every digit, so 100 is never wider than the circle. */
+  font-variant-numeric:tabular-nums;font-feature-settings:"tnum" 1;
+  display:inline-flex;align-items:baseline;justify-content:center;
+  white-space:nowrap;max-width:calc(var(--ring-size) - 32px)}
+/* The unit is a footnote to the number, never half the room it takes. */
+.score-ring .score-num .pct{font-size:.55em;font-weight:600;margin-left:.04em}
 .score-ring .score-of{position:relative;font-size:11px;color:var(--muted);
   margin-top:1px;letter-spacing:.04em}
+@media (max-width:620px){.score-ring{--ring-size:92px}}
 .verdict h2{margin:0 0 4px;font-size:21px;letter-spacing:-.022em}
 .verdict p{margin:0;color:var(--text-2);max-width:62ch}
 @media (max-width:620px){.verdict{grid-template-columns:1fr;text-align:left}}
@@ -342,6 +354,9 @@ a{color:var(--accent);text-underline-offset:2px}
   box-shadow:none}
 .btn:disabled,.btn[aria-disabled="true"]{opacity:.55;cursor:not-allowed;
   box-shadow:var(--shadow-1)}
+/* A working button is disabled so it cannot be pressed twice, but it is not
+ * switched off: it keeps its colour and shows its spinner. */
+.btn[aria-busy="true"]:disabled{opacity:1;cursor:progress}
 .btn-small{height:var(--ctl-h-sm);padding:0 12px;font-size:13px;
   border-radius:var(--r-sm)}
 .btn-large{height:var(--ctl-h-lg);padding:0 20px;font-size:15px}
@@ -602,6 +617,10 @@ mark{background:var(--warn-bg);color:var(--warn-fg);border-radius:3px;
 
 .working{display:inline-flex;align-items:center;gap:2px;color:var(--accent);
   font-weight:600;font-size:13.5px}
+/* The one calm line under a card that is working. It says how long this
+ * usually takes, so nobody reloads the page at twenty seconds. */
+.busy-note{margin:-6px 0 16px;padding:0 2px;color:var(--text-2);
+  font-size:13.5px}
 
 /* Answers fade up as HTMX swaps them in. */
 @keyframes rise{from{opacity:0;transform:translateY(7px)}to{opacity:1;transform:none}}
@@ -857,7 +876,14 @@ tr.diff-row td:first-child{box-shadow:inset 3px 0 0 var(--warn-line)}
 
 table.heat{border-collapse:separate;border-spacing:3px;width:100%}
 .heat-axis{font-size:10.5px;color:var(--muted);font-weight:700;
-  text-align:center;padding:2px;width:24px;letter-spacing:.04em}
+  text-align:center;padding:2px;white-space:nowrap;letter-spacing:.04em}
+/* The axis says "Bad 5" and "Likely 3" in words. Under 420px the row has no
+ * space for them, so it keeps "B5" and "L3" and the words stay in aria-label. */
+.heat-axis .axis-short{display:none}
+@media (max-width:419px){
+  .heat-axis .axis-long{display:none}
+  .heat-axis .axis-short{display:inline}
+  .heat-axis{width:24px}}
 /* Sequential: one hue, light -> dark, carrying magnitude. Every cell with a
  * risk also shows its id, so the colour is never the only channel. */
 .heat-cell{border-radius:var(--r-sm);height:46px;vertical-align:middle;
