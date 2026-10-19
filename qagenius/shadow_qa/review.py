@@ -7,6 +7,7 @@ started. Nothing the AI wrote is ever modified — only added to.
 
 import re
 from dataclasses import dataclass, field
+from decimal import ROUND_DOWN, ROUND_HALF_UP, Decimal
 
 from qagenius.automation_checks import Finding, ProjectFile
 from qagenius.models import (
@@ -548,7 +549,10 @@ def _is_refused(
     # At the limit itself, the criterion's own words say why it is refused.
     if at_limit and rule is not None:
         return f'{value} is refused: {boundary.source} says "{rule.phrase}"'
-    return f"{value} is past the limit {boundary.source} states, so it is refused"
+    # A minimum is missed from underneath, not passed from above.
+    short = rule is not None and rule.accepts_above
+    where = "below" if short else "past"
+    return f"{value} is {where} the limit {boundary.source} states, so it is refused"
 
 
 def _rule_for(boundary: Boundary, setting: Setting) -> "LimitRule | None":
@@ -581,13 +585,74 @@ def _at_the_limit(boundary: Boundary, value: str, setting: Setting) -> str:
     return _is_refused(boundary, value, setting, at_limit=True)
 
 
+CENT = Decimal("0.01")
+
+
+def _plain(amount: float) -> str:
+    """20.0 -> "20", 12.5 -> "12.5": a rate said the way a coupon says it."""
+    return f"{amount:g}"
+
+
+def _to_the_cent(amount: Decimal, rounding: str) -> str:
+    return f"{amount.quantize(CENT, rounding=rounding):f}"
+
+
+def _every_digit(amount: Decimal) -> str:
+    """The amount with every digit it really has, and never fewer than cents.
+
+    $29.998 is the number the argument is about, and writing it as $30.00
+    here would hide the very cent the test is being asked to settle.
+    """
+    whole, _, cents = format(amount.normalize(), "f").partition(".")
+    return f"{whole}.{cents.ljust(2, '0')}"
+
+
+def _cap_outcome(boundary: Boundary, value: str) -> str:
+    """What a capped percentage really takes off at this one order total.
+
+    The three values around a cap are the one place the checklist can do the
+    sum itself instead of asking a tester to, and the cent it rounds to is
+    the half of the sum two systems can disagree about.
+    """
+    symbol = value[:1]
+    rate = Decimal(_plain(boundary.rate)) / 100
+    cap = Decimal(_plain(boundary.cap))
+    raw = rate * Decimal(value[1:])
+    percent = f"{_plain(boundary.rate)}%"
+    if raw > cap:
+        return (
+            f"{percent} is {symbol}{_every_digit(raw)}, so the cap applies "
+            f"and the discount stays {symbol}{_every_digit(cap)}"
+        )
+    if raw == cap:
+        return f"{percent} is exactly {symbol}{_every_digit(raw)} — the cap"
+    up = _to_the_cent(raw, ROUND_HALF_UP)
+    down = _to_the_cent(raw, ROUND_DOWN)
+    if up == down:
+        return f"{percent} is {symbol}{up}, so the discount is {symbol}{up}"
+    return (
+        f"{percent} is {symbol}{_every_digit(raw)}, so the discount is "
+        f"{symbol}{up} after rounding to the cent — check the shop rounds "
+        f"this way (it could also be {symbol}{down})"
+    )
+
+
 def _boundary_outcome(boundary: Boundary, value: str, setting: Setting) -> str:
     """What should happen at this one value, in the criteria's own words."""
+    # A cap boundary has no criterion to quote: nobody wrote its number down,
+    # so the arithmetic that found it is also the answer.
+    if boundary.rate is not None and boundary.cap is not None:
+        return _cap_outcome(boundary, value)
     index = boundary.values.index(value)
-    if index == 0:
-        return _goes_through(boundary, value, setting)
     if index == 1:
         return _at_the_limit(boundary, value, setting)
+    # Which end of the number works. A maximum -- "a photo under 2 MB" --
+    # takes the value below and turns the one above away; a minimum -- "an
+    # order of at least $50" -- does it the other way round, and writing a
+    # $49.99 order down as a success is the mistake this file is here to stop.
+    rule = _rule_for(boundary, setting)
+    if (index == 2) == bool(rule is not None and rule.accepts_above):
+        return _goes_through(boundary, value, setting)
     return _is_refused(boundary, value, setting)
 
 
@@ -720,6 +785,12 @@ _LIMIT_INCLUDES = (
     "or fewer", "or under", "at least", "no fewer than", "no less than",
     "minimum", "or more", "≤", "<=", "≥", ">=",
 )
+# Of those, the ones that count upwards from the value: everything at or over
+# it is on the rule's side, and everything under it is not.
+_LIMIT_INCLUDES_UP = (
+    "at least", "no fewer than", "no less than", "minimum", "or more",
+    "≥", ">=",
+)
 # ... and words that stop short of it, from below ...
 _LIMIT_UNDER = (
     "under", "below", "less than", "fewer than", "smaller than",
@@ -776,6 +847,29 @@ class LimitRule:
     def covers(self) -> bool:
         """Does the rule's own wording take the limit value in?"""
         return self.side == "includes"
+
+    @property
+    def counts_up(self) -> bool:
+        """Is the rule's own side above the value, or below it?
+
+        "more than $50" and "at least $50" are about the orders over the
+        number; "under 2 MB" and "up to 2 MB" are about the files under it.
+        """
+        if self.side == "over":
+            return True
+        if self.side == "under":
+            return False
+        return any(mentions(self.phrase, word) for word in _LIMIT_INCLUDES_UP)
+
+    @property
+    def accepts_above(self) -> bool:
+        """Is it the values over the limit that go through, or the ones under?
+
+        The wording is only half of it. "More than $50 and the discount is
+        applied" and "less than 2 MB and the upload is rejected" both point
+        upwards; the same words with the other ending point down.
+        """
+        return not self.counts_up if self.outcome == "refused" else self.counts_up
 
     @property
     def verdict(self) -> str:

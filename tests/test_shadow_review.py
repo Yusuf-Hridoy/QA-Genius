@@ -1148,3 +1148,59 @@ def test_the_coupon_run_adds_the_tests_the_senior_tester_missed():
     # And nothing about a card: this story never pays for anything.
     assert "declined" not in titles.lower()
     assert "double click" not in titles.lower()
+
+
+# ── which side of the limit works ────────────────────────────────────────────
+
+
+def _coupon_limit_case(title: str):
+    """The added boundary case whose title names this value."""
+    review = review_test_cases(
+        COUPON_STORY,
+        number_criteria(COUPON_CRITERIA),
+        suite(case(case_id="TC-001", title="A $90 cart", traceability="AC-1")),
+        COUPON_CONTEXT,
+    )
+    return next(
+        one
+        for one in review.added
+        if "pack:boundary" in one.tags and title in one.title
+    )
+
+
+def test_a_minimum_refuses_the_value_under_it_and_accepts_the_one_over():
+    """"More than $50" is a floor: $49.99 is the refusal, $50.01 the success.
+
+    Read as a ceiling it asks for a test that expects a $49.99 order to be
+    discounted, which is the bug the whole reviewer exists to catch.
+    """
+    limit = _coupon_limit_case("$49.99")
+    assert (
+        "At $49.99: the coupon is refused with the message "
+        '"This coupon needs an order of at least $50." (AC-2)'
+    ) in limit.expected_result
+    assert "At $50.01: the discount is applied" in limit.expected_result
+
+
+# ── the cap test does the sum ────────────────────────────────────────────────
+
+
+def test_the_cap_case_works_out_each_discount_to_the_cent():
+    """The $150 nobody wrote down, with the arithmetic that found it.
+
+    A tester asked to try "one cent under the cap total" still has to work
+    out what should come back. Three numbers, three answers, and the one
+    that rounds is named as the one to go and ask about.
+    """
+    limit = _coupon_limit_case("$149.99")
+    said = limit.expected_result
+    assert (
+        "At $149.99: 20% is $29.998, so the discount is $30.00 after rounding "
+        "to the cent — check the shop rounds this way (it could also be "
+        "$29.99)."
+    ) in said
+    assert "At $150.00: 20% is exactly $30.00 — the cap." in said
+    assert (
+        "At $150.01: 20% is $30.002, so the cap applies and the discount "
+        "stays $30.00."
+    ) in said

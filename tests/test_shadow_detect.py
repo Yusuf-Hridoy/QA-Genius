@@ -536,6 +536,19 @@ def test_every_coupon_check_is_a_test_somebody_could_run():
         assert check.test.expected_result.strip().endswith("."), check.short_id
 
 
+def test_the_two_timezone_check_waits_for_a_story_about_timezones():
+    """A coupon has an expiry date, which is not two readers in two countries.
+
+    The datetime pack wakes up on "expiry date", and this check followed it
+    in and asked for London and Tokyo accounts on a story about a cart.
+    """
+    pack = next(one for one in load_packs() if one.id == "datetime")
+    two_users = next(one for one in pack.checks if one.short_id == "utc_storage")
+    whole = story_text("\n".join([COUPON_STORY, COUPON_CONTEXT]), COUPON_CRITERIA)
+    assert not applies(two_users, whole)
+    assert applies(two_users, "Deadlines are shown in the reader's time zone.")
+
+
 def test_a_coupon_story_is_not_a_payment_story():
     """It says "pay less" and "before payment" and never touches a card."""
     whole = story_text("\n".join([COUPON_STORY, COUPON_CONTEXT]), COUPON_CRITERIA)

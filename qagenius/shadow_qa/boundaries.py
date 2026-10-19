@@ -136,6 +136,11 @@ class Boundary:
     phrase: str  # "5 failed verification attempts"
     values: list[str]  # ["4 attempts", "5 attempts", "6 attempts"]
     kind: str  # "count" | "size" | "duration" | "length" | "digits"
+    # A cap boundary is worked out from two numbers rather than read off the
+    # page, and it keeps them both, so whatever writes the expected result
+    # can do the arithmetic instead of describing it.
+    rate: float | None = None  # 20.0, from "20% off"
+    cap: float | None = None  # 30.0, the most the rule ever takes off
 
     @property
     def label(self) -> str:
@@ -277,6 +282,8 @@ def cap_boundary(criteria: list[Criterion]) -> Boundary | None:
         ),
         values=_money_values(total, symbol),
         kind="money",
+        rate=percent,
+        cap=amount,
     )
 
 

@@ -25,6 +25,9 @@ title = "Shown in the user's timezone, stored in UTC"
 severity = "high"
 why = "Save the local time and every report, export and reminder is wrong for everyone else."
 covered_if = ["utc", "timezone", "time zone", "user's local", "converted", "offset"]
+# Two readers in two countries is a real bug, but only for a feature that has
+# two readers in two countries. An expiry date on a coupon does not.
+only_if = ["timezone", "time zone", "utc", "international", "local time"]
   [checks.test]
   title = "The same moment reads correctly for two users in different timezones"
   category = "Functional"
