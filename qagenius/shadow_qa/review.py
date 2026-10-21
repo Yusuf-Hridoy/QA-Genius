@@ -697,6 +697,154 @@ def is_window(boundary: Boundary, text: str) -> bool:
     return False
 
 
+# A state with an end, and whether the thing works while it holds. A lock
+# ending lets the shopper in; a validity ending shuts them out, so the
+# sense of the state has to travel with its name.
+_STATES: dict[str, bool] = {
+    "locked": False, "blocked": False, "suspended": False, "disabled": False,
+    "frozen": False, "banned": False, "barred": False, "restricted": False,
+    "paused": False, "hidden": False, "unavailable": False, "throttled": False,
+    "valid": True, "active": True, "available": True, "usable": True,
+    "enabled": True, "unlocked": True, "live": True, "open": True,
+}
+# What the same states are called as a thing rather than a state, for
+# "the lock lasts 30 minutes".
+_STATE_NOUNS = {
+    "lock": "locked", "lockout": "locked", "block": "blocked",
+    "suspension": "suspended", "ban": "banned", "freeze": "frozen",
+    "validity": "valid", "pause": "paused",
+}
+# "locked for 15 minutes", "stays valid for 30 days".
+_LASTS_FOR = re.compile(
+    r"(?<![\w-])(" + "|".join(_STATES) + r")\b"
+    r"(?:\s+[\w-]+){0,2}?\s+for\s+(?:a\s+|an\s+|the\s+)?$",
+    re.IGNORECASE,
+)
+# "expires after 30 days": whatever it is was valid until then.
+_EXPIRES_AFTER = re.compile(
+    r"(?<![\w-])expir(?:es|e|ed|ing)\s+(?:after|in)\s+(?:a\s+|an\s+|the\s+)?$",
+    re.IGNORECASE,
+)
+# "the lock lasts 30 minutes": the state is named elsewhere in the sentence.
+_LASTS = re.compile(
+    r"(?<![\w-])lasts?\s+(?:for\s+)?(?:a\s+|an\s+|the\s+)?$", re.IGNORECASE
+)
+# "30 minutes have not yet passed": the same stretch said from the other
+# side, with the state named in the same sentence ("a locked account").
+_PASSES_AFTER = re.compile(
+    r"^\s*(?:have|has)\s+(?:not\s+yet\s+|not\s+|yet\s+)?(?:passed|elapsed|gone\b)",
+    re.IGNORECASE,
+)
+_LOOK_BACK_FOR_A_STATE = 40
+# A criterion about the moment a state runs out, rather than about the state.
+_ENDED_WORDS = (
+    "passed", "elapsed", "expired", "expires", "over", "ends", "ended",
+    "later", "afterwards", "once", "has passed", "have passed",
+)
+
+
+def _state_named_in(text: str) -> tuple[str, bool] | None:
+    """The state a sentence names, as a state word and what it allows."""
+    for word, allows in _STATES.items():
+        if mentions(text, word):
+            return word, allows
+    for noun, word in _STATE_NOUNS.items():
+        if mentions(text, noun):
+            return word, _STATES[word]
+    return None
+
+
+def lasting_state(boundary: Boundary, text: str) -> tuple[str, bool] | None:
+    """The state this duration says how long lasts, and what it allows.
+
+    "locked for 15 minutes" and "valid for 30 days" both name a state with
+    an end, not a limit on a value: before the number the state holds, at
+    it the state runs out, and after it the state is over. That is the
+    opposite of a limit, where past the number is where the rule bites.
+    """
+    if boundary.kind != "duration":
+        return None
+    said = str(text or "")
+    for found in re.finditer(re.escape(boundary.phrase), said, re.IGNORECASE):
+        before = said[max(0, found.start() - _LOOK_BACK_FOR_A_STATE): found.start()]
+        named = _LASTS_FOR.search(before)
+        if named is not None:
+            word = named.group(1).lower()
+            return word, _STATES[word]
+        if _EXPIRES_AFTER.search(before):
+            return "valid", True
+        if _LASTS.search(before) or _PASSES_AFTER.match(said[found.end():]):
+            state = _state_named_in(said)
+            if state is not None:
+                return state
+    return None
+
+
+def _ending_criterion(boundary: Boundary, setting: Setting) -> Criterion | None:
+    """The criterion that says what happens once the duration has passed."""
+    for criterion in setting.criteria:
+        if criterion.id == boundary.source:
+            continue
+        if not states_value(criterion.text, boundary.values[1]):
+            continue
+        if not any(mentions(criterion.text, word) for word in _ENDED_WORDS):
+            continue
+        if _then_outcome(criterion):
+            return criterion
+    return None
+
+
+def _duration_outcome(
+    boundary: Boundary, value: str, index: int, setting: Setting
+) -> str | None:
+    """What a "lasts for N" duration says at this value, or None.
+
+    A run asked for a test expecting a locked account to be refused at 31
+    minutes of a 30-minute lock, which is the one minute at which the lock
+    is over.
+    """
+    mine = next(
+        (one for one in setting.criteria if one.id == boundary.source), None
+    )
+    if mine is None:
+        return None
+    found = lasting_state(boundary, mine.text)
+    if found is None:
+        return None
+    state, allows = found
+    limit = boundary.values[1]
+
+    if index == 0:
+        # While it holds, the criterion's own words say what that means --
+        # unless they only say the state again, which tells a tester nothing
+        # they could not read off the row above.
+        said = _then_outcome(mine) or _consequence(mine.text)
+        if said and mentions(said, state) and states_value(said, limit):
+            said = ""
+        said = said or ("it still works" if allows else "it is refused")
+        return (
+            f"{value} is inside the {limit} it stays {state}, so it is still "
+            f"{state}: {said}"
+        )
+
+    ends = _ending_criterion(boundary, setting)
+    over = _then_outcome(ends) if ends is not None else ""
+    if index == 1:
+        if over:
+            return f"At exactly {limit} it stops being {state} ({ends.id}): {over}"
+        # Nobody wrote the end down, so nobody can say which side of it
+        # the moment itself falls on.
+        return (
+            f"Check what happens at exactly {limit} — the criteria do not say "
+            f"whether it is still {state} the moment the time runs out"
+        )
+    said = over or ("it is refused" if allows else "it works again")
+    return (
+        f"{value} is past the {limit} it stays {state}, so it is no longer "
+        f"{state}: {said}"
+    )
+
+
 def _not_happening(said: str) -> str:
     """The criterion's own outcome, said as the thing that does not happen."""
     found = _TO_NEGATE.search(said)
@@ -737,8 +885,15 @@ def _boundary_outcome(boundary: Boundary, value: str, setting: Setting) -> str:
     if boundary.rate is not None and boundary.cap is not None:
         return _cap_outcome(boundary, value)
     index = boundary.values.index(value)
-    # A window is the one case where past the number means the rule stops,
-    # not that it bites, so it is answered before the limit logic below.
+    # Two durations are not limits at all: a stretch a count is measured
+    # inside, and a stretch a state lasts. Past either number the rule
+    # stops rather than bites, so both are answered before the limit logic.
+    # A state that says how long it lasts goes first: "locked for 15
+    # minutes" inside a criterion that also counts attempts is the lock,
+    # not the window the attempts are counted in.
+    lasting = _duration_outcome(boundary, value, index, setting)
+    if lasting is not None:
+        return lasting
     windowed = _window_outcome(boundary, value, index, setting)
     if windowed is not None:
         return windowed
@@ -761,8 +916,11 @@ def _boundary_expected(
     said = [_boundary_outcome(boundary, value, setting) for value in missing]
     if len(missing) == 1:
         return _sentence(said[0])
+    # An outcome that opens with the value says which one it is already;
+    # "At 29 minutes: 29 minutes is inside…" says it twice.
     return " ".join(
-        _sentence(f"At {value}: {one}") for value, one in zip(missing, said)
+        _sentence(one if one.startswith(value) else f"At {value}: {one}")
+        for value, one in zip(missing, said)
     )
 
 

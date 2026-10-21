@@ -956,7 +956,8 @@ def _limit_case_for(*texts):
 def test_at_the_limit_a_criterion_that_excludes_it_asks_for_a_refusal():
     """AC-1 says "under 2 megabytes", so the added test must not accept 2 MB."""
     limit = _limit_case_for(PHOTO_CRITERIA[0])
-    assert 'At 2 MB: 2 MB is refused: AC-1 says "under 2 megabytes"' in (
+    # The line opens with the value, so it is not prefixed with it again.
+    assert '2 MB is refused: AC-1 says "under 2 megabytes"' in (
         limit.expected_result
     )
     assert "At 2 MB: the photo is" not in limit.expected_result
@@ -987,7 +988,7 @@ def test_a_rejection_rule_leaves_the_limit_value_itself_allowed():
     the answer for the one that was not.
     """
     limit = _limit_case_for(PHOTO_CRITERIA[2])
-    assert "At 2 MB: 2 MB is inside the limit AC-1 states, so it is accepted" in (
+    assert "2 MB is inside the limit AC-1 states, so it is accepted" in (
         limit.expected_result
     )
     assert "At 2 MB: the upload is rejected" not in limit.expected_result
@@ -1472,3 +1473,121 @@ def test_word_stem_duplicates_are_one_risk():
         covered_if=("refresh",),
     )
     assert _twin(same, [written]) is written
+
+
+# ── a duration that says how long a state lasts ─────────────────────────────
+
+LOCK_LASTS = [
+    "The account locks after 5 failed sign-in attempts",
+    "A locked account stays locked for 15 minutes",
+    "When 15 minutes have passed Then the shopper can sign in with the "
+    "correct password",
+]
+
+
+def _outcomes(criteria: list[str], value: str) -> list[str]:
+    """What the added limit test expects at each of a boundary's values."""
+    from qagenius.shadow_qa.boundaries import find_boundaries
+    from qagenius.shadow_qa.review import Setting, _boundary_outcome
+
+    ruled = number_criteria(criteria)
+    boundary = next(
+        one for one in find_boundaries(ruled) if one.values[1] == value
+    )
+    setting = Setting(page="", criteria=ruled, rules=(), disputed=frozenset())
+    return [_boundary_outcome(boundary, one, setting) for one in boundary.values]
+
+
+def test_before_the_lock_ends_the_account_is_still_locked():
+    before, _, _ = _outcomes(LOCK_LASTS, "15 minutes")
+    assert "14 minutes" in before
+    assert "still locked" in before
+    assert "sign in" not in before
+
+
+def test_at_the_end_the_criterion_that_describes_it_answers():
+    _, at, _ = _outcomes(LOCK_LASTS, "15 minutes")
+    assert "At exactly 15 minutes it stops being locked" in at
+    assert "the shopper can sign in with the correct password" in at
+
+
+def test_after_the_lock_ends_the_correct_password_signs_in():
+    # A run asked for a test expecting a locked account at 16 minutes of a
+    # 15-minute lock, which is the one minute at which the lock is over.
+    _, _, after = _outcomes(LOCK_LASTS, "15 minutes")
+    assert "16 minutes" in after
+    assert "no longer locked" in after
+    assert "sign in" in after
+    assert "refused" not in after
+
+
+def test_with_no_criterion_about_the_end_the_moment_itself_is_a_question():
+    _, at, after = _outcomes(["A locked account stays locked for 15 minutes"], "15 minutes")
+    assert at == (
+        "Check what happens at exactly 15 minutes — the criteria do not say "
+        "whether it is still locked the moment the time runs out"
+    )
+    assert "no longer locked: it works again" in after
+
+
+def test_a_validity_period_runs_the_other_way():
+    before, _, after = _outcomes(["A coupon is valid for 30 days"], "30 days")
+    assert "29 days" in before and "still valid" in before and "works" in before
+    assert "31 days" in after
+    assert "no longer valid" in after
+    assert "refused" in after
+
+
+def test_something_that_expires_after_a_time_was_valid_until_then():
+    before, _, after = _outcomes(
+        ["A password reset link expires after 24 hours"], "24 hours"
+    )
+    assert "still valid" in before
+    assert "no longer valid" in after and "refused" in after
+
+
+def test_a_lock_duration_is_not_read_as_the_window_beside_it():
+    story = [
+        "After 5 failed login attempts within 10 minutes, the account is "
+        "locked for 15 minutes."
+    ]
+    _, _, window_after = _outcomes(story, "10 minutes")
+    assert "does not apply" in window_after  # the window the attempts fall in
+    before, _, lock_after = _outcomes(story, "15 minutes")
+    assert "still locked" in before
+    assert "no longer locked" in lock_after
+
+
+def test_a_plain_limit_is_still_a_limit():
+    outcomes = _outcomes(["The page loads within 2 seconds"], "2 seconds")
+    assert not any("stays" in one for one in outcomes)
+    assert "refused" in outcomes[2]
+
+
+def test_the_same_stretch_said_from_the_other_side_is_read_the_same_way():
+    # The saved sample writes the lock duration as "30 minutes have not yet
+    # passed", and the added test used to expect a refusal at 31 minutes.
+    before, _, after = _outcomes(
+        [
+            "Given a locked account When 30 minutes have not yet passed "
+            "Then sign-in is refused even with the correct password"
+        ],
+        "30 minutes",
+    )
+    assert "still locked" in before
+    assert "sign-in is refused even with the correct password" in before
+    assert "no longer locked" in after
+    assert "refused" not in after
+
+
+def test_a_value_that_opens_a_line_is_not_said_twice():
+    from qagenius.web import _example_suite
+
+    _, _, review, _ = _example_suite()
+    lock = next(
+        one
+        for one in review.added
+        if one.category == "Boundary" and "minutes" in one.title
+    )
+    assert "At 29 minutes: 29 minutes" not in lock.expected_result
+    assert lock.expected_result.startswith("29 minutes is inside")
