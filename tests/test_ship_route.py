@@ -78,14 +78,14 @@ def test_no_body_at_all_is_not_an_error():
 
 
 def test_the_example_cannot_ship():
-    response = client.get("/ship/example")
+    response = client.post("/ship/example")
     assert response.status_code == 200
     assert "Not ready" in response.text
     assert "1 check failed: Risks with a test." in response.text
 
 
 def test_the_example_has_the_statuses_the_brief_asks_for():
-    found = statuses(client.get("/ship/example").text)
+    found = statuses(client.post("/ship/example").text)
     assert found == {
         "clarity": "pass",
         "duel": "warn",
@@ -98,11 +98,11 @@ def test_the_example_has_the_statuses_the_brief_asks_for():
 
 
 def test_the_example_says_five_of_seven_checks_ran():
-    assert "5 of 7 checks ran" in client.get("/ship/example").text
+    assert "5 of 7 checks ran" in client.post("/ship/example").text
 
 
 def test_the_example_never_names_a_real_company():
-    body = client.get("/ship/example").text
+    body = client.post("/ship/example").text
     assert "Aurora Storefront" in body
 
 
@@ -180,7 +180,7 @@ def test_a_body_over_the_limit_is_refused():
 
 
 def test_the_markdown_block_is_present_and_parses():
-    body = client.get("/ship/example").text
+    body = client.post("/ship/example").text
     match = re.search(
         r'<script type="application/json" id="ship-md">(.*?)</script>', body, re.DOTALL
     )
@@ -191,12 +191,12 @@ def test_the_markdown_block_is_present_and_parses():
 
 
 def test_the_rows_come_in_check_ids_order():
-    found = [m.group("id") for m in _ROW.finditer(client.get("/ship/example").text)]
+    found = [m.group("id") for m in _ROW.finditer(client.post("/ship/example").text)]
     assert tuple(found) == CHECK_IDS
 
 
 def test_accept_with_reason_appears_only_on_a_failed_row():
-    body = client.get("/ship/example").text
+    body = client.post("/ship/example").text
     rows = body.split('class="card ship-row"')
     accepting = [row for row in rows if "ship-accept" in row]
     assert len(accepting) == 1
@@ -204,7 +204,7 @@ def test_accept_with_reason_appears_only_on_a_failed_row():
 
 
 def test_each_row_links_to_the_desk_that_fixes_it():
-    body = client.get("/ship/example").text
+    body = client.post("/ship/example").text
     assert 'href="/risks">Open Risk radar' in body
     assert 'href="/requirements/test-cases">Open Test cases' in body
 
@@ -218,7 +218,7 @@ def test_an_accepted_note_is_escaped_not_run():
 
 
 def test_the_verdict_banner_carries_the_tone_of_the_verdict():
-    assert "ship-verdict ship-bad" in client.get("/ship/example").text
+    assert "ship-verdict ship-bad" in client.post("/ship/example").text
 
     body = sample()
     body["acceptances"] = {"risks": REASON}
@@ -322,15 +322,18 @@ def test_a_stale_input_adds_a_note_under_that_check():
     assert "Built from older work — update Risk radar for an accurate result." in text
 
 
-def test_the_verdict_says_the_inputs_are_old():
+def test_the_header_says_the_inputs_are_old():
+    # The verdict itself was worked out this minute. Only what it read is
+    # older, and the header says so rather than the reason trailing off.
     text = _stale(sample(), ["risks"])
-    assert "(some inputs are out of date)" in text
+    assert "Worked out just now — some inputs are older" in text
+    assert 'class="pill warn ship-stale-header"' in text
 
 
 def test_nothing_is_said_when_no_input_is_stale():
     text = post(sample()).text
     assert "Built from older work" not in text
-    assert "(some inputs are out of date)" not in text
+    assert "some inputs are older" not in text
 
 
 def test_an_unknown_id_is_ignored_rather_than_shown():

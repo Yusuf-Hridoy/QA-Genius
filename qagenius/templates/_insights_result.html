@@ -132,7 +132,7 @@
     <div class="row">
       {% if is_example %}
       {# The example answer is saved, so it opens without a key and without an AI call. #}
-      <button type="button" class="btn" hx-get="/insights/example-explained"
+      <button type="button" class="btn" hx-post="/insights/example-explained"
               hx-target="#insights-explanation" hx-swap="innerHTML">Explain with AI</button>
       {% else %}
       <button type="submit" class="btn" data-busy-label="Reading…"><span class="btn-label">Explain with AI</span></button>

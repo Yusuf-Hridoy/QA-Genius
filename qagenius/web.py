@@ -2,6 +2,7 @@ import base64
 import html
 import json
 import logging
+import secrets
 from dataclasses import replace
 from pathlib import Path
 
@@ -23,7 +24,7 @@ from qagenius import (
     ship_report_exports,
 )
 from qagenius.automation_checks import CheckReport, check_project
-from qagenius.automation_exports import build_zip, run_steps
+from qagenius.automation_exports import build_zip, run_steps, useful_notes
 from qagenius.bug_report import BugInput, environment_text, reproducibility_text
 from qagenius.bug_report_checks import Check, check_report, quality_score
 from qagenius.bug_report_exports import to_jira, to_markdown
@@ -202,6 +203,34 @@ app = FastAPI(title="QA-Genius v2")
 templates = Jinja2Templates(directory=BASE_DIR / "templates")
 # Drawer + key panel live in base.html, rendered by every page.
 templates.env.globals["providers"] = PROVIDERS
+
+
+def _key_field_name() -> str:
+    """A fresh name for the key box on every render.
+
+    Password managers remember a field by its name and then fill it with an
+    email on the next visit. A name they have never seen gives them nothing
+    to match, and the box is never submitted to us anyway.
+    """
+    return "qag-api-key-" + secrets.token_hex(4)
+
+
+templates.env.globals["key_field_name"] = _key_field_name
+
+# The browser owns the keys, so only the browser can remember how each one
+# did. Every request says what its AI calls found, by position, and app.js
+# writes it into the key panel. No key is ever in this header.
+KEY_RESULTS_HEADER = "X-QAG-Key-Results"
+
+
+@app.middleware("http")
+async def report_key_results(request: Request, call_next):
+    """Tell the browser what this request's AI calls did to each key."""
+    results = llm.start_recording()
+    response = await call_next(request)
+    if results:
+        response.headers[KEY_RESULTS_HEADER] = json.dumps(results)
+    return response
 # Every template that shows model text uses this to take the confidence
 # tag off the end of a line and show it as a pill instead.
 templates.env.filters["confidence"] = split_confidence
@@ -389,6 +418,48 @@ def _error_card(
     )
 
 
+# What to do about it, in plain words, one line per kind of failure. The
+# notes under it say which key did what; this says what the reader can do.
+AI_ERROR_MESSAGES = (
+    (
+        llm.InvalidKeyError,
+        "Your key was rejected. Check it on the Your API keys page and try again.",
+    ),
+    (
+        llm.ModelUnavailableError,
+        "The AI model isn't available right now. Your keys are fine — "
+        "QA-Genius needs a model update.",
+    ),
+    (
+        llm.BadOutputError,
+        "No key could answer in the shape this desk needs. "
+        "Try again in a minute, or add another key.",
+    ),
+    (
+        llm.AllKeysBusyError,
+        "All your keys are busy. Try again in a minute, or add another key.",
+    ),
+)
+
+
+def _ai_error_card(
+    request: Request, error: llm.AiError, heading: str
+) -> HTMLResponse:
+    """One card for every way the AI call can fail, titled by the desk.
+
+    A reader who asked for test cases and got "Could not check the story"
+    has to work out which page they are even on, so each desk names the
+    thing it could not do.
+    """
+    message = next(
+        (text for kind, text in AI_ERROR_MESSAGES if isinstance(error, kind)),
+        # A ProviderError already says what the provider said, in plain
+        # words and under 120 characters.
+        str(error),
+    )
+    return _error_card(request, message, error.notes, heading=heading)
+
+
 def _highlight_story(story: str, phrases: list[str]) -> str:
     """Escape the story, then wrap each vague phrase in <mark> in place.
 
@@ -450,9 +521,11 @@ def _score_tone(score: int) -> str:
     return "warn" if score >= 45 else "bad"
 
 
-def _shadow_story(story: str, criteria: list[str]) -> tuple[StoryNote | None, list[StoryNote]]:
+def _shadow_story(
+    story: str, criteria: list[str], context: str = ""
+) -> tuple[StoryNote | None, list[StoryNote]]:
     """The Principal QA read of the story: the epic warning, then the rest."""
-    found = review_story(story, criteria)
+    found = review_story(story, criteria, context)
     epic = next((note for note in found if note.epic), None)
     return epic, [note for note in found if not note.epic]
 
@@ -468,7 +541,9 @@ def _story_result_context(
     rows, passes = _invest_rows(result)
     clarity = max(0, 100 - result.ambiguity_score)
     # Same click: the rules run on the result that just came back, no AI.
-    epic, shadow_notes = _shadow_story(story, result.generated_acceptance_criteria)
+    epic, shadow_notes = _shadow_story(
+        story, result.generated_acceptance_criteria, context
+    )
     return {
         "epic": epic,
         "shadow_notes": shadow_notes,
@@ -575,6 +650,8 @@ def _match_label(status: str) -> str:
         return "only Reader A"
     if status == "only_b":
         return "only Reader B"
+    if status == "check":
+        return "check this"
     return status
 
 
@@ -603,6 +680,7 @@ def _duel_result_context(story: str, result: DuelResult) -> dict:
         "match_pill": _match_pill,
         "match_label": _match_label,
         "vague_rewrites": result.vague_rewrites,
+        "unclear_forks": result.unclear_forks,
         "not_stated_values": {NOT_STATED_A, NOT_STATED_B},
         "notes": result.notes,
         "provider_name": result.provider_name,
@@ -633,7 +711,7 @@ def _duel_from_sample(story: str) -> dict:
     return _duel_result_context(story, result)
 
 
-@app.get("/requirements/story/example", response_class=HTMLResponse)
+@app.post("/requirements/story/example", response_class=HTMLResponse)
 def story_example(request: Request) -> HTMLResponse:
     """Load example: fills the form and shows a saved result. No key needed."""
     with open(SAMPLES_DIR / "story_check.json", encoding="utf-8") as f:
@@ -711,30 +789,8 @@ def story_run(
             '<p class="muted">Add an API key to run the check.</p>',
             headers={"HX-Trigger": "open-keys"},
         )
-    except llm.AllKeysBusyError as e:
-        return _error_card(
-            request,
-            "All your keys are busy. Try again in a minute or add another key.",
-            e.notes,
-        )
-    except llm.InvalidKeyError as e:
-        return _error_card(
-            request,
-            "Your key was rejected. Check it on the Your API keys page "
-            "and try again.",
-            e.notes,
-        )
-    except llm.ModelUnavailableError as e:
-        return _error_card(
-            request,
-            "The AI model isn't available right now. Your keys are fine — "
-            "QA-Genius needs a model update.",
-            e.notes,
-        )
-    except llm.ProviderError as e:
-        return _error_card(request, str(e))
-    except llm.BadOutputError as e:
-        return _error_card(request, str(e))
+    except llm.AiError as e:
+        return _ai_error_card(request, e, "Could not check the story")
     provider = get_provider(keys[used_index]["provider"])
     provider_name = provider["name"] if provider else "unknown provider"
     return templates.TemplateResponse(
@@ -776,30 +832,8 @@ def story_duel(
             '<p class="muted">Add an API key to run the check.</p>',
             headers={"HX-Trigger": "open-keys"},
         )
-    except llm.AllKeysBusyError as e:
-        return _error_card(
-            request,
-            "All your keys are busy. Try again in a minute or add another key.",
-            e.notes,
-        )
-    except llm.InvalidKeyError as e:
-        return _error_card(
-            request,
-            "Your key was rejected. Check it on the Your API keys page "
-            "and try again.",
-            e.notes,
-        )
-    except llm.ModelUnavailableError as e:
-        return _error_card(
-            request,
-            "The AI model isn't available right now. Your keys are fine — "
-            "QA-Genius needs a model update.",
-            e.notes,
-        )
-    except llm.ProviderError as e:
-        return _error_card(request, str(e))
-    except llm.BadOutputError as e:
-        return _error_card(request, str(e))
+    except llm.AiError as e:
+        return _ai_error_card(request, e, "Could not run the two-reader check")
     return templates.TemplateResponse(
         request,
         "_duel_result.html",
@@ -1044,30 +1078,8 @@ def test_cases_run(
             '<p class="muted">Add an API key to write test cases.</p>',
             headers={"HX-Trigger": "open-keys"},
         )
-    except llm.AllKeysBusyError as e:
-        return _error_card(
-            request,
-            "All your keys are busy. Try again in a minute or add another key.",
-            e.notes,
-        )
-    except llm.InvalidKeyError as e:
-        return _error_card(
-            request,
-            "Your key was rejected. Check it on the Your API keys page "
-            "and try again.",
-            e.notes,
-        )
-    except llm.ModelUnavailableError as e:
-        return _error_card(
-            request,
-            "The AI model isn't available right now. Your keys are fine -- "
-            "QA-Genius needs a model update.",
-            e.notes,
-        )
-    except llm.ProviderError as e:
-        return _error_card(request, str(e))
-    except llm.BadOutputError as e:
-        return _error_card(request, str(e))
+    except llm.AiError as e:
+        return _ai_error_card(request, e, "Could not write test cases")
     provider = get_provider(keys[used_index]["provider"])
     merged, review = _with_principal_cases(
         user_story, criteria, result, context
@@ -1114,7 +1126,7 @@ def _example_suite() -> tuple[TestCaseList, list[Criterion], CaseReview, str]:
     return merged, criteria, review, story
 
 
-@app.get("/requirements/test-cases/example", response_class=HTMLResponse)
+@app.post("/requirements/test-cases/example", response_class=HTMLResponse)
 def test_cases_example(request: Request) -> HTMLResponse:
     """Load example: a saved suite, reviewed. No key needed, no AI call."""
     merged, criteria, review, _ = _example_suite()
@@ -1409,30 +1421,8 @@ def test_cases_refine(
             '<p class="muted">Add an API key to ask for changes.</p>',
             headers={"HX-Trigger": "open-keys"},
         )
-    except llm.AllKeysBusyError as e:
-        return _error_card(
-            request,
-            "All your keys are busy. Try again in a minute or add another key.",
-            e.notes,
-        )
-    except llm.InvalidKeyError as e:
-        return _error_card(
-            request,
-            "Your key was rejected. Check it on the Your API keys page "
-            "and try again.",
-            e.notes,
-        )
-    except llm.ModelUnavailableError as e:
-        return _error_card(
-            request,
-            "The AI model isn't available right now. Your keys are fine -- "
-            "QA-Genius needs a model update.",
-            e.notes,
-        )
-    except llm.ProviderError as e:
-        return _error_card(request, str(e))
-    except llm.BadOutputError as e:
-        return _error_card(request, str(e))
+    except llm.AiError as e:
+        return _ai_error_card(request, e, "Could not strengthen the test cases")
 
     # Strengthen and the risk run are additive: code drops any edit or
     # deletion the AI tried.
@@ -1462,7 +1452,7 @@ def test_cases_refine(
     )
 
 
-@app.get("/requirements/test-cases/example-strengthen", response_class=HTMLResponse)
+@app.post("/requirements/test-cases/example-strengthen", response_class=HTMLResponse)
 def test_cases_example_strengthen(request: Request) -> HTMLResponse:
     """What Strengthen does to the saved example. No key needed, no AI call."""
     # The page already shows the reviewed suite, so the diff is against that
@@ -1580,6 +1570,8 @@ def _automation_result_context(
         "finding_text": _finding_text,
         # Worked out from the files in the ZIP, not from the AI's instructions.
         "run_it": run_steps(script, report.files),
+        # The AI's own notes, minus the ones the run steps above disprove.
+        "ai_notes": useful_notes(script.setup_instructions),
         # What the Download ZIP button posts back to the export route.
         "automation_data": {
             "script": script.model_dump(),
@@ -1649,30 +1641,8 @@ def automation_run(
             '<p class="muted">Add an API key to write automation.</p>',
             headers={"HX-Trigger": "open-keys"},
         )
-    except llm.AllKeysBusyError as e:
-        return _error_card(
-            request,
-            "All your keys are busy. Try again in a minute or add another key.",
-            e.notes,
-        )
-    except llm.InvalidKeyError as e:
-        return _error_card(
-            request,
-            "Your key was rejected. Check it on the Your API keys page "
-            "and try again.",
-            e.notes,
-        )
-    except llm.ModelUnavailableError as e:
-        return _error_card(
-            request,
-            "The AI model isn't available right now. Your keys are fine -- "
-            "QA-Genius needs a model update.",
-            e.notes,
-        )
-    except llm.ProviderError as e:
-        return _error_card(request, str(e))
-    except llm.BadOutputError as e:
-        return _error_card(request, str(e))
+    except llm.AiError as e:
+        return _ai_error_card(request, e, "Could not write the code")
 
     selected_ids = [case.id for case in cases]
     report = _checked_project(script, selected_ids)
@@ -1699,7 +1669,7 @@ def _automation_sample() -> tuple[AutomationScript, list[str]]:
     )
 
 
-@app.get("/requirements/automation/example", response_class=HTMLResponse)
+@app.post("/requirements/automation/example", response_class=HTMLResponse)
 def automation_example(request: Request) -> HTMLResponse:
     """Load example: a saved project. No key needed, no AI call."""
     script, selected_ids = _automation_sample()
@@ -1887,30 +1857,8 @@ async def bugs_run(request: Request) -> HTMLResponse:
             '<p class="muted">Add an API key to write a bug report.</p>',
             headers={"HX-Trigger": "open-keys"},
         )
-    except llm.AllKeysBusyError as e:
-        return _error_card(
-            request,
-            "All your keys are busy. Try again in a minute or add another key.",
-            e.notes,
-        )
-    except llm.InvalidKeyError as e:
-        return _error_card(
-            request,
-            "Your key was rejected. Check it on the Your API keys page "
-            "and try again.",
-            e.notes,
-        )
-    except llm.ModelUnavailableError as e:
-        return _error_card(
-            request,
-            "The AI model isn't available right now. Your keys are fine -- "
-            "QA-Genius needs a model update.",
-            e.notes,
-        )
-    except llm.ProviderError as e:
-        return _error_card(request, str(e))
-    except llm.BadOutputError as e:
-        return _error_card(request, str(e))
+    except llm.AiError as e:
+        return _ai_error_card(request, e, "Could not write the bug report")
 
     provider = get_provider(keys[used_index]["provider"])
     return templates.TemplateResponse(
@@ -1932,7 +1880,7 @@ def _bug_sample() -> tuple[BugReport, BugInput]:
     return BugReport.model_validate(sample["report"]), BugInput(**sample["input"])
 
 
-@app.get("/bugs/example", response_class=HTMLResponse)
+@app.post("/bugs/example", response_class=HTMLResponse)
 def bugs_example(request: Request) -> HTMLResponse:
     """Load example: a saved bug report. No key needed, no AI call."""
     report, bug = _bug_sample()
@@ -2038,7 +1986,7 @@ def _sample_insights() -> Insights:
     return compute_insights(reports)
 
 
-@app.get("/insights/example", response_class=HTMLResponse)
+@app.post("/insights/example", response_class=HTMLResponse)
 def insights_example(request: Request) -> HTMLResponse:
     """Load example: two saved runs of the Aurora Storefront suite. No key, no AI."""
     return templates.TemplateResponse(
@@ -2048,7 +1996,7 @@ def insights_example(request: Request) -> HTMLResponse:
     )
 
 
-@app.get("/insights/example-explained", response_class=HTMLResponse)
+@app.post("/insights/example-explained", response_class=HTMLResponse)
 def insights_example_explained(request: Request) -> HTMLResponse:
     """The saved explanation for the example runs. No key, no AI call."""
     with open(SAMPLES_DIR / "insights_summary.json", encoding="utf-8") as f:
@@ -2090,27 +2038,8 @@ async def insights_explain(request: Request) -> HTMLResponse:
             '<p class="muted">Add an API key to explain these results.</p>',
             headers={"HX-Trigger": "open-keys"},
         )
-    except llm.AllKeysBusyError as e:
-        return _error_card(
-            request,
-            "All your keys are busy. Try again in a minute or add another key.",
-            e.notes,
-        )
-    except llm.InvalidKeyError as e:
-        return _error_card(
-            request,
-            "Your key was rejected. Check it on the Your API keys page and try again.",
-            e.notes,
-        )
-    except llm.ModelUnavailableError as e:
-        return _error_card(
-            request,
-            "The AI model isn't available right now. Your keys are fine -- "
-            "QA-Genius needs a model update.",
-            e.notes,
-        )
-    except (llm.ProviderError, llm.BadOutputError) as e:
-        return _error_card(request, str(e))
+    except llm.AiError as e:
+        return _ai_error_card(request, e, "Could not explain these results")
 
     cleaned, guard_notes = clean_summary(summary, insights)
     provider = get_provider(keys[used_index]["provider"])
@@ -2239,12 +2168,16 @@ def _risk_result_context(
     """Every number here is computed from the analysis, never read back from it."""
     report = score_risks(analysis, cases)
     # A weak claim is not coverage: the test the AI named is about something else.
-    covered = sum(
-        1 for item in report.risks if item.coverage in ("verified", "covered")
-    )
+    # The two kinds that do count are shown apart, because "tested" and
+    # "probably tested" are not the same promise and the ring holds both.
+    verified = sum(1 for item in report.risks if item.coverage == "verified")
+    probably = sum(1 for item in report.risks if item.coverage == "covered")
+    covered = verified + probably
     return {
         "report": report,
         "covered": covered,
+        "verified_count": verified,
+        "probably_count": probably,
         "heat_rows": _heat_rows(report),
         "untested": _untested_high(report),
         "level_pill": LEVEL_PILLS,
@@ -2332,29 +2265,8 @@ def risks_run(
         result, used_index, notes = llm.generate_json(keys, system, user, RiskAnalysis)
     except llm.NoKeysError:
         return HTMLResponse(RISK_NO_KEY, headers={"HX-Trigger": "open-keys"})
-    except llm.AllKeysBusyError as e:
-        return _error_card(
-            request,
-            "All your keys are busy. Try again in a minute or add another key.",
-            e.notes,
-        )
-    except llm.InvalidKeyError as e:
-        return _error_card(
-            request,
-            "Your key was rejected. Check it on the Your API keys page and try again.",
-            e.notes,
-        )
-    except llm.ModelUnavailableError as e:
-        return _error_card(
-            request,
-            "The AI model isn't available right now. Your keys are fine -- "
-            "QA-Genius needs a model update.",
-            e.notes,
-        )
-    except llm.ProviderError as e:
-        return _error_card(request, str(e))
-    except llm.BadOutputError as e:
-        return _error_card(request, str(e))
+    except llm.AiError as e:
+        return _ai_error_card(request, e, "Could not find risks")
 
     known_ids = ({criterion.id for criterion in criteria}, {case.id for case in cases})
     analysis, guard_notes = clean_analysis(result, *known_ids)
@@ -2419,7 +2331,7 @@ def _risk_sample() -> tuple[RiskAnalysis, list[TestCase], list[Criterion]]:
     return analysis, cases, criteria
 
 
-@app.get("/risks/example", response_class=HTMLResponse)
+@app.post("/risks/example", response_class=HTMLResponse)
 def risks_example(request: Request) -> HTMLResponse:
     """Load example: a saved FMEA, reviewed. No key needed, no AI call."""
     analysis, cases, criteria = _risk_sample()
@@ -2614,13 +2526,18 @@ def _ship_story(raw: dict) -> str:
 
 
 def _ship_result(
-    request: Request, report: ShipReport, story: str, ignored: list[str]
+    request: Request,
+    report: ShipReport,
+    story: str,
+    ignored: list[str],
+    is_example: bool = False,
 ) -> HTMLResponse:
     return templates.TemplateResponse(
         request,
         "_ship_check_result.html",
         {
             "report": report,
+            "is_example": is_example,
             "story": story,
             "story_short": story[:STORY_IN_BANNER],
             "total_checks": len(report.items),
@@ -2716,14 +2633,18 @@ async def ship_report_route(request: Request) -> HTMLResponse:
     return _ship_result(request, compute_ship_report(inputs), _ship_story(raw), ignored)
 
 
-@app.get("/ship/example", response_class=HTMLResponse)
+@app.post("/ship/example", response_class=HTMLResponse)
 def ship_example(request: Request) -> HTMLResponse:
     """Load example: a saved run that cannot ship. No key needed, no AI call."""
     with open(SAMPLES_DIR / "ship_check.json", encoding="utf-8") as f:
         sample = json.load(f)
     inputs, ignored = _ship_inputs(sample)
     return _ship_result(
-        request, compute_ship_report(inputs), _ship_story(sample), ignored
+        request,
+        compute_ship_report(inputs),
+        _ship_story(sample),
+        ignored,
+        is_example=True,
     )
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -2823,11 +2744,15 @@ def _matrix_context(
     notes: list[str],
     reasons: dict[str, str] | None = None,
     from_ai: bool = False,
+    suggested: list[Rule] | None = None,
 ) -> dict:
     manual = manual_only_count(matrix)
     return {
         "factors": factors,
         "rules": rules,
+        # Rules the AI guessed. They are shown, never applied, until
+        # somebody presses Use this rule.
+        "suggested_rules": list(suggested or []),
         "matrix": matrix,
         "notes": notes,
         "reasons": reasons or {},
@@ -2918,6 +2843,7 @@ def matrix_suggest(
     keys = _request_keys(request)
     reasons: dict[str, str] = {}
     notes: list[str] = []
+    suggested: list[Rule] = []
     from_ai = False
     if not keys or not story:
         factors, rules = standard_set()
@@ -2938,7 +2864,7 @@ def matrix_suggest(
             factors, rules = standard_set()
             notes.append(MATRIX_NO_KEY_NOTE)
         else:
-            factors, rules, guard_notes = clean_proposal(
+            factors, rules, suggested, guard_notes = clean_proposal(
                 result, "\n".join([story, *texts])
             )
             from_ai = True
@@ -2949,7 +2875,9 @@ def matrix_suggest(
     return templates.TemplateResponse(
         request,
         "_test_matrix_editor.html",
-        _matrix_context(factors, rules, matrix, notes, reasons, from_ai),
+        _matrix_context(
+            factors, rules, matrix, notes, reasons, from_ai, suggested
+        ),
     )
 
 
@@ -3001,7 +2929,7 @@ def matrix_export_csv(payload: MatrixBody) -> Response:
     )
 
 
-@app.get("/requirements/matrix/example", response_class=HTMLResponse)
+@app.post("/requirements/matrix/example", response_class=HTMLResponse)
 def matrix_example(request: Request) -> HTMLResponse:
     """Load example: the Aurora Storefront login story. No AI call."""
     with open(SAMPLES_DIR / "test_matrix.json", encoding="utf-8") as f:

@@ -247,13 +247,13 @@ def test_a_busy_key_shows_the_friendly_card(monkeypatch) -> None:
 
 
 def test_the_example_needs_no_key() -> None:
-    response = client.get("/bugs/example")
+    response = client.post("/bugs/example")
     assert response.status_code == 200
     assert "saved example" in response.text
 
 
 def test_the_example_passes_six_of_seven_checks() -> None:
-    body = client.get("/bugs/example").text
+    body = client.post("/bugs/example").text
     # The score leads the card; the count says which checks it came from.
     assert "--pct:86" in body
     assert "6 of 7 report checks pass" in body

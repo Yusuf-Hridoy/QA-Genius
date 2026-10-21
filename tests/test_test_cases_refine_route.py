@@ -230,7 +230,7 @@ def test_proposal_json_round_trips_through_render(monkeypatch) -> None:
 
 
 def test_example_strengthen_only_adds_cases() -> None:
-    response = client.get("/requirements/test-cases/example-strengthen")
+    response = client.post("/requirements/test-cases/example-strengthen")
     assert response.status_code == 200
     body = response.text
     assert "+5 added" in body
@@ -242,7 +242,7 @@ def test_example_strengthen_only_adds_cases() -> None:
 
 
 def test_example_offers_the_strengthen_link() -> None:
-    body = client.get("/requirements/test-cases/example").text
+    body = client.post("/requirements/test-cases/example").text
     assert "Try Strengthen on the example" in body
 
 

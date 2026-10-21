@@ -17,10 +17,15 @@ const source = readFileSync(
 /** Bring a value out of the vm realm so deep comparison works. */
 const plain = (value) => JSON.parse(JSON.stringify(value));
 
-function load() {
+function load(documentExtras = {}) {
   const store = {};
   const sandbox = {
-    document: { addEventListener: () => {}, querySelector: () => null },
+    document: {
+      addEventListener: () => {},
+      querySelector: () => null,
+      getElementById: () => null,
+      ...documentExtras,
+    },
     sessionStorage: {
       getItem: (key) => (key in store ? store[key] : null),
       setItem: (key, value) => {
@@ -90,4 +95,44 @@ test("criterion ids always follow position", () => {
     { id: "AC-1", text: "first" },
     { id: "AC-2", text: "second" },
   ]);
+});
+
+/* ── the Generate button wakes up while you type ─────────────────────────── */
+
+test("one non-empty criterion is enough to generate", () => {
+  const { canGenerate } = load();
+  assert.equal(canGenerate({ criteria: [] }), false);
+  assert.equal(canGenerate({ criteria: [{ id: "AC-1", text: "" }] }), false);
+  assert.equal(canGenerate({ criteria: [{ id: "AC-1", text: "   " }] }), false);
+  assert.equal(canGenerate({ criteria: [{ id: "AC-1", text: "T" }] }), true);
+});
+
+test("typing the first character enables the button and hides the note", () => {
+  const button = { disabled: true, attrs: {}, setAttribute(k, v) { this.attrs[k] = v; } };
+  const why = { hidden: false };
+  const nodes = { "generate-test-cases": button, "generate-why": why };
+  const { syncGenerate } = load({ getElementById: (id) => nodes[id] || null });
+
+  const run = { criteria: [{ id: "AC-1", text: "" }] };
+  syncGenerate(run);
+  assert.equal(button.disabled, true);
+  assert.equal(button.attrs["aria-disabled"], "true");
+  assert.equal(why.hidden, false);
+
+  run.criteria[0].text = "The account locks";
+  syncGenerate(run);
+  assert.equal(button.disabled, false);
+  assert.equal(button.attrs["aria-disabled"], "false");
+  assert.equal(why.hidden, true);
+});
+
+test("deleting the last criterion's text disables it again", () => {
+  const button = { disabled: false, attrs: {}, setAttribute(k, v) { this.attrs[k] = v; } };
+  const why = { hidden: true };
+  const nodes = { "generate-test-cases": button, "generate-why": why };
+  const { syncGenerate } = load({ getElementById: (id) => nodes[id] || null });
+
+  syncGenerate({ criteria: [{ id: "AC-1", text: "" }] });
+  assert.equal(button.disabled, true);
+  assert.equal(why.hidden, false);
 });

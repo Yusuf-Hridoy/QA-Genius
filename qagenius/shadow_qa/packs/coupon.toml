@@ -207,3 +207,18 @@ effect = "The shopper is charged a cent more than the screen promised, and the r
 cause = "The cart rounds the percentage and the payment service rounds the total."
 covered_if = ["rounding", "rounds", "cent", "cents", "two decimal", "the same amount"]
 tested_by = ["cents_rounding"]
+
+[[checks]]
+id = "unknown_code"
+title = "A code that does not exist, or has a typo in it, is refused clearly"
+severity = "high"
+why = "The commonest thing a shopper types is a code that is not a code. A silent refusal, or a total that moves anyway, is worse than a wrong discount: nobody notices it."
+covered_if = ["does not exist", "doesn't exist", "unknown code", "invalid code", "wrong code", "made-up code", "made up code", "typo", "mistyped", "not a real code", "no such coupon", "fake code"]
+  [checks.test]
+  title = "A code that doesn't exist is refused and the total does not change"
+  category = "Negative"
+  priority = "High"
+  pre_conditions = "A cart above the minimum and no coupon applied"
+  steps = ["Write down the total before anything is entered", "Enter FAKE123 and apply it", "Read the message and the total", "Enter SAVE2O, with the letter O instead of a zero, and apply it", "Read the message and the total again"]
+  expected_result = "Both codes are refused with a message that says the code is not recognised; the total is the same as it was before each attempt, and no discount line appears."
+  test_data = "FAKE123 (no such code), SAVE2O (SAVE20 with a letter O)"

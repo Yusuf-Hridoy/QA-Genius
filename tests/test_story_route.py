@@ -88,7 +88,7 @@ def test_fake_llm_returns_result_cards(monkeypatch) -> None:
 
 
 def test_load_example_needs_no_keys() -> None:
-    response = client.get("/requirements/story/example")
+    response = client.post("/requirements/story/example")
     assert response.status_code == 200
     body = response.text
     assert "How clear:" in body
@@ -120,13 +120,19 @@ def test_invalid_key_returns_plain_error(monkeypatch) -> None:
 
 def test_unreadable_output_returns_plain_error(monkeypatch) -> None:
     def fake(keys, system, user, schema):
-        raise llm.BadOutputError("The AI returned something unreadable. Try again.")
+        raise llm.BadOutputError(
+            llm.UNREADABLE, ["Key 1 (Groq) couldn't give a structured answer"]
+        )
 
     monkeypatch.setattr(llm, "generate_json", fake)
     response = client.post(
         "/requirements/story/run", data=FORM, headers=KEYS_HEADER
     )
-    assert "unreadable" in response.text
+    assert "No key could answer in the shape this desk needs" in response.text
+    assert "add another key" in response.text
+    # The provider's own JSON never reaches the page.
+    assert "{" not in response.text.split("error-card")[1]
+    assert "couldn&#39;t give a structured answer" in response.text
 
 
 def test_unavailable_model_returns_update_message(monkeypatch) -> None:
@@ -176,7 +182,7 @@ def test_story_run_sends_schema_to_model(monkeypatch) -> None:
 
 def test_story_result_carries_criteria_to_step_two(monkeypatch) -> None:
     """The Use these criteria button and its JSON ride along with the result."""
-    body = client.get("/requirements/story/example").text
+    body = client.post("/requirements/story/example").text
     assert 'id="use-criteria"' in body
     assert '<script type="application/json" id="story-criteria">' in body
     raw = body.split('<script type="application/json" id="story-criteria">')[1]
@@ -189,7 +195,7 @@ def test_story_result_carries_criteria_to_step_two(monkeypatch) -> None:
 
 def test_story_result_offers_both_ways_on() -> None:
     """Risk radar is reachable from the result, and step 2 still is too."""
-    body = client.get("/requirements/story/example").text
+    body = client.post("/requirements/story/example").text
     assert 'id="find-risks"' in body
     assert 'id="use-criteria"' in body
     assert 'id="story-criteria"' in body
@@ -197,7 +203,7 @@ def test_story_result_offers_both_ways_on() -> None:
 
 def test_story_criteria_json_is_escaped_not_safe() -> None:
     """tojson must escape a closing tag so AI text cannot break out of the script."""
-    body = client.get("/requirements/story/example").text
+    body = client.post("/requirements/story/example").text
     block = body.split('id="story-criteria">')[1].split("</script>")[0]
     assert "</script" not in block
 

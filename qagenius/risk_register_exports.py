@@ -126,7 +126,7 @@ def _write_register_sheet(sheet, report: RiskReport) -> None:
 
 def _write_heat_sheet(sheet, report: RiskReport) -> None:
     """Severity down the side, 5 at the top; likelihood across the bottom."""
-    sheet.append(["Severity \ Likelihood"] + [f"L{n}" for n in range(1, 6)])
+    sheet.append(["Severity / Likelihood"] + [f"L{n}" for n in range(1, 6)])
     for cell in sheet[1]:
         cell.font = Font(bold=True)
     sheet.column_dimensions["A"].width = 22

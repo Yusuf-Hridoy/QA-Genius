@@ -13,6 +13,7 @@ from qagenius.ship_check import (
     CHECK_IDS,
     MatrixRun,
     CORE_CHECKS,
+    VERDICT_LABELS,
     ShipInputs,
     compute_ship_report,
 )
@@ -93,7 +94,7 @@ def duel(agreement: int, *severities: str) -> DuelSummary:
 
 
 @pytest.mark.parametrize(
-    "agreement,expected", [(100, "pass"), (70, "pass"), (69, "warn"), (40, "warn"), (39, "fail")]
+    "agreement,expected", [(100, "pass"), (70, "pass"), (69, "warn"), (40, "warn"), (39, "warn")]
 )
 def test_duel_agreement_boundaries(agreement, expected):
     assert status_of(report(duel=duel(agreement)), "duel") == expected
@@ -107,8 +108,10 @@ def test_a_medium_fork_warns_however_high_the_agreement():
     assert status_of(report(duel=duel(100, "medium")), "duel") == "warn"
 
 
-def test_a_high_fork_fails_however_high_the_agreement():
-    assert status_of(report(duel=duel(100, "high")), "duel") == "fail"
+def test_a_high_fork_only_warns_however_high_the_agreement():
+    # Two AI readers are two opinions, so this check never fails.
+    assert status_of(report(duel=duel(100, "high")), "duel") == "warn"
+
 
 
 # ---------- criteria coverage ----------
@@ -199,8 +202,12 @@ def test_a_medium_risk_with_no_test_warns():
     ) == "warn"
 
 
-def test_a_high_risk_the_ai_claimed_but_cannot_match_warns():
-    """covered_by names a case about something else: "weak", not covered."""
+def test_a_high_risk_the_ai_claimed_but_cannot_match_counts_as_untested():
+    """covered_by names a case about something else: "weak", not covered.
+
+    Risk radar has always counted this one in its untested-high number, and
+    a run showed Ship check saying 1 while Risk radar said 2.
+    """
     unrelated = case(case_id="TC-900", title="Shopper updates a delivery address")
     unrelated = unrelated.model_copy(
         update={
@@ -217,7 +224,8 @@ def test_a_high_risk_the_ai_claimed_but_cannot_match_warns():
         ),
         "risks",
     )
-    assert item.status == "warn"
+    assert item.status == "fail"
+    assert item.summary == "1 high risk untested or weak"
     assert "AI claim doesn't match its test" in item.details[0]
     assert item.details[0].startswith("High · ")
 
@@ -448,16 +456,27 @@ def test_a_fail_beats_everything_else():
     assert result.verdict_reason == "1 check failed: Risks with a test."
 
 
-def test_two_fails_are_both_named():
+def test_a_two_reader_problem_alone_never_blocks_a_release():
+    result = report(**_everything_passes(duel=duel(20, "high", "high")))
+    assert result.verdict == "ship_with_risks"
+    assert VERDICT_LABELS[result.verdict] == "Release with known risks"
+
+
+def test_every_failed_check_is_named():
     # Clarity cannot fail here: _everything_passes carries criteria, and
-    # written criteria hold a low score at warn. The duel can.
+    # written criteria hold a low score at warn. The duel can no longer fail
+    # at all, so a thin one-case suite and an untested high risk do the work.
     result = report(
         **_everything_passes(
-            duel=duel(30, "high"),
+            criteria=CRITERIA,
+            test_cases=suite(case(case_id="TC-001", traceability="AC-1")),
             risk_analysis=RiskAnalysis(failure_modes=[HIGH]),
         )
     )
-    assert result.verdict_reason == "2 checks failed: Two-reader check, Risks with a test."
+    assert result.verdict == "dont_ship"
+    assert result.verdict_reason == (
+        "3 checks failed: Criteria with a test, How well tested, Risks with a test."
+    )
 
 
 @pytest.mark.parametrize("core", CORE_CHECKS)
@@ -648,3 +667,20 @@ def test_the_missing_acceptance_criteria_line_goes_when_there_are_criteria():
 )
 def test_the_clarity_boundaries_still_hold_without_criteria(clarity, expected):
     assert status_of(report(story_analysis=analysis(100 - clarity)), "clarity") == expected
+
+
+def test_the_two_desks_count_untested_high_risks_the_same_way():
+    from qagenius.risk_radar import loose_risks, score_risks
+
+    high_weak, high_case = _weak_pair("R1", 5, 4, "Focus trap in the overlay")
+    none = failure_mode("R5", 5, 4).model_copy(update={"title": "Uncaught exception"})
+    analysis = RiskAnalysis(failure_modes=[none, high_weak])
+    cases = suite(high_case)
+
+    radar = score_risks(analysis, list(cases.test_cases))
+    item = item_of(
+        report(risk_analysis=analysis, test_cases=cases, criteria=CRITERIA), "risks"
+    )
+    assert radar.counts["untested_high"] == len(loose_risks(radar.risks, "high")) == 2
+    assert item.summary.startswith("2 high risks untested or weak")
+    assert item.status == "fail"

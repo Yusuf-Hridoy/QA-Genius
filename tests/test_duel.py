@@ -8,9 +8,10 @@ from qagenius.duel import (
     drop_false_forks,
     format_number_facts,
     ground_forks,
+    reader_wrote_about,
     run_duel,
 )
-from qagenius.models import DuelComparison, Fork, Interpretation, NumberReading
+from qagenius.models import DuelComparison, Fork, Interpretation, NumberReading, Rule
 from qagenius.numbers import match_numbers
 from qagenius.prompts import duel_compare_prompt
 from qagenius.web import _highlight_duel_story
@@ -197,7 +198,7 @@ def test_unsupported_number_is_removed() -> None:
     reading_a = _reading_with_numbers("3 attempts")
     reading_b = Interpretation()
     comparison = _fork_sides("threshold", "3 attempts", "5 attempts")
-    cleaned, removed, notes = ground_forks(comparison, reading_a, reading_b)
+    cleaned, removed, notes, _unclear = ground_forks(comparison, reading_a, reading_b)
     assert cleaned.forks[0].reading_a == "3 attempts"
     assert cleaned.forks[0].reading_b == NOT_STATED_B
     assert removed == 1
@@ -208,7 +209,7 @@ def test_supported_numbers_kept() -> None:
     reading_a = _reading_with_numbers("3 attempts")
     reading_b = _reading_with_numbers("5 attempts")
     comparison = _fork_sides("threshold", "3 attempts", "5 attempts")
-    cleaned, removed, notes = ground_forks(comparison, reading_a, reading_b)
+    cleaned, removed, notes, _unclear = ground_forks(comparison, reading_a, reading_b)
     assert cleaned.forks[0].reading_a == "3 attempts"
     assert cleaned.forks[0].reading_b == "5 attempts"
     assert removed == 0
@@ -217,7 +218,7 @@ def test_supported_numbers_kept() -> None:
 
 def test_both_unsupported_drops_fork() -> None:
     comparison = _fork_sides("window", "7 minutes", "9 minutes")
-    cleaned, removed, _ = ground_forks(
+    cleaned, removed, _, _unclear = ground_forks(
         comparison, Interpretation(), Interpretation()
     )
     assert cleaned.forks == []
@@ -227,7 +228,7 @@ def test_both_unsupported_drops_fork() -> None:
 def test_not_stated_normalised() -> None:
     reading_a = _reading_with_numbers("3 attempts")
     comparison = _fork_sides("threshold", "3 attempts", "Not stated")
-    cleaned, removed, _ = ground_forks(comparison, reading_a, Interpretation())
+    cleaned, removed, _, _unclear = ground_forks(comparison, reading_a, Interpretation())
     assert len(cleaned.forks) == 1
     assert cleaned.forks[0].reading_b == NOT_STATED_B
     assert removed == 0
@@ -237,14 +238,14 @@ def test_number_match_is_whole_number() -> None:
     reading_b = _reading_with_numbers("15 minutes")
     comparison = _fork_sides("window", "3 attempts", "5 minutes")
     reading_a = _reading_with_numbers("3 attempts")
-    cleaned, removed, _ = ground_forks(comparison, reading_a, reading_b)
+    cleaned, removed, _, _unclear = ground_forks(comparison, reading_a, reading_b)
     assert cleaned.forks[0].reading_b == NOT_STATED_B
     assert removed == 1
 
 
 def test_text_only_claims_kept() -> None:
     comparison = _fork_sides("effect", "locks fast", "permanent until admin unlock")
-    cleaned, removed, _ = ground_forks(
+    cleaned, removed, _, _unclear = ground_forks(
         comparison, Interpretation(), Interpretation()
     )
     assert len(cleaned.forks) == 1
@@ -454,7 +455,88 @@ def test_matches_computed_before_compare() -> None:
 def test_thousands_separator_is_one_number() -> None:
     reading = _reading_with_numbers("1000 attempts")
     comparison = _fork_sides("threshold", "1,000 attempts", "1000 attempts")
-    cleaned, removed, notes = ground_forks(comparison, reading, reading)
+    cleaned, removed, notes, _unclear = ground_forks(comparison, reading, reading)
     assert cleaned.forks[0].reading_a == "1,000 attempts"
     assert removed == 0
     assert notes == []
+
+
+# ---------- "not stated" is checked against what the reader wrote ----------
+
+
+def _coupon_reader_b() -> Interpretation:
+    return Interpretation(
+        rules=[
+            Rule(
+                topic="Coupon usage limit per account",
+                reading="one coupon use per account, ever",
+                source_phrase="one coupon",
+            )
+        ],
+        numbers=[
+            NumberReading(
+                name="Coupon usage limit per account",
+                value="1 use",
+                source_phrase="one coupon",
+            )
+        ],
+    )
+
+
+def test_reader_who_wrote_about_the_topic_is_not_called_silent() -> None:
+    assert reader_wrote_about(_coupon_reader_b(), "Coupon usage limit per account")
+    assert not reader_wrote_about(Interpretation(), "Coupon usage limit per account")
+
+
+def test_a_wrong_silence_claim_becomes_a_check_row() -> None:
+    comparison = _fork_sides(
+        "Coupon usage limit per account", "one per order", "Not stated"
+    )
+    cleaned, removed, notes, unclear = ground_forks(
+        comparison, Interpretation(), _coupon_reader_b()
+    )
+    assert cleaned.forks[0].reading_b != NOT_STATED_B
+    assert "one coupon use per account" in cleaned.forks[0].reading_b
+    assert unclear == {"Coupon usage limit per account"}
+    assert removed == 0
+    assert any("did write about" in note for note in notes)
+
+
+def test_a_real_silence_is_still_reported() -> None:
+    comparison = _fork_sides("Coupon usage limit per account", "one per order", "Not stated")
+    cleaned, removed, _notes, unclear = ground_forks(
+        comparison, Interpretation(), Interpretation()
+    )
+    assert cleaned.forks[0].reading_b == NOT_STATED_B
+    assert unclear == set()
+    assert removed == 0
+
+
+def test_run_duel_marks_the_unclear_fork() -> None:
+    reader_b = _coupon_reader_b()
+
+    def fake(keys, system, user, schema):
+        if schema.__name__ == "Interpretation":
+            if "strictest" in system:
+                return Interpretation(), 0, []
+            return reader_b, 0, []
+        return (
+            DuelComparison(
+                forks=[
+                    Fork(
+                        topic="Coupon usage limit per account",
+                        reading_a="one per order",
+                        reading_b=NOT_STATED_B,
+                        source_phrase="lock",
+                        severity="high",
+                        suggested_rewrite="a clear rewrite",
+                    )
+                ],
+                agreements=[],
+            ),
+            0,
+            [],
+        )
+
+    result = run_duel(KEYS, STORY, "", "", generate=fake)
+    assert result.unclear_forks == {0}

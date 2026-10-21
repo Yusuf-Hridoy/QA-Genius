@@ -7,6 +7,14 @@
 
   var RUN_KEY = "qag.run";
   var FOCUS_OPTIONS = ["Functional", "Negative", "Boundary", "Edge Case"];
+  /* What the boxes say. The value posted stays the standard name, because
+   * the server checks it and the CSV and Excel exports keep it too. */
+  var FOCUS_WORDS = {
+    Functional: "Normal path",
+    Negative: "Wrong input",
+    Boundary: "At the limit",
+    "Edge Case": "Unusual case"
+  };
   var HISTORY_MAX = 5;
   var MAX_SELECTED = 12;
   /* These must match FRAMEWORK_OPTIONS, STRUCTURE_OPTIONS and BROWSER_OPTIONS
@@ -139,6 +147,11 @@
     return node ? node.value : "";
   }
 
+  function setField(name, value) {
+    var node = document.querySelector('#story-form [name="' + name + '"]');
+    if (node) node.value = value;
+  }
+
   /* The criteria the story check drafted, as plain strings. */
   function storyCriteriaTexts() {
     var holder = document.getElementById("story-criteria");
@@ -187,6 +200,110 @@
     fresh.autorun_test_cases = false;
     writeRun(fresh);
     return fresh;
+  }
+
+  /* ---------- step 1: the story page remembers what you were doing ----------
+   *
+   * A reader who came back from the test-cases desk found an empty box and
+   * no result, and had to spend a key again to see what they had just read.
+   * The story, its type, the context and the two result cards are put back
+   * from what the browser already holds. Nothing here calls the AI. */
+
+  var VIEW_KEY = "qag.story_view";
+
+  function readView() {
+    try {
+      var raw = sessionStorage.getItem(VIEW_KEY);
+      return raw ? JSON.parse(raw) : null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function writeView(view) {
+    try {
+      if (view) sessionStorage.setItem(VIEW_KEY, JSON.stringify(view));
+      else sessionStorage.removeItem(VIEW_KEY);
+    } catch (e) {
+      /* storage blocked: the page still works, it just forgets */
+    }
+  }
+
+  /* The cards as the server drew them, kept against the story they describe
+   * so a saved card can never turn up under a different story. */
+  function rememberStoryView() {
+    var story = fieldValue("user_story").trim();
+    if (!story) return;
+    var view = readView() || {};
+    if (view.story !== story) view = { story: story };
+    var result = document.getElementById("story-output");
+    var duel = document.getElementById("duel-output");
+    if (result && result.innerHTML.trim()) view.result = result.innerHTML;
+    if (duel && duel.innerHTML.trim()) view.duel = duel.innerHTML;
+    writeView(view);
+  }
+
+  function putBack(id, html) {
+    var box = document.getElementById(id);
+    if (!box || !html || box.innerHTML.trim()) return;
+    box.innerHTML = html;
+    /* The card carries hx-post buttons, which htmx only knows about once
+     * it has been told to look at the new nodes. */
+    if (window.htmx && window.htmx.process) window.htmx.process(box);
+  }
+
+  function restoreStoryPage() {
+    var form = document.getElementById("story-form");
+    if (!form) return;
+    var run = readRun() || {};
+    setField("user_story", run.story || "");
+    setField("story_type", run.story_type || "User story");
+    setField("context", run.context || "");
+    var story = String(run.story || "").trim();
+    var view = readView();
+    if (view && story && view.story === story) {
+      putBack("story-output", view.result);
+      putBack("duel-output", view.duel);
+    }
+    showStartFresh(Boolean(story));
+  }
+
+  /* One link, and only when there is something to clear. */
+  function showStartFresh(wanted) {
+    var existing = document.getElementById("story-start-fresh");
+    if (!wanted) {
+      if (existing) existing.parentNode.removeChild(existing);
+      return;
+    }
+    if (existing) return;
+    var actions = document.querySelector("#story-form .form-actions");
+    if (!actions) return;
+    var link = el("button", "btn btn-small", "Start a new story");
+    link.type = "button";
+    link.id = "story-start-fresh";
+    link.addEventListener("click", startFreshStory);
+    actions.appendChild(link);
+  }
+
+  function startFreshStory() {
+    var run = readRun() || {};
+    delete run.story;
+    delete run.story_type;
+    delete run.context;
+    delete run.story_analysis;
+    delete run.duel_summary;
+    writeRun(run);
+    writeView(null);
+    setField("user_story", "");
+    setField("story_type", "User story");
+    setField("context", "");
+    ["story-output", "duel-output"].forEach(function (id) {
+      var box = document.getElementById(id);
+      if (box) box.innerHTML = "";
+    });
+    showStartFresh(false);
+    var box = document.getElementById("story-user-story");
+    if (box) box.focus();
   }
 
   /* ---------- what Ship check reads back ---------- */
@@ -376,10 +493,7 @@
     var actionBar = el("div", "form-actions");
     var generate = el("button", "btn btn-primary", "Generate test cases →");
     generate.setAttribute("type", "button");
-    if (nonEmpty(run).length === 0) {
-      generate.disabled = true;
-      generate.setAttribute("aria-disabled", "true");
-    }
+    generate.id = "generate-test-cases";
     generate.addEventListener("click", function () {
       var current = readRun() || run;
       current.autorun_test_cases = true;
@@ -388,14 +502,37 @@
     });
     actionBar.appendChild(generate);
     actions.appendChild(actionBar);
-    /* A disabled button says why, and not only in a title attribute. */
-    if (nonEmpty(run).length === 0) {
-      actions.appendChild(
-        el("p", "form-note", "Add at least one criterion to generate test cases.")
-      );
-    }
+    /* A disabled button says why, and not only in a title attribute. The
+     * line is always here so typing can show and hide it without a redraw
+     * that would take the caret out of the box being typed in. */
+    var why = el("p", "form-note", "Add at least one criterion to generate test cases.");
+    why.id = "generate-why";
+    actions.appendChild(why);
     root.appendChild(actions);
+    syncGenerate(run);
     fieldsReady(root);
+  }
+
+  /* Is there anything to generate test cases from? */
+  function canGenerate(run) {
+    return nonEmpty(run).length > 0;
+  }
+
+  /* The enable rule, run again on every keystroke. A reader who typed their
+   * first criterion and found the button still grey had to add a second one
+   * and delete it to wake it up. */
+  function syncGenerate(run) {
+    var button = document.getElementById("generate-test-cases");
+    if (!button) {
+      return;
+    }
+    var ready = canGenerate(run);
+    button.disabled = !ready;
+    button.setAttribute("aria-disabled", ready ? "false" : "true");
+    var why = document.getElementById("generate-why");
+    if (why) {
+      why.hidden = ready;
+    }
   }
 
   function criterionRow(run, criterion, index) {
@@ -411,6 +548,7 @@
       run.criteria = renumber(run.criteria);
       writeRun(run);
       growTextarea(box);
+      syncGenerate(run);
     });
     row.appendChild(box);
 
@@ -531,7 +669,7 @@
       input.checked = true;
       input.id = "focus-" + i;
       wrap.appendChild(input);
-      wrap.appendChild(document.createTextNode(" " + option));
+      wrap.appendChild(document.createTextNode(" " + (FOCUS_WORDS[option] || option)));
       focus.appendChild(wrap);
     });
     form.appendChild(focus);
@@ -546,7 +684,7 @@
 
     var example = el("button", "btn", "Load example");
     example.setAttribute("type", "button");
-    example.setAttribute("hx-get", "/requirements/test-cases/example");
+    example.setAttribute("hx-post", "/requirements/test-cases/example");
     example.setAttribute("hx-target", "#test-cases-output");
     example.setAttribute("hx-swap", "innerHTML");
     actions.appendChild(example);
@@ -594,7 +732,7 @@
     );
     var example = el("button", "btn", "Load example");
     example.setAttribute("type", "button");
-    example.setAttribute("hx-get", "/requirements/test-cases/example");
+    example.setAttribute("hx-post", "/requirements/test-cases/example");
     example.setAttribute("hx-target", "#test-cases-output");
     example.setAttribute("hx-swap", "innerHTML");
     card.appendChild(example);
@@ -753,7 +891,7 @@
   function exampleButton() {
     var example = el("button", "btn", "Load example");
     example.setAttribute("type", "button");
-    example.setAttribute("hx-get", "/requirements/automation/example");
+    example.setAttribute("hx-post", "/requirements/automation/example");
     example.setAttribute("hx-target", "#automation-output");
     example.setAttribute("hx-swap", "innerHTML");
     return example;
@@ -1344,6 +1482,10 @@
     if (path.indexOf("/requirements/story/duel") !== -1) {
       saveDuelSummary();
     }
+    if (path.indexOf("/requirements/story/") !== -1) {
+      rememberStoryView();
+      showStartFresh(Boolean(fieldValue("user_story").trim()));
+    }
     if (path.indexOf("/requirements/automation/") !== -1) {
       saveAutomationToRun();
     }
@@ -1362,6 +1504,7 @@
   });
 
   document.addEventListener("DOMContentLoaded", function () {
+    restoreStoryPage();
     renderCriteria();
     renderTestCases();
     renderAutomation();
@@ -1371,6 +1514,13 @@
   /* The pure helpers the unit tests in tests/js reach for. The page itself
    * never goes through here. */
   if (typeof window !== "undefined") {
-    window.QAGFlow = { withoutCase: withoutCase, renumber: renumber };
+    window.QAGFlow = {
+      withoutCase: withoutCase,
+      renumber: renumber,
+      restoreStoryPage: restoreStoryPage,
+      startFreshStory: startFreshStory,
+      canGenerate: canGenerate,
+      syncGenerate: syncGenerate,
+    };
   }
 })();

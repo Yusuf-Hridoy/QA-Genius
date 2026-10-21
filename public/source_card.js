@@ -34,6 +34,13 @@
     test_cases: "Test cases",
     automation: "Automation"
   };
+  /* A desk that can load its example without its button being on screen. */
+  var DESK_EXAMPLES = {
+    matrix: function () {
+      return window.QAGMatrix && window.QAGMatrix.loadExample;
+    }
+  };
+
   /* The desk's own Load example button, which the card borrows. */
   var EXAMPLES = {
     risks: "#risk-example",
@@ -450,6 +457,14 @@
       return;
     }
     if (event.target.closest(".source-example")) {
+      /* The desk's own button only exists once that desk has rendered: on
+       * the matrix page the editor is not there yet, so the first press
+       * found nothing to click. The desk's own function is asked first. */
+      var own = DESK_EXAMPLES[desk] && DESK_EXAMPLES[desk]();
+      if (own) {
+        own();
+        return;
+      }
       var example = document.querySelector(EXAMPLES[desk]);
       if (example) example.click();
       return;

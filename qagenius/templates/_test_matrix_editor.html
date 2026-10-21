@@ -74,6 +74,32 @@
   </div>
 </div>
 
+{# A rule the AI guessed takes real runs off the matrix, so it waits here
+   until somebody reads it and says yes. Standard rules are facts about the
+   tools and are applied above. #}
+{% if suggested_rules %}
+<div class="card card-form" id="matrix-suggested-card">
+  <h2>Suggested rules</h2>
+  <p class="muted small">The AI thinks these combinations never happen. They are
+    not used yet — read each one and keep the ones that are right.</p>
+  <ul class="matrix-rule-list" id="matrix-suggested-list">
+    {% for rule in suggested_rules %}
+    <li class="matrix-suggested-rule"
+        data-if-factor="{{ rule.if_factor }}" data-if-value="{{ rule.if_value }}"
+        data-then-factor="{{ rule.then_factor }}" data-then-value="{{ rule.then_value }}"
+        data-reason="{{ rule.reason }}" data-source="ai">
+      <span><strong>{{ rule.if_factor }}={{ rule.if_value }}</strong> never with
+        <strong>{{ rule.then_factor }}={{ rule.then_value }}</strong></span>
+      <span class="pill warn plain small rule-source">Suggested by AI — check it</span>
+      {% if rule.reason %}<span class="muted small">{{ rule.reason }}</span>{% endif %}
+      <span class="spacer"></span>
+      <button type="button" class="btn btn-small matrix-use-rule">Use this rule</button>
+    </li>
+    {% endfor %}
+  </ul>
+</div>
+{% endif %}
+
 <div id="matrix-output">
 {% include "_test_matrix_result.html" %}
 </div>

@@ -23,10 +23,17 @@
     return inner || button;
   }
 
-  /* The card the line belongs under: the one this button sits in. */
+  /* The card the line belongs under: the one this button sits in. Some
+   * desks build their form straight into the page with no card around the
+   * buttons -- Automation does -- and the line must still appear. */
   function cardOf(button) {
     if (!button.closest) return null;
-    return button.closest(".source-card") || button.closest(".card") || null;
+    return (
+      button.closest(".source-card") ||
+      button.closest(".card") ||
+      button.closest("form") ||
+      null
+    );
   }
 
   function docOf(button) {
@@ -103,12 +110,26 @@
     working.slice().forEach(stop);
   }
 
+  /* The line on its own, for work no button started: the Matrix asks the
+   * model the moment the page opens, and the wait was silent. */
+  function noteUnder(anchor) {
+    if (!anchor) return;
+    showNote(anchor);
+  }
+
+  function clearNote(anchor) {
+    if (working.length) return;
+    hideNote(anchor || (typeof document === "undefined" ? null : document.body));
+  }
+
   window.QAGBusy = {
     WAIT_LINE: WAIT_LINE,
     NOTE_ID: NOTE_ID,
     start: start,
     stop: stop,
     stopAll: stopAll,
+    noteUnder: noteUnder,
+    clearNote: clearNote,
     isBusy: isBusy,
     working: function () {
       return working.slice();

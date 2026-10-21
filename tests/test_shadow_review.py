@@ -1204,3 +1204,271 @@ def test_the_cap_case_works_out_each_discount_to_the_cent():
         "At $150.01: 20% is $30.002, so the cap applies and the discount "
         "stays $30.00."
     ) in said
+
+
+# ── windows are not limits ───────────────────────────────────────────────────
+
+WINDOW_CRITERIA = [
+    "After 5 failed sign-in attempts within 10 minutes, the account is "
+    "locked for 15 minutes.",
+]
+
+
+def _outcome_at(criteria: list[str], value: str) -> str:
+    from qagenius.shadow_qa.boundaries import find_boundaries
+    from qagenius.shadow_qa.review import Setting, _boundary_outcome
+
+    ruled = number_criteria(criteria)
+    boundary = next(
+        one for one in find_boundaries(ruled) if one.values[1] == value
+    )
+    setting = Setting(page="", criteria=ruled, rules=(), disputed=frozenset())
+    return _boundary_outcome(boundary, boundary.values[2], setting)
+
+
+def test_just_outside_a_window_the_rule_does_not_apply():
+    # The run this came from asked for a test expecting a lock at 11 minutes,
+    # which is the one minute at which the rule stops reaching the attempts.
+    said = _outcome_at(WINDOW_CRITERIA, "10 minutes")
+    assert "does not apply" in said
+    assert "NOT locked" in said
+    assert "refused" not in said
+
+
+def test_just_past_a_plain_limit_the_rule_still_bites():
+    said = _outcome_at(["A locked account stays locked for 30 minutes"], "30 minutes")
+    assert "window" not in said
+
+
+def test_a_window_is_only_a_window_when_something_is_counted_inside_it():
+    from qagenius.shadow_qa.boundaries import find_boundaries
+    from qagenius.shadow_qa.review import is_window
+
+    plain = number_criteria(["The page loads within 2 seconds"])
+    boundary = find_boundaries(plain)[0]
+    assert not is_window(boundary, plain[0].text)
+
+
+# ── the senior tester reads the test's real values ───────────────────────────
+
+
+def test_a_number_only_in_the_title_is_not_the_test_s_value():
+    # A real run called a $75 cart "exactly $50" because the title said
+    # "order over $50".
+    cases = [
+        case(
+            case_id="TC-005",
+            title="Discount applied for an order over $50",
+            traceability="AC-1",
+            steps=["Add items to the cart", "Enter the coupon code"],
+            test_data="cart_total=75.00, coupon=SAVE20",
+            expected_result="The discount is applied and the new total is shown",
+        )
+    ]
+    notes = limit_conflicts(
+        with_context(number_criteria(COUPON_CRITERIA), COUPON_CONTEXT), cases
+    )
+    assert not any("TC-005" in note for note in notes)
+
+
+def test_the_test_data_is_read_for_the_limit_value():
+    cases = [
+        case(
+            case_id="TC-008",
+            title="Coupon on a small cart",
+            traceability="AC-2",
+            steps=["Enter the coupon code"],
+            test_data="cart_total=50.00",
+            expected_result="The coupon is refused",
+        )
+    ]
+    criteria = number_criteria(
+        ["Given a cart of at least $50 When a valid coupon is entered "
+         "Then the discount is applied"]
+    )
+    notes = limit_conflicts(criteria, cases)
+    assert any("TC-008" in note and "50" in note for note in notes)
+
+
+# ── no duplicate count tests ─────────────────────────────────────────────────
+
+
+def test_a_count_the_ai_already_used_is_not_asked_for_again():
+    from qagenius.shadow_qa.boundaries import find_boundaries, missing_values
+
+    ruled = number_criteria(["The account locks after 5 failed sign-in attempts"])
+    boundary = next(one for one in find_boundaries(ruled) if one.kind == "count")
+    assert boundary.values == ["4 attempts", "5 attempts", "6 attempts"]
+    cases = [
+        case(
+            case_id="TC-001",
+            steps=["Sign in wrongly 4 times", "Try a 5th time"],
+            test_data="attempts=6",
+            expected_result="The account is locked",
+        )
+    ]
+    assert missing_values(boundary, cases) == []
+
+
+def test_every_way_a_tester_writes_a_count_is_read():
+    from qagenius.shadow_qa.boundaries import scan, states
+
+    for said in ("the 6th attempt", "the sixth wrong password", "6 times",
+                 "6 wrong passwords", "attempts=6", "6 attempts"):
+        assert states("6 attempts", scan(said)), said
+
+
+# ── two tests that disagree about the same rule ──────────────────────────────
+
+
+def test_two_cases_that_lock_at_different_counts_are_named():
+    from qagenius.shadow_qa.review import trigger_disagreements
+
+    cases = [
+        case(
+            case_id="TC-001",
+            traceability="AC-1",
+            steps=["Enter a wrong password 5 times", "Enter it once more"],
+            test_data="attempts=6",
+            expected_result="The account is locked and sign-in is refused",
+        ),
+        case(
+            case_id="TC-007",
+            traceability="AC-1",
+            steps=["Enter a wrong password 5 times"],
+            test_data="attempts=5",
+            expected_result="The account is locked and sign-in is refused",
+        ),
+    ]
+    notes = trigger_disagreements(cases)
+    assert len(notes) == 1
+    assert "TC-001" in notes[0] and "6th" in notes[0]
+    assert "TC-007" in notes[0] and "5th" in notes[0]
+    assert "Decide which is right." in notes[0]
+
+
+def test_two_cases_that_agree_say_nothing():
+    from qagenius.shadow_qa.review import trigger_disagreements
+
+    cases = [
+        case(case_id="TC-001", traceability="AC-1", test_data="attempts=6",
+             expected_result="The account is locked and sign-in is refused"),
+        case(case_id="TC-002", traceability="AC-1", test_data="attempts=6",
+             expected_result="The account is locked and sign-in is refused"),
+    ]
+    assert trigger_disagreements(cases) == []
+
+
+def test_the_boundary_reason_names_only_the_values_that_were_missing():
+    from qagenius.shadow_qa.review import reason_for
+
+    added = case(
+        case_id="TC-009",
+        category="Boundary",
+        title="Boundary value at 6 attempts (AC-1)",
+        tags=["principal-qa", "pack:boundary"],
+    )
+    assert reason_for(added) == (
+        "The limit is where this breaks, and no case uses 6 attempts."
+    )
+
+
+# ── coupon and data rules ───────────────────────────────────────────────────
+
+
+def test_a_success_test_whose_data_breaks_the_rule_is_named():
+    from qagenius.shadow_qa.review import precondition_notes
+
+    criteria = with_context(number_criteria(COUPON_CRITERIA), COUPON_CONTEXT)
+    bad = case(
+        case_id="TC-008",
+        traceability="AC-1",
+        title="Coupon applies to a small cart",
+        pre_conditions="A cart with one item",
+        steps=["Enter the coupon code", "Apply it"],
+        test_data="cart_total=19.99, coupon=SAVE20",
+        expected_result="The discount is applied and the new total is shown",
+    )
+    notes = precondition_notes(criteria, [bad])
+    assert len(notes) == 1
+    assert "TC-008 uses $19.99" in notes[0]
+    assert "can't pass as written" in notes[0]
+
+
+def test_a_success_test_whose_data_fits_is_left_alone():
+    from qagenius.shadow_qa.review import precondition_notes
+
+    criteria = with_context(number_criteria(COUPON_CRITERIA), COUPON_CONTEXT)
+    good = case(
+        case_id="TC-005",
+        traceability="AC-1",
+        test_data="cart_total=75.00, coupon=SAVE20",
+        expected_result="The discount is applied and the new total is shown",
+    )
+    assert precondition_notes(criteria, [good]) == []
+
+
+def test_two_tests_that_round_the_same_sum_differently_are_named():
+    from qagenius.shadow_qa.review import rounding_notes
+
+    first = case(
+        case_id="TC-003",
+        title="15% off a 59.99 cart",
+        test_data="cart=59.99, coupon=15%",
+        expected_result="The discount is 8.99 and the total is 51.00",
+    )
+    second = case(
+        case_id="TC-004",
+        title="15% off a 59.99 cart at payment",
+        test_data="cart=59.99, coupon=15%",
+        expected_result="The discount is 9.00 and the total is 50.99",
+    )
+    notes = rounding_notes([first, second])
+    assert len(notes) == 1
+    assert "TC-003 expects 8.99 off" in notes[0]
+    assert "TC-004 expects 9.00 off" in notes[0]
+    assert "how the shop rounds the cent" in notes[0]
+
+
+def test_two_tests_that_round_the_same_way_say_nothing():
+    from qagenius.shadow_qa.review import rounding_notes
+
+    first = case(
+        case_id="TC-003",
+        test_data="cart=59.99, coupon=15%",
+        expected_result="The discount is 9.00",
+    )
+    second = case(
+        case_id="TC-004",
+        test_data="cart=59.99, coupon=15%",
+        expected_result="The discount is 9.00",
+    )
+    assert rounding_notes([first, second]) == []
+
+
+def test_word_stem_duplicates_are_one_risk():
+    from qagenius.shadow_qa.packs import PackRisk
+    from qagenius.shadow_qa.review import _twin
+
+    written = FailureMode(
+        id="R1",
+        title="Coupon removed on refresh",
+        category="functional",
+        effect="The shopper loses the discount",
+        cause="The cart reloads without the coupon",
+        severity=4,
+        likelihood=3,
+        detectability=3,
+    )
+    same = PackRisk(
+        pack_id="coupon",
+        title="Coupon removes itself when the page refreshes",
+        category="functional",
+        effect="The discount is lost",
+        cause="A refresh drops it",
+        severity=4,
+        likelihood=3,
+        detectability=3,
+        covered_if=("refresh",),
+    )
+    assert _twin(same, [written]) is written

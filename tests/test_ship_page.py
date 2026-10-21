@@ -1,6 +1,7 @@
 """The Ship check page and its result card: what a reader actually sees."""
 
 import json
+from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
@@ -9,6 +10,12 @@ import main
 from qagenius import llm
 
 client = TestClient(main.app)
+
+
+def open_page(path: str):
+    """An example is asked for with POST, so no reader's URL can carry one."""
+    return client.post(path) if "/example" in path else client.get(path)
+ROOT = Path(__file__).resolve().parent.parent
 
 REASON = "Behind a feature flag for internal users until the shared counter lands."
 
@@ -67,28 +74,28 @@ def test_the_banner_tone_matches_the_verdict(tone, label):
 
 
 def test_the_banner_counts_the_checks_that_ran():
-    assert "5 of 7 checks ran" in client.get("/ship/example").text
+    assert "5 of 7 checks ran" in client.post("/ship/example").text
 
 
 # ---------- the rows ----------
 
 
 def test_a_pass_row_carries_no_accept_button():
-    rows = client.get("/ship/example").text.split('class="card ship-row"')
+    rows = client.post("/ship/example").text.split('class="card ship-row"')
     passing = [row for row in rows if 'data-status="pass"' in row]
     assert passing
     assert all("Accept this risk and say why" not in row for row in passing)
 
 
 def test_a_warn_row_carries_no_accept_button():
-    rows = client.get("/ship/example").text.split('class="card ship-row"')
+    rows = client.post("/ship/example").text.split('class="card ship-row"')
     warning = [row for row in rows if 'data-status="warn"' in row]
     assert warning
     assert all("Accept this risk and say why" not in row for row in warning)
 
 
 def test_a_fail_row_carries_the_accept_form():
-    rows = client.get("/ship/example").text.split('class="card ship-row"')
+    rows = client.post("/ship/example").text.split('class="card ship-row"')
     failing = [row for row in rows if 'data-status="fail"' in row][0]
     assert "Accept this risk and say why" in failing
     assert 'class="ship-accept-form"' in failing
@@ -112,7 +119,7 @@ def test_a_script_tag_in_a_reason_shows_as_text():
 
 
 def test_details_are_a_disclosure_not_a_wall_of_text():
-    body = client.get("/ship/example").text
+    body = client.post("/ship/example").text
     assert '<details class="ship-details">' in body
     assert "no test" in body
 
@@ -121,13 +128,13 @@ def test_details_are_a_disclosure_not_a_wall_of_text():
 
 
 def test_the_report_offers_copy_and_print():
-    body = client.get("/ship/example").text
+    body = client.post("/ship/example").text
     assert 'id="ship-copy-md"' in body
     assert 'id="ship-print"' in body
 
 
 def test_the_markdown_block_holds_the_whole_report():
-    body = client.get("/ship/example").text
+    body = client.post("/ship/example").text
     markdown = json.loads(
         body.split('id="ship-md">', 1)[1].split("</script>", 1)[0]
     )
@@ -145,7 +152,7 @@ def test_the_print_stylesheet_hides_the_chrome():
 
 
 def test_the_result_repeats_that_nothing_left_the_browser():
-    body = client.get("/ship/example").text
+    body = client.post("/ship/example").text
     assert "Nothing was sent to an AI" in body
 
 
@@ -170,7 +177,7 @@ def test_the_home_page_sends_you_to_ship_check():
 
 
 def test_the_risk_result_still_links_on_to_ship_check():
-    body = client.get("/risks/example").text
+    body = client.post("/risks/example").text
     assert 'class="btn btn-small ship-link" href="/ship"' in body
 
 
@@ -180,5 +187,27 @@ def test_the_risk_result_still_links_on_to_ship_check():
 )
 def test_the_requirements_results_link_on_through_the_next_strip(url):
     """The strip carries Ship check now, with its freshness beside it."""
-    body = client.get(url).text
+    body = open_page(url).text
     assert 'class="next-chip" href="/ship"' in body
+
+
+def test_the_example_says_it_is_a_saved_example():
+    # A saved run must never be mistaken for one the reader's own work
+    # produced, and it is a whole finished run, so nothing on the page
+    # should still be asking them to start one.
+    body = client.post("/ship/example").text
+    assert 'data-is-example="1"' in body
+    assert "This is a saved example." in body
+
+
+def test_a_real_report_carries_no_example_banner():
+    body = client.post("/ship/report", json={}).text
+    assert "This is a saved example." not in body
+
+
+def test_the_example_hides_the_start_card():
+    script = (ROOT / "public" / "ship_check.js").read_text(encoding="utf-8")
+    # loadExample empties #ship-root before showing the saved run.
+    block = script.split("function loadExample(", 1)[1].split("\n  }", 1)[0]
+    assert 'byId("ship-root")' in block
+    assert "textContent = \"\"" in block

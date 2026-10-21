@@ -85,7 +85,7 @@ def test_fake_duel_returns_duel_card(monkeypatch) -> None:
 
 
 def test_load_example_includes_duel_without_key() -> None:
-    response = client.get("/requirements/story/example")
+    response = client.post("/requirements/story/example")
     assert response.status_code == 200
     body = response.text
     assert "Two-reader check" in body
@@ -169,7 +169,7 @@ def test_sample_duel_is_clean() -> None:
     assert len(reading_a.rules) >= 3
     assert len(reading_b.numbers) >= 3
     assert len(reading_b.rules) >= 3
-    _, removed, _ = ground_forks(comparison, reading_a, reading_b)
+    _, removed, _, _ = ground_forks(comparison, reading_a, reading_b)
     assert removed == 0
     for fork in comparison.forks:
         assert find_vague_words(fork.suggested_rewrite) == []
@@ -244,7 +244,7 @@ def test_values_table_hidden_when_empty(monkeypatch) -> None:
 
 
 def test_load_example_has_values_table() -> None:
-    body = client.get("/requirements/story/example").text
+    body = client.post("/requirements/story/example").text
     assert "Numbers, compared by code" in body
     assert '<span class="pill ok">same</span>' in body
     assert '<span class="pill bad">different</span>' in body

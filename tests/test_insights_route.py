@@ -363,7 +363,7 @@ def test_a_busy_key_shows_an_error_card(monkeypatch) -> None:
 def test_the_example_works_without_a_key(monkeypatch) -> None:
     monkeypatch.setattr(llm, "generate_json", _never_called)
 
-    response = client.get("/insights/example")
+    response = client.post("/insights/example")
 
     assert response.status_code == 200
     assert "85%" in response.text
@@ -374,7 +374,7 @@ def test_the_example_works_without_a_key(monkeypatch) -> None:
 def test_the_example_explanation_works_without_a_key(monkeypatch) -> None:
     monkeypatch.setattr(llm, "generate_json", _never_called)
 
-    response = client.get("/insights/example-explained")
+    response = client.post("/insights/example-explained")
 
     assert response.status_code == 200
     assert "Answered by saved example." in response.text

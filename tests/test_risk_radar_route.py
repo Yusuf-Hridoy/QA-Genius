@@ -213,7 +213,7 @@ def test_rescore_refuses_too_many_risks() -> None:
 
 def test_the_page_data_round_trips_through_rescore(monkeypatch) -> None:
     monkeypatch.setattr(llm, "generate_json", _never)
-    page = client.get("/risks/example").text
+    page = client.post("/risks/example").text
     start = page.index('id="risk-data">') + len('id="risk-data">')
     raw = page[start : page.index("</script>", start)]
     data = json.loads(raw)
@@ -226,7 +226,7 @@ def test_the_page_data_round_trips_through_rescore(monkeypatch) -> None:
 
 
 def test_the_example_shows_every_coverage_state() -> None:
-    body = client.get("/risks/example").text
+    body = client.post("/risks/example").text
     assert "Tested by TC-010 (tagged risk:R1)" in body
     assert "Probably tested by TC-005" in body
     assert "both say:" in body
@@ -236,7 +236,7 @@ def test_the_example_shows_every_coverage_state() -> None:
 
 
 def test_the_example_counts_its_untested_high_risks() -> None:
-    body = client.get("/risks/example").text
+    body = client.post("/risks/example").text
     # The saved analysis plus the classics the senior tester adds; the button and
     # the stat must agree on the number whatever that number is.
     shown = re.search(
@@ -248,7 +248,7 @@ def test_the_example_counts_its_untested_high_risks() -> None:
 
 
 def test_the_example_needs_no_key_and_says_so() -> None:
-    response = client.get("/risks/example")
+    response = client.post("/risks/example")
     assert response.status_code == 200
     assert "Answered by saved example." in response.text
 
@@ -257,7 +257,7 @@ def test_the_example_needs_no_key_and_says_so() -> None:
 
 
 def test_the_heat_map_has_every_cell_and_the_ids_in_the_right_one() -> None:
-    body = client.get("/risks/example").text
+    body = client.post("/risks/example").text
     assert body.count('class="heat-cell') == 25
     # R1 is severity 5, likelihood 4 in the saved example.
     marker = 'data-cell="5-4"'
@@ -281,7 +281,7 @@ def test_the_rpn_pill_is_coloured_by_level(monkeypatch) -> None:
 
 
 def test_the_card_shows_the_reasons_and_the_test_idea() -> None:
-    body = client.get("/risks/example").text
+    body = client.post("/risks/example").text
     assert "Why these scores" in body
     assert "These scores are the AI's guess" in body
     assert "class=\"score-input\"" in body
@@ -377,6 +377,6 @@ def test_an_unlabelled_rescore_is_treated_as_a_score_edit(monkeypatch) -> None:
 
 
 def test_a_real_analysis_still_names_the_provider() -> None:
-    body = client.get("/risks/example").text
+    body = client.post("/risks/example").text
     assert "Answered by saved example." in body
     assert "Rechecked by code" not in body

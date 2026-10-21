@@ -1,5 +1,5 @@
 from qagenius.models import Interpretation, NumberReading
-from qagenius.numbers import match_numbers, parse_quantity
+from qagenius.numbers import match_numbers, parse_quantity, read_scope, scopes_clash
 
 
 def _reading(*pairs: tuple[str, str]) -> Interpretation:
@@ -148,3 +148,53 @@ def test_comma_as_decimal_point() -> None:
     assert quantity is not None
     assert quantity.family == "time"
     assert quantity.amount == 5400
+
+
+# ---------- scope: what a limit counts against ----------
+
+
+def test_scope_read_from_the_name() -> None:
+    assert read_scope("Coupon limit per order") == "order"
+    assert read_scope("Coupon usage limit per account") == "account"
+    assert read_scope("Total coupons") == "total"
+    assert read_scope("Attempt limit") is None
+
+
+def test_scopes_clash_only_when_both_are_stated() -> None:
+    assert scopes_clash("Coupon limit per order", "Coupon uses per account")
+    assert not scopes_clash("Coupon limit per order", "Coupon limit")
+    assert not scopes_clash("Coupon limit per order", "Coupons per order")
+
+
+def test_different_scopes_never_pair() -> None:
+    # The real run paired "1 coupon per order" with "1 use per account" and
+    # called the readers wrong about a limit they never both named.
+    matches = match_numbers(
+        _reading(("Coupon limit per order", "1 coupon")),
+        _reading(("Coupon usage limit per account", "1 use")),
+    )
+    assert [m.status for m in matches] == ["only_a", "only_b"]
+
+
+def test_same_number_said_two_ways_is_not_a_difference() -> None:
+    matches = match_numbers(
+        _reading(("Coupon limit", "1 coupon")),
+        _reading(("Coupon limit", "1 use")),
+    )
+    assert [m.status for m in matches] == ["same"]
+
+
+def test_free_text_the_code_cannot_read_is_a_check_not_a_difference() -> None:
+    matches = match_numbers(
+        _reading(("Lock reason", "too many tries")),
+        _reading(("Lock reason", "repeated failures")),
+    )
+    assert [m.status for m in matches] == ["check"]
+
+
+def test_two_different_counts_of_the_same_thing_still_differ() -> None:
+    matches = match_numbers(
+        _reading(("Coupon limit", "1 coupon")),
+        _reading(("Coupon limit", "3 coupons")),
+    )
+    assert [m.status for m in matches] == ["different"]

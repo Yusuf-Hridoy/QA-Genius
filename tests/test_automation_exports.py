@@ -127,10 +127,12 @@ def test_playwright_node_installs_from_the_package_json_it_shipped() -> None:
     ]
 
 
-def test_playwright_typescript_without_dependencies_also_installs_typescript() -> None:
+def test_playwright_typescript_always_has_a_package_json_to_install_from() -> None:
+    # A TypeScript project is given one, with the compiler and the Node
+    # types already in it, so there is nothing left for npm init to do.
     assert _steps() == [
         "cd qa-genius-automation",
-        "npm init -y && npm install -D @playwright/test typescript",
+        "npm install",
         "npx playwright install",
         "npx playwright test",
     ]

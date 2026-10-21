@@ -276,9 +276,29 @@ def test_the_lockout_story_gets_no_epic_warning():
     assert epic_note(review_story(LOCKOUT_STORY, LOCKOUT_CRITERIA)) is None
 
 
-def test_ten_criteria_alone_make_it_an_epic():
+def test_drafted_criteria_never_make_a_small_story_an_epic():
+    # A run warned that a one-line story was really eight features, every
+    # one of them read off criteria the AI had just drafted for it.
     texts = [f"The page shows field {number}" for number in range(10)]
-    assert epic_note(review_story("As a user, I want a page so that I can read it.", texts))
+    assert epic_note(
+        review_story("As a user, I want a page so that I can read it.", texts)
+    ) is None
+
+
+def test_a_one_line_story_with_a_context_gets_no_warning():
+    assert epic_note(
+        review_story("As a user I want x so that y", [], "login page")
+    ) is None
+
+
+def test_the_features_come_from_the_story_not_the_drafted_criteria():
+    note = epic_note(review_story(PROFILE_STORY, PROFILE_CRITERIA))
+    assert note is not None
+    # "Rate limit" is only in the AI's criteria, never in the story.
+    assert "Rate limit" not in note.features
+    for named in ("Profile", "Password", "Two-factor", "Sessions", "OAuth",
+                  "Preferences", "Upload", "Deletion"):
+        assert named in note.features, named
 
 
 def test_a_missing_actor_and_benefit_are_reported():
@@ -529,7 +549,7 @@ def test_the_guest_check_waits_for_a_story_that_mentions_guests():
 
 def test_every_coupon_check_is_a_test_somebody_could_run():
     pack = next(one for one in load_packs() if one.id == "coupon")
-    assert len(pack.checks) == 10
+    assert len(pack.checks) == 11
     for check in pack.checks:
         assert len(check.test.steps) >= 2, check.short_id
         assert check.test.test_data.strip(), check.short_id
@@ -572,3 +592,16 @@ def test_no_pack_is_switched_on_by_a_word_that_names_a_place():
     for pack in load_packs():
         strong = {word.lower() for word in pack.triggers} & flow_words
         assert not strong, f"{pack.id}: {sorted(strong)}"
+
+
+def test_the_coupon_pack_asks_for_a_code_that_does_not_exist():
+    # The commonest thing a shopper types is a code that is not a code, and
+    # no run ever asked for a test of it.
+    pack = next(one for one in load_packs() if one.id == "coupon")
+    check = next(one for one in pack.checks if one.short_id == "unknown_code")
+    assert "FAKE123" in check.test.test_data
+    assert "SAVE2O" in check.test.test_data
+    assert "refused" in check.test.expected_result
+    assert "the total is the same" in check.test.expected_result.lower()
+    # It applies to any coupon story, not only one that mentions typos.
+    assert applies(check, "As a shopper I want to use a coupon code.")

@@ -1,5 +1,5 @@
 {% if provider_name == "saved example" %}
-{% with caption = "Add a key and press Run the two-reader check to read your own story twice." %}
+{% with caption = "Add a key and press Run the two-reader check to read your own story twice.", with_keys = "Run it on your own story — press Run the two-reader check." %}
 {% include "_example_flag.html" %}
 {% endwith %}
 {% endif %}
@@ -9,7 +9,7 @@
     differently, the story is unclear.</p>
   <p>
     <span class="pill {{ forks_pill }}">{{ forks | length }} place{{ "" if forks | length == 1 else "s" }} they disagree</span>
-    <span class="pill warn">{{ vague_count }} unclear word{{ "" if vague_count == 1 else "s" }}</span>
+    <span class="pill {{ "warn" if vague_count else "ok" }}">{% if vague_count %}{{ vague_count }} unclear word{{ "" if vague_count == 1 else "s" }}{% else %}No unclear words{% endif %}</span>
     <span class="pill {{ agreement_pill }}">they agree {{ agreement_pct }}% of the time</span>
   </p>
   {% if result.removed_claims > 0 %}
@@ -87,7 +87,7 @@
     {% for fork in forks %}
     <tr>
       <td>{{ fork.topic }}</td>
-      <td><span class="pill {{ severity_pill(fork.severity) }}">{{ fork.severity }}</span></td>
+      <td>{% if loop.index0 in unclear_forks %}<span class="pill warn">check this</span><br><span class="muted small">Both readers wrote about this, so they may not really disagree.</span>{% else %}<span class="pill {{ severity_pill(fork.severity) }}">{{ fork.severity }}</span>{% endif %}</td>
       <td>A: {% if fork.reading_a in not_stated_values %}<em class="muted">{{ fork.reading_a }}</em>{% else %}{{ fork.reading_a }}{% endif %}<br>B: {% if fork.reading_b in not_stated_values %}<em class="muted">{{ fork.reading_b }}</em>{% else %}{{ fork.reading_b }}{% endif %}</td>
       <td>{{ fork.suggested_rewrite }}{% if loop.index0 in vague_rewrites %} <span class="pill warn">still unclear: {{ vague_rewrites[loop.index0] | join(", ") }}</span>{% endif %}</td>
       <td><button type="button" class="btn btn-small apply-rewrite" data-phrase="{{ fork.source_phrase | e }}" data-rewrite="{{ fork.suggested_rewrite | e }}"{% if loop.index0 in vague_rewrites %} disabled aria-disabled="true" title="This wording is still unclear — write your own."{% endif %}>Use this wording</button></td>

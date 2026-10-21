@@ -56,17 +56,20 @@ def test_a_duplicate_name_gets_a_number() -> None:
         "tests/login.spec.ts",
         "tests/login.spec_2.ts",
         "playwright.config.ts",
+        # A TypeScript project cannot be type-checked without these two.
+        "package.json",
+        "tsconfig.json",
     ]
 
 
 def test_an_unsafe_name_falls_back_to_a_safe_one() -> None:
     files = project_files(script(test_file_name="../evil.ts", page_object_code=None))
-    assert [file.name for file in files] == ["test_cases.ts", "playwright.config.ts"]
+    assert [file.name for file in files][:2] == ["test_cases.ts", "playwright.config.ts"]
 
 
 def test_empty_code_is_not_a_file() -> None:
     files = project_files(script(page_object_code="   ", config_code=None))
-    assert [file.name for file in files] == ["tests/login.spec.ts"]
+    assert [file.name for file in files][:1] == ["tests/login.spec.ts"]
 
 
 def test_a_python_project_keeps_requirements_txt_and_adds_it_last() -> None:
@@ -82,8 +85,12 @@ def test_a_javascript_project_calls_its_dependency_file_package_json() -> None:
     file called requirements.txt. The name follows the framework now."""
     deps = '{"devDependencies": {"@playwright/test": "^1.40.0"}}\n'
     files = project_files(script(requirements_txt=deps))
-    assert files[-1].name == "package.json"
-    assert files[-1].code == deps
+    names = [file.name for file in files]
+    assert "package.json" in names
+    assert "requirements.txt" not in names
+    # The version the AI chose is its choice to keep.
+    package = next(file for file in files if file.name == "package.json")
+    assert '"@playwright/test": "^1.40.0"' in package.code
 
 
 def test_json_content_wins_over_a_python_framework() -> None:

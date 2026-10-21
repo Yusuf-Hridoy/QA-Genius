@@ -72,11 +72,14 @@
     <button type="button" class="btn btn-small" id="copy-command">Copy</button>
     <span class="muted small" id="command-status" aria-live="polite"></span>
   </div>
-  {% if script.setup_instructions %}
+  {# Only the notes the run steps above do not disprove: a note telling the
+     reader to mkdir a new folder and npm init builds an empty project beside
+     the one they just unzipped. #}
+  {% if ai_notes %}
   <details>
     <summary>Notes from the AI</summary>
     <ol class="setup-steps">
-      {% for step in script.setup_instructions %}<li>{{ step }}</li>{% endfor %}
+      {% for step in ai_notes %}<li>{{ step }}</li>{% endfor %}
     </ol>
     <p class="muted small">QA-Genius does not follow these — the commands above are
       worked out from the project you downloaded.</p>

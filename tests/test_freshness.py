@@ -9,6 +9,11 @@ from fastapi.testclient import TestClient
 import main
 
 client = TestClient(main.app)
+
+
+def open_page(path: str):
+    """An example is asked for with POST, so no reader's URL can carry one."""
+    return client.post(path) if "/example" in path else client.get(path)
 ROOT = Path(__file__).resolve().parent.parent
 
 # desk key -> the page that shows it
@@ -35,7 +40,7 @@ ALL_PAGES = [
 
 @pytest.mark.parametrize("desk,path", sorted(CARD_PAGES.items()))
 def test_each_desk_has_exactly_one_source_card(desk, path) -> None:
-    body = client.get(path).text
+    body = open_page(path).text
     assert body.count('id="source-card"') == 1, path
     assert f'data-desk="{desk}"' in body
 
@@ -43,7 +48,7 @@ def test_each_desk_has_exactly_one_source_card(desk, path) -> None:
 @pytest.mark.parametrize("desk,path", sorted(CARD_PAGES.items()))
 def test_the_card_sits_at_the_top_of_the_page(desk, path) -> None:
     """It answers "is this current?" before the page says anything else."""
-    body = client.get(path).text
+    body = open_page(path).text
     main_at = body.index("<main")
     card_at = body.index('id="source-card"')
     assert card_at > main_at
@@ -54,7 +59,7 @@ def test_the_card_sits_at_the_top_of_the_page(desk, path) -> None:
 
 @pytest.mark.parametrize("path", ALL_PAGES)
 def test_run_state_loads_on_every_page(path) -> None:
-    body = client.get(path).text
+    body = open_page(path).text
     assert "/run_state.js" in body, path
     assert "/source_card.js" in body, path
 
@@ -125,7 +130,7 @@ def test_the_phone_nav_is_the_same_markup() -> None:
     ["/requirements/test-cases/example", "/requirements/automation/example"],
 )
 def test_each_result_offers_the_three_next_desks(path) -> None:
-    body = client.get(path).text
+    body = open_page(path).text
     assert body.count('id="next-strip"') == 1
     for href in ("/risks", "/requirements/matrix", "/ship"):
         assert f'class="next-chip" href="{href}"' in body, href
@@ -137,12 +142,12 @@ def test_each_result_offers_the_three_next_desks(path) -> None:
 )
 def test_the_old_standalone_ship_link_is_gone(path) -> None:
     """The strip replaced it; two links to the same desk is one too many."""
-    body = client.get(path).text
+    body = open_page(path).text
     assert "ship-link" not in body
 
 
 def test_the_strip_says_what_it_is_for() -> None:
-    body = client.get("/requirements/test-cases/example").text
+    body = client.post("/requirements/test-cases/example").text
     assert 'aria-label="Next steps"' in body
     assert "Next:" in body
 
@@ -176,9 +181,12 @@ def test_the_risk_desk_keeps_one_load_example_button() -> None:
     assert 'risks: "#risk-example"' in card
 
 
-def test_an_out_of_date_answer_stays_on_screen_dimmed() -> None:
+def test_an_out_of_date_answer_stays_on_screen_and_still_readable() -> None:
     css = (ROOT / "public" / "style.css").read_text(encoding="utf-8")
-    assert ".stale-result{opacity:.6}" in css
+    # The panel is dimmed, never the words: an opacity over the whole block
+    # took the text under 4.5:1 against the page behind it.
+    assert ".stale-result{background:var(--card-2)" in css
+    assert ".stale-result{opacity" not in css
     assert ".stale-result button" in css  # read-only while it is out of date
     card = (ROOT / "public" / "source_card.js").read_text(encoding="utf-8")
     assert "Built from older criteria — press update" in card
@@ -187,7 +195,7 @@ def test_an_out_of_date_answer_stays_on_screen_dimmed() -> None:
 
 def test_a_loaded_sample_is_marked_in_the_html() -> None:
     """run_state.js needs to see that what is on screen is a sample."""
-    body = client.get("/risks/example").text
+    body = client.post("/risks/example").text
     assert 'data-is-example="1"' in body
 
 

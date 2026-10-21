@@ -8,6 +8,7 @@ started. Nothing the AI wrote is ever modified — only added to.
 import re
 from dataclasses import dataclass, field
 from decimal import ROUND_DOWN, ROUND_HALF_UP, Decimal
+from functools import lru_cache
 
 from qagenius.automation_checks import Finding, ProjectFile
 from qagenius.models import (
@@ -18,6 +19,10 @@ from qagenius.models import (
     TestCaseList,
 )
 from qagenius.shadow_qa.boundaries import (
+    COUNT_UNIT_NAMES,
+    CURRENCIES,
+    LOOSE_COUNT,
+    MONEY_ANY,
     Boundary,
     case_text,
     find_boundaries,
@@ -26,6 +31,7 @@ from qagenius.shadow_qa.boundaries import (
     scan,
     states,
     states_value,
+    value_quantity,
 )
 from qagenius.shadow_qa.detect import PackHit, detect_hits, mentions, story_text
 from qagenius.shadow_qa.packs import SEVERITY_RANK, Check, PackRisk
@@ -637,6 +643,93 @@ def _cap_outcome(boundary: Boundary, value: str) -> str:
     )
 
 
+# The words that turn a stretch of time into a window the rule watches:
+# "5 wrong passwords within 10 minutes".
+_WINDOW_LEAD = re.compile(
+    r"(?:with ?in|inside|over|during|across|in)\s+"
+    r"(?:a\s+|an\s+|the\s+|any\s+|each\s+|every\s+|the\s+last\s+|"
+    r"a\s+rolling\s+|a\s+single\s+)?$",
+    re.IGNORECASE,
+)
+_WINDOW_WORD = re.compile(r"(?<![\w-])window(?![\w-])", re.IGNORECASE)
+# "the account is locked" -> "the account is NOT locked".
+_TO_NEGATE = re.compile(r"(?<![\w-])(is|are|was|were|gets|get|becomes)(?![\w-])")
+
+
+@lru_cache(maxsize=256)
+def _counts_something(text: str) -> bool:
+    """Does this criterion count a number of things, as well as name a time?"""
+    return any(
+        one.kind == "count" for one in find_boundaries([Criterion("x", text)])
+    )
+
+
+def _consequence(text: str) -> str:
+    """What a one-sentence criterion says happens, when it has no Then.
+
+    "After 5 wrong passwords within 10 minutes, the account is locked" never
+    says "then", and the clause after the comma is the whole point of it.
+    """
+    _, comma, tail = str(text or "").strip().rstrip(".").rpartition(",")
+    said = tail.strip()
+    return said if comma and len(said.split()) >= 3 else ""
+
+
+def is_window(boundary: Boundary, text: str) -> bool:
+    """Is this duration the stretch a count is measured over?
+
+    A limit bites past its number; a window stops applying past its own.
+    "5 wrong passwords within 10 minutes" locks the account, and the same
+    five spread over 11 minutes do not, because the rule never reaches
+    them. Only a duration that a count is counted inside is read this way,
+    so "the page loads in 2 seconds" stays the limit it is.
+    """
+    if boundary.kind != "duration":
+        return False
+    said = str(text or "")
+    if not _counts_something(said):
+        return False
+    if _WINDOW_WORD.search(said):
+        return True
+    for found in re.finditer(re.escape(boundary.phrase), said, re.IGNORECASE):
+        if _WINDOW_LEAD.search(said[: found.start()]):
+            return True
+    return False
+
+
+def _not_happening(said: str) -> str:
+    """The criterion's own outcome, said as the thing that does not happen."""
+    found = _TO_NEGATE.search(said)
+    if found:
+        return said[: found.end()] + " NOT" + said[found.end():]
+    return f"none of that happens ({said})"
+
+
+def _window_outcome(
+    boundary: Boundary, value: str, index: int, setting: Setting
+) -> str | None:
+    """What a window really says at this value, or None when it is not one."""
+    mine = next(
+        (one for one in setting.criteria if one.id == boundary.source), None
+    )
+    if mine is None or not is_window(boundary, mine.text):
+        return None
+    said = _then_outcome(mine) or _consequence(mine.text)
+    limit = boundary.values[1]
+    if index == 2:
+        tail = f": {_not_happening(said)}" if said else ""
+        return (
+            f"{value} is outside the {limit} window {boundary.source} states, "
+            f"so the rule does not apply{tail}"
+        )
+    tail = f": {said}" if said else ""
+    where = "inside" if index == 0 else "the far edge of"
+    return (
+        f"{value} is {where} the {limit} window {boundary.source} states, "
+        f"so the rule applies{tail}"
+    )
+
+
 def _boundary_outcome(boundary: Boundary, value: str, setting: Setting) -> str:
     """What should happen at this one value, in the criteria's own words."""
     # A cap boundary has no criterion to quote: nobody wrote its number down,
@@ -644,6 +737,11 @@ def _boundary_outcome(boundary: Boundary, value: str, setting: Setting) -> str:
     if boundary.rate is not None and boundary.cap is not None:
         return _cap_outcome(boundary, value)
     index = boundary.values.index(value)
+    # A window is the one case where past the number means the rule stops,
+    # not that it bites, so it is answered before the limit logic below.
+    windowed = _window_outcome(boundary, value, index, setting)
+    if windowed is not None:
+        return windowed
     if index == 1:
         return _at_the_limit(boundary, value, setting)
     # Which end of the number works. A maximum -- "a photo under 2 MB" --
@@ -1116,6 +1214,184 @@ def _criteria_conflicts(rules: list[LimitRule]) -> list[str]:
     return notes
 
 
+def _ordinal(number: float) -> str:
+    """6.0 -> "6th", the way a tester narrates the try that locks them out."""
+    whole = int(number)
+    if 10 <= whole % 100 <= 20:
+        return f"{whole}th"
+    return f"{whole}{ {1: 'st', 2: 'nd', 3: 'rd'}.get(whole % 10, 'th') }"
+
+
+def _trigger_count(case: TestCase) -> float | None:
+    """The count at which a case expects the rule to bite, if it says one.
+
+    Read from the steps, the data and the expected result -- never from the
+    title, which names the rule rather than the run.
+    """
+    text = " \n ".join(
+        [*(case.steps or []), str(case.test_data or ""), str(case.expected_result or "")]
+    )
+    counted = [
+        amount
+        for unit, amount in scan(text)
+        if unit in COUNT_UNIT_NAMES or unit == LOOSE_COUNT
+    ]
+    # The run ends on the try that trips the rule, so the highest count a
+    # case names is the one it expects to be refused on.
+    return max(counted) if counted else None
+
+
+def trigger_disagreements(cases: list[TestCase]) -> list[str]:
+    """Two cases for one criterion that fire the same rule at different counts.
+
+    A real run had TC-001 locking the account on the 6th wrong password and
+    TC-007 locking it on the 5th. Both passed review on their own; together
+    they say the suite does not know what the rule is.
+    """
+    by_criterion: dict[str, list[tuple[TestCase, float]]] = {}
+    for case in cases or []:
+        if _expects_in(str(case.expected_result or "")) != "refused":
+            continue
+        count = _trigger_count(case)
+        if count is None:
+            continue
+        key = str(case.traceability or "").strip()
+        if not key:
+            continue
+        by_criterion.setdefault(key, []).append((case, count))
+
+    notes: list[str] = []
+    for source, found in by_criterion.items():
+        counts = {count for _, count in found}
+        if len(counts) < 2:
+            continue
+        first, second = found[0], next(
+            pair for pair in found if pair[1] != found[0][1]
+        )
+        notes.append(
+            f"{first[0].id} expects {source} to apply on the "
+            f"{_ordinal(first[1])} try, {second[0].id} on the "
+            f"{_ordinal(second[1])}. Decide which is right."
+        )
+    return notes
+
+
+# A money amount written to the cent, with or without a currency in front.
+_CENTS = re.compile(r"(?<![\w.])([$\u20ac\u00a3]?)(\d+\.\d\d)(?![\d])")
+# The two halves of a percentage sum: "20% of $150".
+_RATE = re.compile(r"(\d+(?:\.\d+)?)\s*(?:%|percent)", re.IGNORECASE)
+
+
+def _money_in(text: str) -> list[Decimal]:
+    """Every amount written to the cent in this text."""
+    return [Decimal(found.group(2)) for found in _CENTS.finditer(str(text or ""))]
+
+
+def _rate_in(text: str) -> Decimal | None:
+    found = _RATE.search(str(text or ""))
+    return Decimal(found.group(1)) if found else None
+
+
+def rounding_notes(cases: list[TestCase]) -> list[str]:
+    """Two cases that take the same percentage of the same amount and differ.
+
+    A run had one case expect $8.99 off a $59.99 cart and another expect
+    $9.00 off the same cart from the same 15% coupon. Both read fine on
+    their own; together they say nobody has decided how the shop rounds.
+    """
+    # (rate, the amount it is taken from) -> the cases and what each expects
+    seen: dict[tuple[str, str], list[tuple[str, Decimal]]] = {}
+    for case in cases or []:
+        text = " ".join(
+            [str(case.test_data or ""), str(case.pre_conditions or ""), str(case.title or "")]
+        )
+        rate = _rate_in(text) or _rate_in(str(case.expected_result or ""))
+        if rate is None:
+            continue
+        totals = _money_in(text)
+        if not totals:
+            continue
+        base = max(totals)
+        raw = (rate / 100) * base
+        for expected in _money_in(case.expected_result):
+            # Only an amount this sum could really have produced counts: the
+            # cart total itself is in the sentence too.
+            if abs(expected - raw) > CENT:
+                continue
+            key = (f"{rate:f}", f"{base:f}")
+            seen.setdefault(key, []).append((case.id, expected))
+
+    notes: list[str] = []
+    for (rate, base), found in seen.items():
+        amounts = {amount for _, amount in found}
+        if len(amounts) < 2:
+            continue
+        first, second = found[0], next(one for one in found if one[1] != found[0][1])
+        notes.append(
+            f"{first[0]} expects {first[1]:.2f} off and {second[0]} expects "
+            f"{second[1]:.2f} off the same {_plain(float(Decimal(rate)))}% of "
+            f"{Decimal(base):.2f}. Decide how the shop rounds the cent, then "
+            f"fix the one that is wrong."
+        )
+    return notes
+
+
+def precondition_notes(
+    criteria: list[Criterion], cases: list[TestCase]
+) -> list[str]:
+    """A success test whose own data breaks the rule it is testing.
+
+    A run wrote TC-008 with a $19.99 cart for a coupon that needs at least
+    $50, and expected the discount to apply. The test cannot pass as
+    written, whatever the code does.
+    """
+    rules = [one for one in limit_rules(criteria) if one.outcome == "accepted"]
+    if not rules:
+        return []
+    notes: list[str] = []
+    for case in cases or []:
+        if _expects_in(str(case.expected_result or "")) != "accepted":
+            continue
+        said = scan(
+            " ".join([str(case.test_data or ""), str(case.pre_conditions or "")])
+        )
+        for rule in rules:
+            wanted = value_quantity(rule.value)
+            if wanted is None:
+                continue
+            unit, limit = wanted
+            used = [number for other, number in said if other in _matching_units(unit)]
+            if not used:
+                continue
+            # The rule's own side says which way its precondition runs.
+            short = min(used) < limit if rule.counts_up else max(used) > limit
+            if not short:
+                continue
+            value = min(used) if rule.counts_up else max(used)
+            notes.append(
+                f"{case.id} uses {_said_as(unit, value)}, but {rule.source} needs "
+                f'"{rule.phrase}" — this test can\'t pass as written.'
+            )
+            break
+    return notes
+
+
+def _matching_units(unit: str) -> set[str]:
+    """The units an amount of this kind could have been written in."""
+    if unit in CURRENCIES:
+        return {unit, MONEY_ANY}
+    return {unit}
+
+
+def _said_as(unit: str, amount: float) -> str:
+    """"$19.99", or "19.99 minutes" when the unit is not a currency."""
+    if unit in CURRENCIES:
+        return f"{unit}{amount:.2f}"
+    if unit == MONEY_ANY:
+        return f"{amount:.2f}"
+    return f"{_plain(amount)} {unit}"
+
+
 def limit_conflicts(criteria: list[Criterion], cases: list[TestCase]) -> list[str]:
     """Where the limit value itself is argued about: by a test, or by the criteria.
 
@@ -1129,14 +1405,27 @@ def limit_conflicts(criteria: list[Criterion], cases: list[TestCase]) -> list[st
     the limit itself answers the question.
     """
     rules = limit_rules(criteria)
+    # Two cases that fire one rule at two counts is a disagreement the
+    # criteria cannot settle, so it is reported whether or not they state
+    # a limit the code could read.
+    disagreements = (
+        trigger_disagreements(cases)
+        + precondition_notes(criteria, cases)
+        + rounding_notes(cases)
+    )
     if not rules:
-        return []
+        return disagreements[:MAX_QUALITY_NOTES]
     # A gap first: nobody deciding is worse than two people disagreeing.
-    notes = _gap_notes(rules) + _criteria_conflicts(rules)
+    notes = _gap_notes(rules) + _criteria_conflicts(rules) + disagreements
     for case in cases or []:
         if len(notes) >= MAX_QUALITY_NOTES:
             break
-        said = _sentences([case.title, *(case.steps or []), case.expected_result])
+        # The title is a label, not data. "Discount on an order over $50" is
+        # the name of a test whose cart is $75, and reading the $50 out of it
+        # is how a sound case was called wrong about a limit it never used.
+        said = _sentences(
+            [*(case.steps or []), str(case.test_data or ""), case.expected_result]
+        )
         # Every sentence is read for its numbers once, however many limits
         # there are to compare it against.
         scanned = [(one, scan(one)) for one in said if _A_NUMBER_IN.search(one)]
@@ -1154,6 +1443,10 @@ def limit_conflicts(criteria: list[Criterion], cases: list[TestCase]) -> list[st
             # to it: the first sentence about the limit that answers wins,
             # and a sentence about a hair more is a different test.
             verdict = next((said for one in about if (said := _expects_in(one))), "")
+            if not verdict:
+                # The value is in "Data to use" and the answer is in the
+                # expected result: two sentences, one test.
+                verdict = _expects_in(str(case.expected_result or ""))
             if not verdict:
                 break
             wanted = "accepted" if rule.allowed else "refused"
@@ -1323,10 +1616,13 @@ def reason_for(case: TestCase) -> str:
         if check is not None:
             return check.why
     if case.category == "Boundary":
-        return (
-            "The limit is where this breaks, and no case from the AI used the "
-            "values either side of it."
-        )
+        # Only the values the AI really left out are claimed: the title
+        # carries them, and a run that said "no case used the values" while
+        # one did is the reason this names them.
+        values = str(case.title or "").partition(" at ")[2].partition(" (")[0]
+        if values:
+            return f"The limit is where this breaks, and no case uses {values}."
+        return "The limit is where this breaks, and no case uses the value either side of it."
     return ""
 
 

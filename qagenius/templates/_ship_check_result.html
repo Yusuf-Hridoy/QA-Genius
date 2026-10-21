@@ -1,12 +1,21 @@
 {# The decision, then one row per check. Every number on this page was computed
    by qagenius/ship_check.py; no AI text reaches it, so nothing is marked safe. #}
 {% from "_form_fields.html" import field %}
-<div class="ship-report">
+{% if is_example %}
+{% with caption = "Run the other desks on your own story, then come back here." %}
+{% include "_example_flag.html" %}
+{% endwith %}
+{% endif %}
+<div class="ship-report"{% if is_example %} data-example="1"{% endif %}>
   <div class="verdict ship-verdict ship-{{ verdict_tone }}">
     <div>
       <span class="pill {{ verdict_tone }}">Decision</span>
       <h2 class="ship-verdict-label">{{ verdict_label }}</h2>
       <p>{{ report.verdict_reason }}</p>
+      {% if report.stale %}
+      {# The verdict is this minute's; some of what it read is not. #}
+      <p class="pill warn ship-stale-header">Worked out just now — some inputs are older</p>
+      {% endif %}
       <p class="muted small">{{ report.checked }} of {{ total_checks }} checks ran</p>
     </div>
   </div>

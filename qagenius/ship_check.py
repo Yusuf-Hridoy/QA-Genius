@@ -17,7 +17,7 @@ from qagenius.models import (
     TestCase,
     TestCaseList,
 )
-from qagenius.risk_radar import score_risks
+from qagenius.risk_radar import loose_risks, score_risks
 from qagenius.shadow_qa.story_rules import epic_note, review_story
 from qagenius.story_text import without_criteria_lines
 from qagenius.shadow_qa.review import limit_conflicts, with_context
@@ -79,7 +79,7 @@ MAX_DETAILS = 8
 MIN_REASON, MAX_REASON = 10, 300
 
 CLARITY_PASS, CLARITY_WARN = 70, 50
-AGREEMENT_PASS, AGREEMENT_WARN = 70, 40
+AGREEMENT_PASS = 70
 
 
 @dataclass(frozen=True)
@@ -102,6 +102,9 @@ class ShipReport:
     items: list[ShipCheckItem]  # in CHECK_IDS order
     counts: dict[str, int]      # pass, warn, fail, accepted, not_checked
     checked: int                # number of checks with data
+    # True when at least one check was computed from work that has moved on.
+    # The verdict itself is this minute's; some of what it read is not.
+    stale: bool = False
 
 
 @dataclass(frozen=True)
@@ -246,7 +249,9 @@ def _clarity(inputs: ShipInputs, criteria: list[Criterion]) -> ShipCheckItem:
 
     # A story that is really seven features is the first thing to say about
     # its clarity, whatever the score was.
-    epic = epic_note(review_story(inputs.story, [item.text for item in criteria]))
+    epic = epic_note(
+        review_story(inputs.story, [item.text for item in criteria], inputs.context)
+    )
     if epic is not None:
         details.insert(0, f"Senior tester: {epic.title} — {epic.detail}")
         if status == "pass":
@@ -261,9 +266,10 @@ def _duel(inputs: ShipInputs) -> ShipCheckItem:
     agreement = duel.agreement_pct
     high = [fork for fork in duel.forks if fork.severity == "high"]
     medium = [fork for fork in duel.forks if fork.severity == "medium"]
-    if high or agreement < AGREEMENT_WARN:
-        status = "fail"
-    elif medium or agreement < AGREEMENT_PASS:
+    # Two AI readers reading a story differently is a flag to look at, never
+    # proof the build is broken, so this check warns at worst and can never
+    # hold a release on its own.
+    if high or medium or agreement < AGREEMENT_PASS:
         status = "warn"
     else:
         status = "pass"
@@ -357,6 +363,10 @@ def _risks(inputs: ShipInputs) -> ShipCheckItem:
             one for one in report.risks if one.level == level and one.coverage == coverage
         ]
 
+    # Risk radar's "untested high" count and this bucket are one function, so
+    # a risk whose only evidence is an AI claim the words do not back is high
+    # and untested on both desks. A run showed 1 here and 2 there.
+    high_loose = loose_risks(report.risks, "high")
     high_none, high_weak = pick("high", "none"), pick("high", "weak")
     medium_none, medium_weak = pick("medium", "none"), pick("medium", "weak")
     # A real run said "1 high risk has no test" while five medium ones were
@@ -366,21 +376,19 @@ def _risks(inputs: ShipInputs) -> ShipCheckItem:
         f"{_plural(medium_loose, 'medium risk')} untested or weak" if medium_loose else ""
     )
 
-    if high_none:
+    if high_loose:
         status = "fail"
-        summary = f"{_plural(len(high_none), 'high risk')} ha" + (
-            "s no test" if len(high_none) == 1 else "ve no test"
-        )
+        if not high_weak:
+            summary = f"{_plural(len(high_none), 'high risk')} ha" + (
+                "s no test" if len(high_none) == 1 else "ve no test"
+            )
+        else:
+            summary = f"{_plural(len(high_loose), 'high risk')} untested or weak"
         if medium_part:
             summary += f" · {medium_part}"
-    elif medium_none or high_weak:
+    elif medium_none:
         status = "warn"
-        parts = []
-        if high_weak:
-            parts.append(f"{_plural(len(high_weak), 'high risk')} only weakly covered")
-        if medium_part:
-            parts.append(medium_part)
-        summary = " · ".join(parts)
+        summary = medium_part
     else:
         status = "pass"
         summary = (
@@ -494,7 +502,9 @@ STALE_DESKS = {
     "depth": "Test cases",
     "automation": "Automation",
 }
-STALE_SUFFIX = " (some inputs are out of date)"
+# Said in the header rather than tacked onto the reason: the verdict was
+# worked out just now, and only its inputs are older.
+STALE_HEADER = "Worked out just now — some inputs are older"
 
 
 def _with_stale_notes(
@@ -557,13 +567,12 @@ def compute_ship_report(inputs: ShipInputs) -> ShipReport:
         for name in ("pass", "warn", "fail", "accepted", "not_checked")
     }
     verdict, reason = _verdict(items)
-    # A verdict computed from older material says so in its own line.
-    if any(item.stale_note for item in items):
-        reason += STALE_SUFFIX
     return ShipReport(
         verdict=verdict,
         verdict_reason=reason,
         items=items,
         counts=counts,
         checked=sum(1 for item in items if item.status != "not_checked"),
+        # A verdict computed from older material says so in its own line.
+        stale=any(item.stale_note for item in items),
     )

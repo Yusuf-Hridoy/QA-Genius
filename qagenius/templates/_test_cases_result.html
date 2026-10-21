@@ -1,7 +1,7 @@
 {% from "_form_fields.html" import field %}
 {% import "_principal_qa.html" as pq %}
 {% if is_example %}
-{% with caption = "Add a key and press Generate test cases to run this on your own criteria." %}
+{% with caption = "Add a key and press Generate test cases to run this on your own criteria.", with_keys = "Run it on your own criteria — press Generate test cases." %}
 {% include "_example_flag.html" %}
 {% endwith %}
 {% endif %}
@@ -188,7 +188,7 @@
     <a class="btn" href="/requirements/matrix">Build test matrix →</a>
     {% if is_example %}
     <button type="button" class="btn" id="example-strengthen"
-      hx-get="/requirements/test-cases/example-strengthen"
+      hx-post="/requirements/test-cases/example-strengthen"
       hx-target="#tc-proposal" hx-swap="innerHTML">Try Strengthen on the example</button>
     {% endif %}
   </div>

@@ -29,6 +29,22 @@ STORY_ALLOWS_GUESTS = (
 GUEST_RULE_NOTE = (
     "Ignored a suggested rule — your story says guests can use this."
 )
+# A reason that argues against its own rule. The AI writes both halves and
+# does not notice: "a guest checkout is valid, so this combination happens".
+REASON_ALLOWS = (
+    "valid", "can happen", "does happen", "possible", "allowed", "permitted",
+    "supported", "legitimate",
+)
+REASON_RULE_NOTE = (
+    "Ignored a suggested rule — its own reason says that combination can happen."
+)
+# Standard rules are facts about the tools, so they are applied. A rule the
+# AI guessed from the factor names is a suggestion until someone says yes:
+# applying one quietly takes real runs off the matrix.
+SUGGESTED_NOTE = (
+    "{count} rule{plural} suggested by the AI {verb} not applied — "
+    "look at them under Suggested rules."
+)
 
 MAX_PROPOSED_FACTORS = 6
 MAX_PROPOSED_VALUES = 5
@@ -117,6 +133,11 @@ def _with_screen_factors(
     return factors[:room] + missing, [note]
 
 
+def _reason_allows_it(rule: Rule) -> bool:
+    """Does the rule's own reason say the combination can happen?"""
+    return any(mentions(rule.reason, word) for word in REASON_ALLOWS)
+
+
 def _argues_about_guests(rule: Rule) -> bool:
     """Does this rule say a guest can never do the thing the story is about?
 
@@ -137,11 +158,18 @@ def _argues_about_guests(rule: Rule) -> bool:
 
 def clean_proposal(
     proposal: MatrixProposal, text: str = ""
-) -> tuple[list[Factor], list[Rule], list[str]]:
-    """(factors, rules, notes). Always returns something the engine can build.
+) -> tuple[list[Factor], list[Rule], list[Rule], list[str]]:
+    """(factors, applied rules, suggested rules, notes).
 
-    `text` is the story and its criteria: it only decides whether a story is
-    about an API, which is the one case with no browser and no device.
+    Always returns something the engine can build. The standard rules are
+    applied, because they are facts about the tools; every rule the AI
+    guessed comes back as a suggestion instead, for someone to accept one
+    at a time. A run had the AI rule out the guest checkout the story was
+    about, and the matrix lost every run that would have tested it.
+
+    `text` is the story and its criteria: it decides whether a story is
+    about an API, which is the one case with no browser and no device, and
+    whether a rule argues with what the story says is allowed.
     """
     notes: list[str] = []
 
@@ -184,9 +212,11 @@ def clean_proposal(
         )
 
     rules: list[Rule] = []
+    suggested: list[Rule] = []
     seen_rules: set[tuple[str, str, str, str]] = set()
     dropped = 0
     argued = 0
+    talked_back = 0
     guests_welcome = any(mentions(text, word) for word in STORY_ALLOWS_GUESTS)
     proposed_rules = [
         Rule(
@@ -199,27 +229,40 @@ def clean_proposal(
         )
         for one in proposal.rules
     ]
-    # The standard rules are facts about the tools, so they apply whenever the
-    # factors they talk about are present.
-    for rule in proposed_rules + STANDARD_RULES:
-        if guests_welcome and _argues_about_guests(rule):
-            argued += 1
-            continue
-        if not usable(rule):
-            if rule in proposed_rules:
-                dropped += 1
-            continue
-        key = (
+
+    def key_of(rule: Rule) -> tuple[str, str, str, str]:
+        return (
             rule.if_factor.lower(),
             rule.if_value.lower(),
             rule.then_factor.lower(),
             rule.then_value.lower(),
         )
+
+    def fresh(rule: Rule) -> bool:
+        key = key_of(rule)
         mirrored = (key[2], key[3], key[0], key[1])
         if key in seen_rules or mirrored in seen_rules:
-            continue
+            return False
         seen_rules.add(key)
-        rules.append(rule)
+        return True
+
+    # The standard rules are facts about the tools, so they apply whenever the
+    # factors they talk about are present.
+    for rule in STANDARD_RULES:
+        if usable(rule) and fresh(rule):
+            rules.append(rule)
+    for rule in proposed_rules:
+        if guests_welcome and _argues_about_guests(rule):
+            argued += 1
+            continue
+        if _reason_allows_it(rule):
+            talked_back += 1
+            continue
+        if not usable(rule):
+            dropped += 1
+            continue
+        if fresh(rule):
+            suggested.append(rule)
     if dropped:
         notes.append(
             f"Ignored {dropped} rule{'' if dropped == 1 else 's'} that referred to "
@@ -227,11 +270,27 @@ def clean_proposal(
         )
     if argued:
         notes.append(GUEST_RULE_NOTE)
+    if talked_back:
+        notes.append(REASON_RULE_NOTE)
+    if suggested:
+        count = len(suggested)
+        notes.append(
+            SUGGESTED_NOTE.format(
+                count=count,
+                plural="" if count == 1 else "s",
+                verb="was" if count == 1 else "were",
+            )
+        )
 
     problems = validate(factors, rules)
     if problems:
-        return list(STANDARD_FACTORS), list(STANDARD_RULES), notes + [FALLBACK_NOTE]
-    return factors, rules, notes
+        return (
+            list(STANDARD_FACTORS),
+            list(STANDARD_RULES),
+            [],
+            notes + [FALLBACK_NOTE],
+        )
+    return factors, rules, suggested, notes
 
 
 def standard_set() -> tuple[list[Factor], list[Rule]]:

@@ -23,7 +23,7 @@
 
       <div class="form-actions">
         <button id="insights-run" type="submit" class="btn btn-primary" data-busy-label="Reading…"><span class="btn-label">Read the reports</span></button>
-        <button id="insights-example" type="button" class="btn" hx-get="/insights/example"
+        <button id="insights-example" type="button" class="btn" hx-post="/insights/example"
                 hx-target="#insights-output" hx-swap="innerHTML">Load example</button>
       </div>
       <p id="insights-progress" class="htmx-indicator working"><span class="spin"></span>Reading your reports…</p>

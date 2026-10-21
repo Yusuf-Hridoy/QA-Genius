@@ -125,13 +125,50 @@ _STOPWORDS = frozenset(
 _PAIR_THRESHOLD = 0.25
 _ONLY_ONE_BONUS = 0.5
 
+# What a limit counts against, read from its name. "1 per order" and
+# "1 per account" are two different rules, so two numbers whose names state
+# different scopes are never the same value, however alike the names look.
+_SCOPES: tuple[tuple[str, str], ...] = (
+    ("per order", "order"),
+    ("per account", "account"),
+    ("per user", "user"),
+    ("per customer", "customer"),
+    ("per session", "session"),
+    ("per basket", "basket"),
+    ("per cart", "cart"),
+    ("per item", "item"),
+    ("per product", "product"),
+    ("per day", "day"),
+    ("per hour", "hour"),
+    ("per week", "week"),
+    ("per month", "month"),
+    ("in total", "total"),
+    ("total", "total"),
+)
+
+
+def read_scope(name: str) -> str | None:
+    """The scope a value's name states, e.g. "order" from "1 coupon per order"."""
+    words = [word for word in re.split(r"[^a-z0-9]+", str(name or "").lower()) if word]
+    padded = " " + " ".join(words) + " "
+    for phrase, scope in _SCOPES:
+        if f" {phrase} " in padded:
+            return scope
+    return None
+
+
+def scopes_clash(name_a: str, name_b: str) -> bool:
+    """True when both names state a scope and the two scopes differ."""
+    scope_a, scope_b = read_scope(name_a), read_scope(name_b)
+    return scope_a is not None and scope_b is not None and scope_a != scope_b
+
 
 @dataclass(frozen=True)
 class NumberMatch:
     name: str  # Reader A's name if paired, else the one that exists
     value_a: str | None  # original text or None
     value_b: str | None
-    status: str  # "same" | "different" | "only_a" | "only_b"
+    status: str  # "same" | "different" | "check" | "only_a" | "only_b"
 
 
 def name_score(a: str, b: str) -> float:
@@ -159,10 +196,27 @@ def _as_quantity(value: str) -> Quantity:
     return Quantity(amount=0.0, family="other", unit="other", text=value)
 
 
-def _is_same(a: Quantity, b: Quantity) -> bool:
-    if a.family == "other":
-        return a.text.strip().lower() == b.text.strip().lower()
-    return abs(a.amount - b.amount) <= 1e-9 * max(1, abs(a.amount))
+def _first_number(text: str) -> float | None:
+    found = _NUMBER_RE.search(text)
+    if found is None:
+        return None
+    return _to_float(found.group(1))
+
+
+def _compare(a: Quantity, b: Quantity) -> str:
+    """"same", "different", or "check" when code cannot honestly tell."""
+    if a.family != "other":
+        same = abs(a.amount - b.amount) <= 1e-9 * max(1, abs(a.amount))
+        return "same" if same else "different"
+    if a.text.strip().lower() == b.text.strip().lower():
+        return "same"
+    number_a, number_b = _first_number(a.text), _first_number(b.text)
+    if number_a is None or number_b is None:
+        # Two pieces of free text. Code cannot read them, so it says so
+        # instead of calling the readers wrong.
+        return "check"
+    # "1 coupon" and "1 use" are the same 1, written two ways.
+    return "same" if number_a == number_b else "different"
 
 
 def match_numbers(
@@ -190,6 +244,8 @@ def match_numbers(
             family = items_a[i][2].family
             for j in free_b:
                 if items_b[j][2].family != family:
+                    continue
+                if scopes_clash(items_a[i][0], items_b[j][0]):
                     continue
                 score = name_score(items_a[i][0], items_b[j][0])
                 if left_a[family] == 1 and left_b[family] == 1:
@@ -219,7 +275,7 @@ def match_numbers(
                 name=name_a,
                 value_a=value_a,
                 value_b=value_b,
-                status="same" if _is_same(quantity_a, quantity_b) else "different",
+                status=_compare(quantity_a, quantity_b),
             )
         )
     for j, (name_b, value_b, _) in enumerate(items_b):

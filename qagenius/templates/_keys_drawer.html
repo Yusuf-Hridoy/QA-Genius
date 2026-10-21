@@ -23,13 +23,17 @@
     <p class="field-link"><a id="drawer-key-link" href="{{ providers[0].key_url }}" target="_blank" rel="noopener">Get a free key →</a></p>
     {% endcall %}
     {% call field("drawer-label", "Label", optional=true, hint="A nickname for you. It never leaves this browser.") %}
-    <input type="text" id="drawer-label" name="label" maxlength="60" placeholder="e.g. My Gemini key" autocomplete="off">
+    <input type="text" id="drawer-label" name="qag-key-label" maxlength="60" placeholder="e.g. My Gemini key" autocomplete="off">
     {% endcall %}
+    {# Not a password field: browsers offer to fill those with a saved login,
+       and a key is neither a login nor ours to save. It is a plain text box
+       masked by CSS, under a name no password manager has ever seen. #}
     {% call field("drawer-key", "API key") %}
     <div class="secret-row">
-      <input type="password" id="drawer-key" name="key" placeholder="Paste your key" autocomplete="off" spellcheck="false">
+      <input type="text" id="drawer-key" name="{{ key_field_name() }}" class="masked" placeholder="Paste your key" autocomplete="off" data-lpignore="true" data-1p-ignore spellcheck="false" autocapitalize="off">
       <button type="button" class="btn" id="drawer-key-show" aria-pressed="false" aria-controls="drawer-key">Show</button>
     </div>
+    <p class="field-error" id="drawer-key-error" role="alert" hidden></p>
     {% endcall %}
     <div class="form-actions">
       <button type="submit" id="drawer-save" class="btn btn-primary">Save key</button>

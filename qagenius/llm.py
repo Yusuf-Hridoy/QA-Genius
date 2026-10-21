@@ -17,6 +17,7 @@ import json
 import logging
 import re
 from collections.abc import Callable
+from contextvars import ContextVar
 from typing import Any
 
 import openai
@@ -60,36 +61,68 @@ class NoKeysError(Exception):
     """Raised when the request carries no keys."""
 
 
-class AllKeysBusyError(Exception):
+class AiError(Exception):
+    """Something went wrong talking to the AI, with one plain note per key.
+
+    Every desk shows these the same way, so they share a base: the desk
+    supplies its own title and this carries the words.
+    """
+
+    def __init__(self, message: str, notes: list[str] | None = None) -> None:
+        super().__init__(message)
+        self.notes = list(notes or [])
+
+
+class AllKeysBusyError(AiError):
     """Raised when every key failed with a retryable (busy/down) error."""
 
     def __init__(self, notes: list[str]) -> None:
-        super().__init__("All keys busy")
-        self.notes = notes
+        super().__init__("All keys busy", notes)
 
 
-class InvalidKeyError(Exception):
+class InvalidKeyError(AiError):
     """Raised when every key tried was rejected as invalid (401/403)."""
 
     def __init__(self, notes: list[str]) -> None:
-        super().__init__("Invalid key")
-        self.notes = notes
+        super().__init__("Invalid key", notes)
 
 
-class ModelUnavailableError(Exception):
+class ModelUnavailableError(AiError):
     """Raised when every key failed only because the model is gone (404)."""
 
     def __init__(self, notes: list[str]) -> None:
-        super().__init__("Model unavailable")
-        self.notes = notes
+        super().__init__("Model unavailable", notes)
 
 
-class ProviderError(Exception):
+class ProviderError(AiError):
     """Raised for non-retryable provider errors (we stop, no further keys tried)."""
 
 
-class BadOutputError(Exception):
-    """Raised when the AI answer could not be parsed/validated (we stop)."""
+class BadOutputError(AiError):
+    """Raised when no key could give an answer in the shape the desk needs."""
+
+
+UNREADABLE = "The AI returned something unreadable. Try again."
+
+# What this request's AI calls did to each key, so the key panel can say
+# "working · just now" or "failed · too many requests" from a real run and
+# not only from the Test button. Positions only: a key never goes in here.
+_KEY_RESULTS: ContextVar[list[dict] | None] = ContextVar("key_results", default=None)
+
+
+def start_recording() -> list[dict]:
+    """Begin collecting this request's key results, and return the list."""
+    found: list[dict] = []
+    _KEY_RESULTS.set(found)
+    return found
+
+
+def record_key(index: int, ok: bool, reason: str = "") -> None:
+    """Note what one key did. Silent when nothing is recording."""
+    found = _KEY_RESULTS.get()
+    if found is None:
+        return
+    found.append({"index": index, "ok": ok, "reason": reason[:REASON_LIMIT]})
 
 
 def _short_model(model: str, limit: int = 22) -> str:
@@ -102,12 +135,39 @@ def _label(index: int, short: str, model: str | None = None) -> str:
     return f"Key {index + 1} ({short})"
 
 
+# How much of a provider's own words a reader can use. Past this it is the
+# provider talking to itself.
+REASON_LIMIT = 120
+# The one readable line inside a provider's JSON error body.
+_JSON_MESSAGE = re.compile(r'"(?:message|error|detail)"\s*:\s*"([^"]{3,})"')
+_BRACES = re.compile(r"[{}\[\]]+")
+_SPACES = re.compile(r"\s+")
+
+
+def _cut(text: str, limit: int) -> str:
+    """At most `limit` characters, ending on a whole word."""
+    if len(text) <= limit:
+        return text
+    kept = text[:limit].rsplit(" ", 1)[0].rstrip(" ,;:-")
+    return (kept or text[:limit].rstrip()) + "…"
+
+
 def clean_reason(text: str, key: str) -> str:
-    """Shorten a provider error for display and hide anything key-like."""
-    short = text[:160]
+    """A provider error a person can read: no JSON, no key, 120 characters.
+
+    Providers answer a bad request with their whole error body. Pasting it
+    on the page tells a reader nothing and shows them a wall of braces, so
+    the one human sentence in it is pulled out and the rest is dropped.
+    """
+    said = str(text or "")
+    found = _JSON_MESSAGE.search(said)
+    if found:
+        said = found.group(1)
+    said = _SPACES.sub(" ", _BRACES.sub(" ", said)).strip()
     if key:
-        short = short.replace(key, "[hidden]")
-    return KEYLIKE_RE.sub("[hidden]", short)
+        said = said.replace(key, "[hidden]")
+    said = KEYLIKE_RE.sub("[hidden]", said)
+    return _cut(said, REASON_LIMIT)
 
 
 def valid_model(value: Any) -> bool:
@@ -197,6 +257,18 @@ def _call_once(
     return answer or ""
 
 
+# A 400 saying any of these is the provider refusing the way we asked for
+# JSON, not refusing the request. A real run had Groq's gpt-oss-20b answer
+# "400 Failed to validate JSON" to every structured call, and the same key
+# answers fine when asked in plain text.
+JSON_MODE_MARKERS = ("response_format", "json", "schema", "validate")
+
+
+def _rejects_json_mode(error: openai.BadRequestError) -> bool:
+    said = str(error).lower()
+    return any(marker in said for marker in JSON_MODE_MARKERS)
+
+
 def _call_json_then_plain(
     client: Any,
     model: str,
@@ -205,11 +277,15 @@ def _call_json_then_plain(
     image: tuple[str, str] | None,
     label: str,
 ) -> str:
-    """The call, falling back to no JSON mode for providers that reject it."""
+    """The call, falling back to no JSON mode for providers that reject it.
+
+    The schema stays in the system message either way, so the answer still
+    has a shape to aim at; only the provider-side JSON mode is dropped.
+    """
     try:
         return _call_once(client, model, system, user, True, image)
     except openai.BadRequestError as e:
-        if "response_format" not in str(e).lower():
+        if not _rejects_json_mode(e):
             raise
         logger.info("%s rejected JSON mode, retrying without it", label)
         return _call_once(client, model, system, user, False, image)
@@ -261,6 +337,7 @@ def generate_json(
     asides: list[str] = []
     invalid_count = 0
     notfound_count = 0
+    unreadable_count = 0
     attempted = 0
     listed: dict[str, list[str]] = {}
 
@@ -285,24 +362,28 @@ def generate_json(
                 except openai.AuthenticationError:
                     logger.warning("key %d rejected (invalid key)", index + 1)
                     notes.append(f"{_label(index, short)} looked invalid")
+                    record_key(index, False, "the key was rejected")
                     invalid_count += 1
                     attempted += 1
                     continue
                 except openai.PermissionDeniedError:
                     logger.warning("key %d rejected (forbidden)", index + 1)
                     notes.append(f"{_label(index, short)} looked invalid")
+                    record_key(index, False, "the key was not allowed")
                     invalid_count += 1
                     attempted += 1
                     continue
                 except openai.OpenAIError:
                     logger.warning("key %d could not list models", index + 1)
                     notes.append(f"{_label(index, short)} could not list its models")
+                    record_key(index, False, "could not list its models")
                     attempted += 1
                     continue
             model = pick_default(provider, listed[provider["base_url"]])
             if not model:
                 logger.warning("key %d has no chat models", index + 1)
                 notes.append(f"{_label(index, short)} has no chat models")
+                record_key(index, False, "has no chat models")
                 attempted += 1
                 continue
         label = _label(index, short, model)
@@ -327,60 +408,72 @@ def generate_json(
         except openai.AuthenticationError:
             logger.warning("%s rejected (invalid key)", label)
             notes.append(f"{label} looked invalid")
+            record_key(index, False, "the key was rejected")
             invalid_count += 1
             continue
         except openai.PermissionDeniedError:
             logger.warning("%s rejected (forbidden)", label)
             notes.append(f"{label} looked invalid")
+            record_key(index, False, "the key was not allowed")
             invalid_count += 1
             continue
         except openai.RateLimitError:
             logger.warning("%s rate limited", label)
-            notes.append(f"{label} was busy")
+            notes.append(f"{label} was busy (too many requests)")
+            record_key(index, False, "busy (too many requests)")
             continue
         except openai.NotFoundError:
             logger.warning("%s model not available (404)", label)
             notes.append(f"{label} is not available — try updating QA-Genius")
+            record_key(index, False, "that model is gone")
             notfound_count += 1
             continue
         except (openai.APITimeoutError, openai.APIConnectionError):
             logger.warning("%s timed out or unreachable", label)
-            notes.append(f"{label} was busy")
+            notes.append(f"{label} did not answer in time")
+            record_key(index, False, "did not answer in time")
             continue
         except openai.APIStatusError as e:
             status = e.status_code or 0
             if status >= 500:
                 logger.warning("%s server error (%d)", label, status)
-                notes.append(f"{label} was busy")
+                notes.append(f"{label} had a server problem")
+                record_key(index, False, "the provider had a server problem")
                 continue
             if status == 402:
                 logger.warning("%s no credit (402)", label)
                 notes.append(f"{label} has no credit for this model")
+                record_key(index, False, "no credit for this model")
                 continue
             logger.warning("%s failed (%d)", label, status)
             reason = clean_reason(str(e), api_key)
+            record_key(index, False, reason)
             raise ProviderError(
                 f"{label} failed ({status}): {reason}"
             ) from None
         except openai.OpenAIError as e:
             logger.warning("%s failed", label)
             reason = clean_reason(str(e), api_key)
+            record_key(index, False, reason)
             raise ProviderError(f"{label} failed: {reason}") from None
 
         data = json_repair_utils.parse_json_resilient(content)
-        if data is None:
-            logger.warning("%s returned unparseable output", label)
-            raise BadOutputError(
-                "The AI returned something unreadable. Try again."
-            )
-        try:
-            result = schema.model_validate(data)
-        except ValidationError:
-            logger.warning("%s returned output that failed validation", label)
-            raise BadOutputError(
-                "The AI returned something unreadable. Try again."
-            )
+        result = None
+        if data is not None:
+            try:
+                result = schema.model_validate(data)
+            except ValidationError:
+                result = None
+        if result is None:
+            # One key that cannot hold a shape is not the end of the run:
+            # the next key is tried, exactly as for a busy one.
+            logger.warning("%s gave an answer of the wrong shape", label)
+            notes.append(f"{label} couldn't give a structured answer")
+            record_key(index, False, "could not give a structured answer")
+            unreadable_count += 1
+            continue
         logger.info("%s answered", label)
+        record_key(index, True)
         if notes:
             # One sentence, not a log: "Key 1 (Gemini) was busy, so Key 2
             # (Groq) answered." The model id is left off — it is in the key
@@ -393,4 +486,6 @@ def generate_json(
         raise InvalidKeyError(notes)
     if attempted > 0 and notfound_count == attempted:
         raise ModelUnavailableError(notes)
+    if attempted > 0 and unreadable_count == attempted:
+        raise BadOutputError(UNREADABLE, notes)
     raise AllKeysBusyError(notes)

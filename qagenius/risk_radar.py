@@ -22,6 +22,45 @@ MAX_RISKS = 15
 MATCH_FLOOR = 0.12
 # Enough shared words to judge the claim by, not a word cloud.
 MAX_MATCHED_WORDS = 6
+# What a risk is about is what goes wrong, not what the screen is called.
+# Two texts sharing "link", "page" and "bar" share furniture; two sharing
+# "refused", "lost" or "locked" share a behaviour. A real run matched
+# "permissions only hidden in the UI" to a test about opening a page, and
+# missed the one that asks for the URL directly and expects a refusal.
+ACTION_WORDS = frozenset(
+    """
+    lost lose loses losing missing gone disappears disappear
+    refused refuse refuses rejected reject rejects denied deny declined
+    blocked block blocks forbidden unauthorized unauthorised
+    locked lock locks lockout
+    overwrite overwritten overwrites overwriting
+    leak leaks leaked exposed exposes disclosed
+    crash crashes crashed hangs frozen stuck broken breaks
+    bypass bypassed bypasses skipped ignored
+    twice duplicate duplicated double
+    expired expires expire stale timeout timed
+    deleted delete deletes removed
+    corrupt corrupted truncated mismatch
+    reset revoked revoke charged refunded
+    fails fail failed failure wrong incorrect
+    trap trapped traps
+    """.split()
+)
+
+
+def _stem(word: str) -> str:
+    """"trapped" and "trap" are the same behaviour, so they match."""
+    for suffix in ("ing", "ed", "es", "s"):
+        if len(word) > len(suffix) + 2 and word.endswith(suffix):
+            base = word[: -len(suffix)]
+            # "trapped" -> "trapp" -> "trap".
+            if len(base) > 3 and base[-1] == base[-2] and base[-1] not in "aeiou":
+                base = base[:-1]
+            return base
+    return word
+
+
+_ACTION_STEMS = frozenset(_stem(word) for word in ACTION_WORDS)
 # A test case carries "risk:R1" once someone has written it for that risk.
 RISK_TAG = "risk:"
 # Risks the rule packs added know the words that mean a test reaches them.
@@ -136,6 +175,17 @@ def _claimed(risk: FailureMode, cases: list[TestCase]) -> list[TestCase]:
     return found
 
 
+def action_overlap(risk: FailureMode, case: TestCase) -> list[str]:
+    """Words for the thing going wrong that the risk and the case both use.
+
+    Read from the risk's cause and effect, because that is where a risk
+    says what happens; the title is often only the name of a screen.
+    """
+    said = " ".join([risk.cause, risk.effect, risk.title])
+    wanted = {_stem(word) for word in _tokens(said)} & _ACTION_STEMS
+    return sorted(wanted & {_stem(word) for word in _tokens(_case_words(case))})
+
+
 def _coverage(
     risk: FailureMode, cases: list[TestCase]
 ) -> tuple[str, list[tuple[str, str, float, list[str]]]]:
@@ -150,22 +200,50 @@ def _coverage(
     ]
     named_ids = {str(case_id or "").strip().lower() for case_id, _, _, _ in named}
     rows.extend(named)
-    scored = [
-        (case.id, case.title, *match_score(risk, case))
+    claimed = [
+        case
         for case in _claimed(risk, cases)
         if str(case.id or "").strip().lower() not in tagged_ids | named_ids
     ]
+    # Shared words alone are not evidence. A claim counts when the case also
+    # says what the risk says goes wrong, and the case that says most of it
+    # leads the list, because the first row is the one the page shows.
+    judged = [
+        (case, *match_score(risk, case), action_overlap(risk, case))
+        for case in claimed
+    ]
+    judged.sort(key=lambda one: (len(one[3]), one[1]), reverse=True)
+    scored = [(case.id, case.title, score, words) for case, score, words, _ in judged]
     rows.extend(scored)
     if tagged:
         return "verified", rows
     if named:
         return "covered", rows
-    if not scored:
+    if not judged:
         return "none", rows
-    if any(score >= MATCH_FLOOR for _, _, score, _ in scored):
+    if any(score >= MATCH_FLOOR and actions for _, score, _, actions in judged):
         return "covered", rows
-    # The AI claimed a test that talks about something else.
+    # The AI claimed a test that talks about something else -- or about the
+    # same furniture, without ever doing the thing that goes wrong.
     return "weak", rows
+
+
+# A risk is only really tested when a test reaches it. "none" is nothing at
+# all; "weak" is the AI naming a test whose words are about something else.
+# Both leave the risk untested, and every desk counts them the same way.
+LOOSE_COVERAGE = ("none", "weak")
+
+
+def loose_risks(risks: list[ScoredRisk], level: str) -> list[ScoredRisk]:
+    """Risks at this level that no test really reaches.
+
+    Risk radar's "untested high" count and Ship check's high bucket are the
+    same question, so they are the same function: a run showed 1 on one desk
+    and 2 on the other, from the same analysis.
+    """
+    return [
+        one for one in risks if one.level == level and one.coverage in LOOSE_COVERAGE
+    ]
 
 
 def _id_key(risk_id: str) -> tuple[int, str]:
@@ -204,11 +282,7 @@ def score_risks(analysis: RiskAnalysis, cases: list[TestCase]) -> RiskReport:
         "high": sum(1 for item in scored if item.level == "high"),
         "medium": sum(1 for item in scored if item.level == "medium"),
         "low": sum(1 for item in scored if item.level == "low"),
-        "untested_high": sum(
-            1
-            for item in scored
-            if item.level == "high" and item.coverage in ("none", "weak")
-        ),
+        "untested_high": len(loose_risks(scored, "high")),
     }
     by_category = {
         name: sum(1 for item in scored if item.risk.category == name)

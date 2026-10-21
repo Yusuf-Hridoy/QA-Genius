@@ -494,3 +494,48 @@ def test_a_word_match_is_listed_once_even_when_the_ai_also_claimed_it():
     tested = case(case_id="TC-003", title="System prevents email enumeration")
     report = score_risks(RiskAnalysis(failure_modes=[risk]), [tested])
     assert [row[0] for row in report.risks[0].covered_tests] == ["TC-003"]
+
+
+# ── a claim needs a shared behaviour, not shared furniture ──────────────────
+
+
+def test_a_claim_sharing_only_nouns_is_not_probably_tested():
+    # R1: permissions enforced only in the UI. TC-006 opens a page and sees
+    # a bar; TC-008 asks for the URL directly and is refused.
+    risk = mode(
+        title="Permissions are only hidden in the UI",
+        cause="The page hides the admin link but the route is not checked",
+        effect="A member reaches the admin page and nothing is refused",
+        covered_by=["TC-006"],
+    )
+    furniture = case(
+        case_id="TC-006",
+        title="The admin link is hidden for a member",
+        expected_result="The navigation bar shows no admin link on the page",
+        steps=["Sign in as a member", "Open the page"],
+    )
+    assert score_risks(analysis(risk), [furniture]).risks[0].coverage == "weak"
+
+
+def test_the_case_that_does_the_thing_leads_the_list():
+    risk = mode(
+        title="Permissions are only hidden in the UI",
+        cause="The page hides the admin link but the route is not checked",
+        effect="A member reaches the admin page and nothing is refused",
+        covered_by=["TC-006", "TC-008"],
+    )
+    furniture = case(
+        case_id="TC-006",
+        title="The admin link is hidden for a member",
+        expected_result="The navigation bar shows no admin link on the page",
+        steps=["Sign in as a member", "Open the page"],
+    )
+    real = case(
+        case_id="TC-008",
+        title="A member asking for the admin page by direct URL",
+        expected_result="The admin page is refused and a message is shown",
+        steps=["Sign in as a member", "Enter the admin page URL directly"],
+    )
+    scored = score_risks(analysis(risk), [furniture, real]).risks[0]
+    assert scored.coverage == "covered"
+    assert scored.covered_tests[0][0] == "TC-008"

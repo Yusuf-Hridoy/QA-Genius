@@ -6,6 +6,15 @@
 
   var STORE_KEY = "qag.keys";
 
+  var NOT_A_KEY = "This looks like an email or password, not an API key.";
+
+  /* An API key is one run of characters. An @ or a space means the browser
+   * or the person put a login in the box. */
+  function looksLikeKey(text) {
+    var value = String(text == null ? "" : text).trim();
+    return value !== "" && value.indexOf("@") === -1 && !/\s/.test(value);
+  }
+
   function loadKeys() {
     var raw = null;
     try {
@@ -129,12 +138,37 @@
         dot.hidden = false;
       }
       var word = keys.length === 1 ? "1 key" : keys.length + " keys";
-      var first = shortModel(keys[0].model);
-      text.textContent =
-        providerName(keys[0].provider) +
-        (first ? " · " + first : "") +
-        " connected · " +
-        word;
+      /* "connected" is a claim about a key that really answered. A key
+       * whose last result was a failure says so instead: a run showed
+       * "connected" over two keys that had both just been refused. */
+      var working = null;
+      var failed = false;
+      keys.forEach(function (entry) {
+        var last = entry.lastTest;
+        if (!last || typeof last.ok !== "boolean") return;
+        if (last.ok) {
+          if (!working) working = entry;
+        } else {
+          failed = true;
+        }
+      });
+      if (working) {
+        var model = shortModel(working.model);
+        text.textContent =
+          providerName(working.provider) +
+          (model ? " · " + model : "") +
+          " connected · " +
+          word;
+      } else if (failed) {
+        text.textContent = "Key problem — open to check";
+      } else {
+        var first = shortModel(keys[0].model);
+        text.textContent =
+          providerName(keys[0].provider) +
+          (first ? " · " + first : "") +
+          " · " +
+          word;
+      }
     } else {
       chip.classList.add("empty");
       if (dot) {
@@ -175,11 +209,14 @@
     void drawer.offsetWidth;
     drawer.classList.add("open");
     drawerOpen = true;
-    if (focusAdd) {
-      var keyInput = document.getElementById("drawer-key");
-      if (keyInput) {
-        keyInput.focus();
-      }
+    /* A panel that opens behind the keyboard is a panel a keyboard user
+     * cannot reach. Focus always moves into it: the key box when that is
+     * what was asked for, the first field otherwise. */
+    var into =
+      document.getElementById(focusAdd ? "drawer-key" : "drawer-provider") ||
+      document.getElementById("drawer-key");
+    if (into && into.focus) {
+      into.focus();
     }
   }
 
@@ -192,8 +229,8 @@
     // Never leave a key on screen for the next time the panel opens.
     var keyBox = document.getElementById("drawer-key");
     var showKey = document.getElementById("drawer-key-show");
-    if (keyBox && keyBox.type === "text") {
-      keyBox.type = "password";
+    if (keyBox && !keyBox.classList.contains("masked")) {
+      keyBox.classList.add("masked");
       if (showKey) {
         showKey.setAttribute("aria-pressed", "false");
         showKey.textContent = "Show";
@@ -211,9 +248,14 @@
         scrim.hidden = true;
       }
     }, 260);
-    var back = lastFocused && lastFocused.focus ? lastFocused : document.getElementById("key-chip");
+    /* And it goes back where it came from. The chip is the way in, so it
+     * is the fallback whenever what opened the panel has since gone. */
+    var chip = document.getElementById("key-chip");
+    var back = lastFocused && lastFocused.focus && lastFocused.isConnected
+      ? lastFocused
+      : chip;
     lastFocused = null;
-    if (back) {
+    if (back && back.focus) {
       back.focus();
     }
   }
@@ -230,7 +272,7 @@
       return el("span", "pill ok", "working · " + timeAgo(last.at));
     }
     var reason = last.reason ? String(last.reason).slice(0, 80) : "failed";
-    return el("span", "pill bad", "failed: " + reason);
+    return el("span", "pill bad", "failed · " + reason);
   }
 
   function findPos(keys, id) {
@@ -450,12 +492,18 @@
     labelInput.setAttribute("aria-label", "Label");
     form.appendChild(labelInput);
 
-    var keyInput = el("input", "ctl");
-    keyInput.type = "password";
+    /* Masked by CSS, not a password field, for the same reason as the add
+     * form: browsers fill password fields with saved logins. */
+    var keyInput = el("input", "ctl masked");
+    keyInput.type = "text";
     keyInput.value = "";
     keyInput.placeholder = "Key (empty = keep current key)";
     keyInput.setAttribute("aria-label", "API key, empty keeps the current key");
     keyInput.autocomplete = "off";
+    keyInput.name = "qag-api-key-edit";
+    keyInput.spellcheck = false;
+    keyInput.setAttribute("data-lpignore", "true");
+    keyInput.setAttribute("data-1p-ignore", "");
     form.appendChild(keyInput);
 
     var row = el("div", "row");
@@ -479,6 +527,12 @@
         return;
       }
       var newKey = keyInput.value.trim();
+      if (newKey && !looksLikeKey(newKey)) {
+        keyInput.setAttribute("aria-invalid", "true");
+        keyInput.placeholder = NOT_A_KEY;
+        keyInput.focus();
+        return;
+      }
       if (select.value !== fresh[at].provider) {
         delete fresh[at].model;
         delete modelCache[entry.id];
@@ -675,13 +729,14 @@
     select.addEventListener("change", syncLink);
     syncLink();
 
-    /* The key field is a password field, so a shoulder or a screen share
-     * cannot read it; Show is there for checking a paste. */
+    /* The key field is masked by CSS rather than by being a password field,
+     * so a shoulder or a screen share cannot read it and no password manager
+     * tries to fill it; Show is there for checking a paste. */
     var showKey = document.getElementById("drawer-key-show");
     if (showKey && keyInput) {
       showKey.addEventListener("click", function () {
-        var shown = keyInput.type === "text";
-        keyInput.type = shown ? "password" : "text";
+        var shown = !keyInput.classList.contains("masked");
+        keyInput.classList.toggle("masked", shown);
         showKey.setAttribute("aria-pressed", shown ? "false" : "true");
         showKey.textContent = shown ? "Show" : "Hide";
         keyInput.focus();
@@ -730,11 +785,29 @@
       }, Promise.resolve());
     });
 
+    var keyError = document.getElementById("drawer-key-error");
+
+    function showKeyError(message) {
+      if (!keyError) {
+        return;
+      }
+      keyError.textContent = message || "";
+      keyError.hidden = !message;
+    }
+
     form.addEventListener("submit", function (event) {
       event.preventDefault();
       var provider = select.value;
       var key = keyInput.value.trim();
+      showKeyError("");
       if (!provider || !key) {
+        keyInput.focus();
+        return;
+      }
+      /* A browser that filled the box anyway, or a hurried paste from a
+       * password manager, puts a login here. No key looks like that. */
+      if (!looksLikeKey(key)) {
+        showKeyError(NOT_A_KEY);
         keyInput.focus();
         return;
       }
@@ -997,6 +1070,73 @@
     describeFields(scope);
   }
 
+  /* A paste longer than the box loses its tail without a word: the browser
+   * cuts it to maxlength and says nothing. A run pasted a long story and
+   * then worked from one that stopped mid-sentence. */
+  var CUT_CLASS = "paste-cut-note";
+
+  function withCommas(number) {
+    var digits = String(number);
+    var out = "";
+    for (var i = 0; i < digits.length; i++) {
+      if (i > 0 && (digits.length - i) % 3 === 0) out += ",";
+      out += digits.charAt(i);
+    }
+    return out;
+  }
+
+  function cutNote(box, max) {
+    var holder = box.parentNode;
+    if (!holder) {
+      return;
+    }
+    var note = holder.querySelector("." + CUT_CLASS);
+    if (!note) {
+      note = document.createElement("p");
+      note.className = CUT_CLASS + " field-error";
+      note.setAttribute("role", "status");
+      holder.insertBefore(note, box.nextSibling);
+    }
+    note.textContent =
+      "Only the first " + withCommas(max) + " characters were kept.";
+    note.hidden = false;
+  }
+
+  function clearCutNote(box) {
+    var holder = box.parentNode;
+    var note = holder ? holder.querySelector("." + CUT_CLASS) : null;
+    if (note) {
+      note.hidden = true;
+    }
+  }
+
+  /* True when this paste would not fit, so the browser is about to cut it. */
+  function pasteWouldBeCut(box, pasted) {
+    var max = box.maxLength;
+    if (!max || max < 0) {
+      return false;
+    }
+    var current = String(box.value || "");
+    var selected = (box.selectionEnd || 0) - (box.selectionStart || 0);
+    return current.length - selected + String(pasted || "").length > max;
+  }
+
+  document.addEventListener("paste", function (event) {
+    var box = event.target;
+    if (!box || !box.maxLength) {
+      return;
+    }
+    var data = event.clipboardData || window.clipboardData;
+    if (!data || !data.getData) {
+      return;
+    }
+    if (pasteWouldBeCut(box, data.getData("text"))) {
+      cutNote(box, box.maxLength);
+    } else {
+      clearCutNote(box);
+    }
+  });
+
   /* Any HTML the server swaps in brings its own fields with it. */
   document.body.addEventListener("htmx:afterSwap", function (event) {
     if (event.target) {
@@ -1012,6 +1152,11 @@
     var counter = document.querySelector('.counter[data-for="' + id + '"]');
     if (counter) {
       paintCounter(counter);
+    }
+    // Typing the box back under its limit answers the warning.
+    var box = event.target;
+    if (box.maxLength && box.value.length < box.maxLength) {
+      clearCutNote(box);
     }
   });
 
@@ -1036,6 +1181,56 @@
       window.QAGBusy.start(busyButton(event.detail.elt));
     }
   });
+
+  /* What the server's AI calls just did to each key, by position. The
+   * server never sees a key or remembers one, so a real run is the only
+   * way the panel can know a key still works -- otherwise it kept saying
+   * "working" from a Test press hours ago. */
+  var KEY_RESULTS_HEADER = "X-QAG-Key-Results";
+
+  function applyKeyResults(raw) {
+    if (!raw) return;
+    var results = null;
+    try {
+      results = JSON.parse(raw);
+    } catch (err) {
+      return;
+    }
+    if (!results || !results.length) return;
+    var keys = loadKeys();
+    var changed = false;
+    results.forEach(function (one) {
+      var at = one && one.index;
+      if (typeof at !== "number" || !keys[at]) return;
+      keys[at].lastTest = {
+        ok: one.ok === true,
+        at: Date.now(),
+        reason: one.ok === true ? "" : String(one.reason || "failed"),
+      };
+      changed = true;
+    });
+    if (!changed) return;
+    storeKeys(keys);
+    renderDrawer();
+  }
+
+  document.body.addEventListener("htmx:afterRequest", function (event) {
+    var xhr = event.detail && event.detail.xhr;
+    if (!xhr || !xhr.getResponseHeader) return;
+    applyKeyResults(xhr.getResponseHeader(KEY_RESULTS_HEADER));
+  });
+
+  /* "Add a key" is the wrong thing to ask of a reader who has one, so a
+   * saved example reads differently once there is a key to run it with. */
+  function freshenExampleCaptions() {
+    if (!loadKeys().length) return;
+    var captions = document.querySelectorAll(".example-caption[data-with-keys]");
+    Array.prototype.forEach.call(captions, function (node) {
+      node.textContent = node.getAttribute("data-with-keys");
+    });
+  }
+
+  document.body.addEventListener("htmx:afterSwap", freshenExampleCaptions);
 
   /* Stop on the answer and on the error alike, and stop every button this
    * click made busy: a source card's button starts the desk's own button,
@@ -1070,6 +1265,7 @@
 
   document.addEventListener("DOMContentLoaded", function () {
     updateChip();
+    freshenExampleCaptions();
     initDrawer();
     initTheme();
     initToTop();
@@ -1081,8 +1277,38 @@
     initNavScroll();
   });
 
+  /* Only the calls that really reach a model carry the keys. An example, a
+   * rebuild and an export are all worked out on the server from what was
+   * posted, and a key has no business on those wires. */
+  var AI_PATHS = [
+    "/requirements/story/run",
+    "/requirements/story/duel",
+    "/requirements/test-cases/run",
+    "/requirements/test-cases/refine",
+    "/requirements/automation/run",
+    "/requirements/matrix/suggest",
+    "/risks/run",
+    "/bugs/run",
+    "/insights/explain",
+  ];
+
+  function callsTheAi(path) {
+    var url = String(path || "").split("?")[0];
+    for (var i = 0; i < AI_PATHS.length; i++) {
+      if (url.indexOf(AI_PATHS[i]) !== -1) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   document.body.addEventListener("htmx:configRequest", function (event) {
-    event.detail.headers["X-QAG-Keys"] = JSON.stringify(headerKeys());
+    var detail = event.detail || {};
+    if (!callsTheAi(detail.path)) {
+      if (detail.headers) delete detail.headers["X-QAG-Keys"];
+      return;
+    }
+    detail.headers["X-QAG-Keys"] = JSON.stringify(headerKeys());
   });
 
   // The server answers "no keys" with an HX-Trigger: open-keys header.
@@ -1128,6 +1354,10 @@
   });
 
   window.QAG = {
+    NOT_A_KEY: NOT_A_KEY,
+    looksLikeKey: looksLikeKey,
+    callsTheAi: callsTheAi,
+    pasteWouldBeCut: pasteWouldBeCut,
     initInputCards: initInputCards,
     initFields: initFields,
     loadKeys: loadKeys,

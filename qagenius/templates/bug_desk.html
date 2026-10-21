@@ -70,7 +70,7 @@
 
       <div class="form-actions">
         <button id="bug-run" type="submit" class="btn btn-primary" data-busy-label="Writing…"><span class="btn-label">Write bug report</span></button>
-        <button id="bug-example" type="button" class="btn" hx-get="/bugs/example" hx-target="#bug-output" hx-swap="innerHTML">Load example</button>
+        <button id="bug-example" type="button" class="btn" hx-post="/bugs/example" hx-target="#bug-output" hx-swap="innerHTML">Load example</button>
       </div>
       <p id="bug-progress" class="htmx-indicator working"><span class="spin"></span>Writing the bug report…</p>
     </div>

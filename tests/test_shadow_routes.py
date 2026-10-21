@@ -124,7 +124,7 @@ def test_a_story_without_an_actor_gets_a_principal_qa_note(monkeypatch) -> None:
 
 
 def test_the_story_example_runs_the_rules_without_a_key() -> None:
-    response = client.get("/requirements/story/example")
+    response = client.post("/requirements/story/example")
     assert response.status_code == 200
     # The saved story is a small one, so the rules run and find nothing to warn
     # about. What matters here is that they ran without a key and without an AI.

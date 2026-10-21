@@ -291,7 +291,7 @@ def test_an_unbuildable_matrix_is_a_422_not_a_broken_file(path) -> None:
 
 def test_the_example_needs_no_key_and_no_network(monkeypatch) -> None:
     monkeypatch.setattr(llm, "generate_json", _never)
-    response = client.get("/requirements/matrix/example")
+    response = client.post("/requirements/matrix/example")
     assert response.status_code == 200
     text = response.text
     assert "<s>216</s>" in text
@@ -301,11 +301,66 @@ def test_the_example_needs_no_key_and_no_network(monkeypatch) -> None:
 
 def test_the_example_covers_every_valid_pair(monkeypatch) -> None:
     monkeypatch.setattr(llm, "generate_json", _never)
-    text = client.get("/requirements/matrix/example").text
+    text = client.post("/requirements/matrix/example").text
     assert "85<span class=\"unit\"> / 85</span> ✓" in text
 
 
 def test_the_example_names_no_real_company(monkeypatch) -> None:
     monkeypatch.setattr(llm, "generate_json", _never)
-    text = client.get("/requirements/matrix/example").text
+    text = client.post("/requirements/matrix/example").text
     assert "Aurora Storefront" in text or "Store admin" in text
+
+
+# ── a rule the AI guessed waits for a yes ───────────────────────────────────
+
+
+def test_a_guessed_rule_is_shown_as_a_suggestion_and_not_applied(monkeypatch):
+    monkeypatch.setattr(llm, "generate_json", _fake())
+    body_text = client.post(
+        "/requirements/matrix/suggest", data=FORM, headers=KEYS_HEADER
+    ).text
+    assert "Suggested rules" in body_text
+    assert "Use this rule" in body_text
+    assert 'class="matrix-suggested-rule"' in body_text or "matrix-suggested-rule" in body_text
+    # The applied list holds no AI rule: only .matrix-rule rows are read back.
+    applied = body_text.split('id="matrix-rule-list"', 1)[1].split("</ul>", 1)[0]
+    assert "Pretend rule." not in applied
+    assert "not applied" in body_text
+
+
+def test_a_rule_the_story_allows_is_never_even_suggested(monkeypatch):
+    allowed = MatrixProposal(
+        factors=[
+            ProposedFactor(name="Signed in", values=["Yes", "No"], reason="Both."),
+            ProposedFactor(name="Cart value", values=["Low", "High"], reason="Min."),
+        ],
+        rules=[
+            ProposedRule(
+                if_factor="Signed in", if_value="No", then_factor="Cart value",
+                then_value="High", reason="Guests cannot use a coupon.",
+            )
+        ],
+    )
+    monkeypatch.setattr(llm, "generate_json", _fake(allowed))
+    form = dict(FORM)
+    form["user_story"] = (
+        "As a guest shopper, I want to use a coupon without an account "
+        "so that I can save money."
+    )
+    body_text = client.post(
+        "/requirements/matrix/suggest", data=form, headers=KEYS_HEADER
+    ).text
+    assert "Guests cannot use a coupon." not in body_text
+    assert "your story says guests can use this" in body_text
+
+
+def test_the_source_card_can_load_the_matrix_example_before_the_editor_exists():
+    # The desk's own #matrix-example button only exists once the editor has
+    # rendered, so the first press on the source card's link found nothing.
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parent.parent
+    matrix_js = (root / "public" / "test_matrix.js").read_text(encoding="utf-8")
+    card_js = (root / "public" / "source_card.js").read_text(encoding="utf-8")
+    assert "window.QAGMatrix = { loadExample: loadExample }" in matrix_js
+    assert "QAGMatrix.loadExample" in card_js

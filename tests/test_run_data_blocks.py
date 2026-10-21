@@ -27,7 +27,7 @@ def _block(body: str, block_id: str):
 
 
 def test_story_result_carries_the_whole_analysis():
-    body = client.get("/requirements/story/example").text
+    body = client.post("/requirements/story/example").text
     assert 'id="story-analysis-data"' in body
     analysis = _block(body, "story-analysis-data")
     assert isinstance(analysis["ambiguity_score"], int)
@@ -36,7 +36,7 @@ def test_story_result_carries_the_whole_analysis():
 
 
 def test_duel_result_carries_the_agreement_and_the_forks():
-    body = client.get("/requirements/story/example").text
+    body = client.post("/requirements/story/example").text
     assert 'id="duel-data"' in body
     duel = _block(body, "duel-data")
     assert isinstance(duel["agreement_pct"], int)
@@ -47,18 +47,18 @@ def test_duel_result_carries_the_agreement_and_the_forks():
 
 
 def test_the_duel_block_carries_nothing_but_those_two_keys():
-    duel = _block(client.get("/requirements/story/example").text, "duel-data")
+    duel = _block(client.post("/requirements/story/example").text, "duel-data")
     assert set(duel) == {"agreement_pct", "forks"}
 
 
 def test_automation_result_carries_the_script_and_the_selected_ids():
-    body = client.get("/requirements/automation/example").text
+    body = client.post("/requirements/automation/example").text
     data = _block(body, "automation-data")
     assert set(data) == {"script", "selected_ids"}
     assert data["script"]["test_code"]
 
 
 def test_insights_result_carries_the_computed_facts():
-    body = client.get("/insights/example").text
+    body = client.post("/insights/example").text
     facts = _block(body, "insights-facts")
     assert set(facts) >= {"runs", "overall", "groups", "flaky", "slowest"}

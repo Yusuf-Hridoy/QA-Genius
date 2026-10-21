@@ -203,6 +203,10 @@
     } else {
       pinned = [];
     }
+    /* The page asks the model the moment it opens, with no button pressed,
+     * and the wait used to be silent. The line says how long it takes
+     * whether or not a button started it. */
+    if (window.QAGBusy) window.QAGBusy.noteUnder(byId("matrix-root"));
     fetch("/requirements/matrix/suggest", {
       method: "POST",
       headers: keyHeader(),
@@ -223,13 +227,15 @@
       // The answer replaces the editor, button and all; an error leaves it
       // where it was. Either way nothing is working any more.
       .then(function () {
-        if (window.QAGBusy) window.QAGBusy.stopAll();
+        if (!window.QAGBusy) return;
+        window.QAGBusy.stopAll();
+        window.QAGBusy.clearNote(byId("matrix-root"));
       });
   }
 
   function loadExample() {
     pinned = [];
-    fetch("/requirements/matrix/example")
+    fetch("/requirements/matrix/example", { method: "POST" })
       .then(function (response) {
         return response.text();
       })
@@ -413,6 +419,55 @@
     queueRebuild();
   }
 
+  /* A suggested rule moves into the applied list only when somebody says
+   * so. Nothing about it changes on the way: it keeps its words, its reason
+   * and its "suggested by AI" label, so the row still says where it is from. */
+  function useRule(item) {
+    var list = byId("matrix-rule-list");
+    if (!list || !item) return;
+    var row = el("li", "matrix-rule");
+    ["if-factor", "if-value", "then-factor", "then-value", "reason"].forEach(
+      function (name) {
+        row.setAttribute("data-" + name, item.getAttribute("data-" + name) || "");
+      }
+    );
+    row.setAttribute("data-source", "ai");
+    var line = el("span");
+    line.appendChild(
+      el(
+        "strong",
+        null,
+        row.getAttribute("data-if-factor") + "=" + row.getAttribute("data-if-value")
+      )
+    );
+    line.appendChild(document.createTextNode(" never with "));
+    line.appendChild(
+      el(
+        "strong",
+        null,
+        row.getAttribute("data-then-factor") + "=" + row.getAttribute("data-then-value")
+      )
+    );
+    row.appendChild(line);
+    row.appendChild(
+      el("span", "pill warn plain small rule-source", "Suggested by AI — check it")
+    );
+    var reason = row.getAttribute("data-reason");
+    if (reason) row.appendChild(el("span", "muted small", reason));
+    row.appendChild(el("span", "spacer"));
+    var remove = el("button", "btn btn-small btn-danger matrix-remove-rule", "Remove");
+    remove.type = "button";
+    row.appendChild(remove);
+    list.appendChild(row);
+    item.parentNode.removeChild(item);
+    var empty = byId("matrix-no-rules");
+    if (empty) empty.hidden = true;
+    var card = byId("matrix-suggested-card");
+    var left = document.querySelectorAll(".matrix-suggested-rule");
+    if (card && !left.length) card.hidden = true;
+    queueRebuild();
+  }
+
   function togglePin(button) {
     var row = parseInt(button.getAttribute("data-run"), 10);
     var table = document.querySelectorAll(".matrix-table tr");
@@ -476,6 +531,11 @@
       saveRule(save.closest(".matrix-rule"));
       return;
     }
+    var use = target.closest(".matrix-use-rule");
+    if (use) {
+      useRule(use.closest(".matrix-suggested-rule"));
+      return;
+    }
     var pin = target.closest(".matrix-pin");
     if (pin) {
       togglePin(pin);
@@ -522,6 +582,13 @@
       queueRebuild();
     }
   });
+
+  /* The source card borrows this desk's Load example. Its own button only
+   * exists once the editor has rendered, so the card calls the function
+   * instead and the first press works. */
+  if (typeof window !== "undefined") {
+    window.QAGMatrix = { loadExample: loadExample };
+  }
 
   document.addEventListener("DOMContentLoaded", function () {
     if (!byId("matrix-root")) return;

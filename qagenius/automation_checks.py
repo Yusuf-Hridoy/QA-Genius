@@ -135,6 +135,98 @@ def _unique(name: str, used: set[str]) -> str:
     return f"{head}{slash}{stem}_{counter}{dot}{ext}"
 
 
+# What a TypeScript project needs before `npx tsc --noEmit` can even start.
+# A real run shipped .ts tests with no compiler, no Node types and no
+# tsconfig, so the project the user downloaded could not be type-checked.
+TS_DEV_DEPENDENCIES = {
+    "@playwright/test": "^1.49.0",
+    "@types/node": "^22.10.0",
+    "typescript": "^5.7.0",
+}
+TSCONFIG_NAME = "tsconfig.json"
+TSCONFIG = {
+    "compilerOptions": {
+        "target": "ES2022",
+        "module": "commonjs",
+        "moduleResolution": "node",
+        "types": ["node", "@playwright/test"],
+        "strict": True,
+        "noEmit": True,
+        "esModuleInterop": True,
+        "skipLibCheck": True,
+        "forceConsistentCasingInFileNames": True,
+    },
+}
+
+
+def is_typescript_project(files: list[ProjectFile]) -> bool:
+    """The language the project was written in, read off its own file names.
+
+    AutomationScript has no language field, and the AI's framework string
+    says "Playwright (JavaScript)" even for a TypeScript project.
+    """
+    return any(file.name.endswith((".ts", ".tsx")) for file in files)
+
+
+def _package_json(code: str) -> dict:
+    try:
+        parsed = json.loads(code)
+    except ValueError:
+        return {}
+    return parsed if isinstance(parsed, dict) else {}
+
+
+def _with_typescript_support(
+    script: AutomationScript, files: list[ProjectFile]
+) -> list[ProjectFile]:
+    """The compiler, the Node types and a tsconfig, when they are missing.
+
+    Only what is absent is added: a version the AI already chose is its
+    choice to keep.
+    """
+    if is_python_framework(script) or not is_typescript_project(files):
+        return files
+    kept: list[ProjectFile] = []
+    has_package = False
+    for file in files:
+        if file.name != "package.json":
+            kept.append(file)
+            continue
+        has_package = True
+        data = _package_json(file.code)
+        if not data:
+            # It does not parse. Rewriting it would hide the very thing the
+            # syntax check is about to report, so it is left as it is.
+            kept.append(file)
+            continue
+        dev = dict(data.get("devDependencies") or {})
+        deps = data.get("dependencies") or {}
+        for name, version in TS_DEV_DEPENDENCIES.items():
+            if name not in dev and name not in deps:
+                dev[name] = version
+        data["devDependencies"] = dev
+        kept.append(ProjectFile(name="package.json", code=json.dumps(data, indent=2)))
+    if not has_package:
+        kept.append(
+            ProjectFile(
+                name="package.json",
+                code=json.dumps(
+                    {
+                        "name": "qa-genius-automation",
+                        "private": True,
+                        "devDependencies": dict(TS_DEV_DEPENDENCIES),
+                    },
+                    indent=2,
+                ),
+            )
+        )
+    if not any(file.name == TSCONFIG_NAME for file in kept):
+        kept.append(
+            ProjectFile(name=TSCONFIG_NAME, code=json.dumps(TSCONFIG, indent=2))
+        )
+    return kept
+
+
 def project_files(script: AutomationScript) -> list[ProjectFile]:
     """Every file the AI wrote, under names that are safe to put in a ZIP."""
     deps_name = dependency_file_name(script)
@@ -161,7 +253,7 @@ def project_files(script: AutomationScript) -> list[ProjectFile]:
         name = _unique(name, used)
         used.add(name)
         files.append(ProjectFile(name=name, code=code))
-    return files
+    return _with_typescript_support(script, files)
 
 
 def _id_pattern(selected_id: str) -> str:

@@ -69,7 +69,7 @@ def test_rate_limit_moves_to_next_key() -> None:
     )
     assert result.ok is True
     assert used == 1
-    assert notes == [f"{FIRST_LABEL} was busy, so {ANSWERED}"]
+    assert notes == [f"{FIRST_LABEL} was busy (too many requests), so {ANSWERED}"]
 
 
 def test_auth_error_marks_key_invalid_and_moves_on() -> None:
@@ -102,7 +102,7 @@ def test_final_note_names_answering_key() -> None:
     _, _, notes = llm.generate_json(
         KEYS, "system", "user", OkSchema, client_factory=factory
     )
-    assert notes == [f"{FIRST_LABEL} was busy, so {ANSWERED}"]
+    assert notes == [f"{FIRST_LABEL} was busy (too many requests), so {ANSWERED}"]
 
 
 def test_first_key_success_leaves_notes_empty() -> None:
@@ -331,3 +331,106 @@ def test_no_credit_moves_to_next_key() -> None:
     assert result.ok is True
     assert used == 1
     assert notes == [f"{FIRST_LABEL} has no credit for this model, so {ANSWERED}"]
+
+
+# ── a provider that refuses the way we ask for JSON ──────────────────────────
+
+
+class _JsonModeRefuser:
+    """A provider that answers only when response_format is left off.
+
+    Groq's openai/gpt-oss-20b did exactly this in a real run: every
+    structured call came back "400 Failed to validate JSON".
+    """
+
+    def __init__(self, content: str = '{"ok": true}') -> None:
+        self.calls: list[bool] = []
+        self.content = content
+        self.chat = type("Chat", (), {"completions": self})()
+
+    def create(self, **kwargs):
+        used_json_mode = "response_format" in kwargs
+        self.calls.append(used_json_mode)
+        if used_json_mode:
+            request = httpx.Request("POST", "https://provider.test/v1/chat")
+            raise openai.BadRequestError(
+                "Failed to validate JSON",
+                response=httpx.Response(400, request=request),
+                body=None,
+            )
+        return _ok_completion(self.content)
+
+
+def test_a_400_about_json_retries_the_same_key_without_json_mode() -> None:
+    refuser = _JsonModeRefuser()
+    result, used, notes = llm.generate_json(
+        KEYS, "system", "user", OkSchema,
+        client_factory=lambda base_url, api_key: refuser,
+    )
+    assert result.ok is True
+    # The first key answered: no second key was needed.
+    assert used == 0
+    assert notes == []
+    assert refuser.calls == [True, False]
+
+
+def test_the_schema_is_still_in_the_prompt_on_the_plain_retry() -> None:
+    seen: list[str] = []
+
+    class Recorder(_JsonModeRefuser):
+        def create(self, **kwargs):
+            seen.append(kwargs["messages"][0]["content"])
+            return super().create(**kwargs)
+
+    llm.generate_json(
+        KEYS, "system", "user", OkSchema,
+        client_factory=lambda base_url, api_key: Recorder(),
+    )
+    assert all('"properties"' in text for text in seen)
+
+
+def test_a_key_that_cannot_hold_a_shape_hands_over_to_the_next_one() -> None:
+    def factory(base_url: str, api_key: str):
+        if api_key == "first":
+            return _FakeClient(_ok_completion("I am afraid I cannot do that."))
+        return _FakeClient(_ok_completion('{"ok": true}'))
+
+    result, used, notes = llm.generate_json(
+        KEYS, "system", "user", OkSchema, client_factory=factory
+    )
+    assert result.ok is True
+    assert used == 1
+    assert "couldn't give a structured answer" in notes[0]
+
+
+def test_every_key_failing_the_shape_is_its_own_error() -> None:
+    def factory(base_url: str, api_key: str):
+        return _FakeClient(_ok_completion("not json at all"))
+
+    with pytest.raises(llm.BadOutputError) as caught:
+        llm.generate_json(KEYS, "system", "user", OkSchema, client_factory=factory)
+    assert len(caught.value.notes) == 2
+    assert all("structured answer" in note for note in caught.value.notes)
+
+
+# ── provider reasons are short, plain and never raw JSON ─────────────────────
+
+
+def test_a_json_error_body_is_shown_as_its_one_readable_line() -> None:
+    body = '{"error": {"message": "the model is retired", "type": "invalid"}}'
+    said = llm.clean_reason(body, "")
+    assert said == "the model is retired"
+    assert "{" not in said
+
+
+def test_a_long_reason_is_cut_at_a_word() -> None:
+    said = llm.clean_reason("word " * 60, "")
+    assert len(said) <= llm.REASON_LIMIT + 1
+    assert said.endswith("…")
+    assert "wor…" not in said
+
+
+def test_a_reason_never_shows_the_key() -> None:
+    said = llm.clean_reason("rejected key sk-abcdefghijklmnopqrstuvwxyz", "")
+    assert "sk-abcdefghijklmnopqrstuvwxyz" not in said
+    assert "[hidden]" in said

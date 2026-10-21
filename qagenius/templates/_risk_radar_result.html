@@ -1,6 +1,6 @@
 {% import "_principal_qa.html" as pq %}
 {% if is_example %}
-{% with caption = "Add a key and press Find risks to run it on your own story." %}
+{% with caption = "Add a key and press Find risks to run it on your own story.", with_keys = "Run it on your own story — press Find risks." %}
 {% include "_example_flag.html" %}
 {% endwith %}
 {% endif %}
@@ -13,7 +13,8 @@
     <span class="pill {{ 'ok' if not report.counts.untested_high else 'bad' }}">
       {% if report.counts.untested_high %}{{ report.counts.untested_high }} high risk{{ "" if report.counts.untested_high == 1 else "s" }} with no test{% else %}Every high risk has a test{% endif %}</span>
     <h2>{{ report.counts.total }} ways this can break<span data-explain="risk-score"></span></h2>
-    <p>{{ covered }} of {{ report.counts.total }} are matched to a test you already have.
+    <p>{{ covered }} of {{ report.counts.total }} are matched to a test you already have
+      ({{ verified_count }} tested · {{ probably_count }} probably tested).
       Risk score = how bad × how likely × how hard to notice. Code works it out —
       the AI does not.</p>
   </div>
@@ -21,7 +22,7 @@
 <div class="stat-row">
   <div class="stat"><div class="num">{{ report.counts.total }}</div><div class="lbl">Ways this can break</div></div>
   <div class="stat"><div class="num">{{ report.counts.high }}</div><div class="lbl">High risk</div></div>
-  <div class="stat"><div class="num">{{ covered }}<span class="unit"> / {{ report.counts.total }}</span></div><div class="lbl">Tested</div></div>
+  <div class="stat"><div class="num">{{ covered }}<span class="unit"> / {{ report.counts.total }}</span></div><div class="lbl">{{ verified_count }} tested · {{ probably_count }} probably tested</div></div>
   <div class="stat{% if report.counts.untested_high %} stat-bad{% endif %}">
     <div class="num">{{ report.counts.untested_high }}</div><div class="lbl">High risk, no test</div>
   </div>

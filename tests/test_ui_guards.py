@@ -105,14 +105,44 @@ def test_every_control_is_in_a_field_or_carries_ctl() -> None:
     assert not stray, f"controls outside a field and without .ctl: {stray}"
 
 
-def test_the_api_key_is_a_password_field() -> None:
-    # A key on screen is a key in a screen share or over a shoulder.
+def _key_input() -> str:
     drawer = (ROOT / "qagenius" / "templates" / "_keys_drawer.html").read_text(
         encoding="utf-8"
     )
     match = re.search(r"<input[^>]*id=\"drawer-key\"[^>]*>", drawer)
     assert match, "the drawer has no #drawer-key input"
-    assert 'type="password"' in match.group(0)
+    return match.group(0)
+
+
+def test_the_api_key_is_not_a_password_field() -> None:
+    # Browsers offer to fill a password field with a saved login, and a real
+    # run had one filled with an email address.
+    tag = _key_input()
+    assert 'type="text"' in tag
+    assert "password" not in tag
+
+
+def test_the_api_key_is_masked_and_left_alone_by_password_managers() -> None:
+    tag = _key_input()
+    assert 'autocomplete="off"' in tag
+    assert 'data-lpignore="true"' in tag
+    assert "data-1p-ignore" in tag
+    assert 'spellcheck="false"' in tag
+    assert 'autocapitalize="off"' in tag
+    # A key on screen is a key in a screen share or over a shoulder.
+    assert 'class="masked"' in tag
+    css = (ROOT / "public" / "style.css").read_text(encoding="utf-8")
+    assert ".masked{-webkit-text-security:disc" in css
+
+
+def test_the_key_form_is_not_a_login_form() -> None:
+    # A username and a password together is what a browser looks for; a
+    # decoy password field would hand it exactly that.
+    drawer = (ROOT / "qagenius" / "templates" / "_keys_drawer.html").read_text(
+        encoding="utf-8"
+    )
+    assert 'type="password"' not in drawer
+    assert 'name="qag-key-label"' in drawer
 
 
 # ── the number inside the round score ────────────────────────────────────────

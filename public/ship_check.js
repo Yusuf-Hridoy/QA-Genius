@@ -190,11 +190,15 @@
   }
 
   function loadExample() {
-    fetch("/ship/example")
+    fetch("/ship/example", { method: "POST" })
       .then(function (response) {
         return response.text();
       })
       .then(function (text) {
+        /* The example is a whole finished run, so the card asking the
+         * reader to start one goes away while they are looking at it. */
+        var root = byId("ship-root");
+        if (root) root.textContent = "";
         show(text);
       })
       .catch(function () {

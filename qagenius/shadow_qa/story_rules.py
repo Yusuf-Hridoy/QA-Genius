@@ -9,10 +9,12 @@ from dataclasses import dataclass, field
 
 from qagenius.shadow_qa.detect import detect_hits, mentions, phrase_pattern, story_text
 
-# Any one of these makes the story an epic.
-EPIC_PACKS = 5
+# Either of these makes the story an epic. Both are counted from what the
+# person wrote -- the story and the context they gave with it -- and never
+# from criteria the AI drafted: a run warned that a one-line story was
+# really eight features, every one of them read off the AI's own draft.
+EPIC_FEATURES = 5
 EPIC_CAPABILITIES = 6
-EPIC_CRITERIA = 10
 # More features than this in the sentence and the pill row stops being
 # readable. Past it the row keeps this many and counts the rest, so the
 # number in the title and the names under it always come from one list.
@@ -60,12 +62,12 @@ def count_capabilities(story: str) -> int:
 
 
 _SHALLOW = (
-    "This is too much for one story. Tests for each part will be thin. "
+    "This is too much for one story. Each part will get only a few tests. "
     "Split it first, or carry on knowing that."
 )
 
 
-def _epic_note(features: list[str], capabilities: int, criteria: int) -> StoryNote:
+def _epic_note(features: list[str], capabilities: int) -> StoryNote:
     """The warning, worded by whichever rule caught the story."""
     shown = features[:MAX_FEATURE_PILLS]
     if features:
@@ -85,22 +87,12 @@ def _epic_note(features: list[str], capabilities: int, criteria: int) -> StoryNo
             features=tuple(shown),
             more=more,
         )
-    if capabilities >= EPIC_CAPABILITIES:
-        return StoryNote(
-            level="warn",
-            title=f"This story asks for {capabilities} things at once",
-            detail=(
-                f"The sentence after \"want to\" lists {capabilities} separate "
-                f"capabilities. {_SHALLOW}"
-            ),
-            epic=True,
-        )
     return StoryNote(
         level="warn",
-        title=f"This story carries {criteria} acceptance criteria",
+        title=f"This story asks for {capabilities} things at once",
         detail=(
-            f"{criteria} criteria in one story is more than one slice of work. "
-            f"{_SHALLOW}"
+            f"The sentence after \"want to\" lists {capabilities} separate "
+            f"capabilities. {_SHALLOW}"
         ),
         epic=True,
     )
@@ -116,22 +108,30 @@ def _said_at(text: str, words: tuple[str, ...] | list[str]) -> int:
     return min(spots) if spots else len(text)
 
 
-def review_story(story: str, criteria: list[str]) -> list[StoryNote]:
-    """What a principal QA would say about this story. No AI, no key."""
+def review_story(
+    story: str, criteria: list[str], context: str = ""
+) -> list[StoryNote]:
+    """What a principal QA would say about this story. No AI, no key.
+
+    The features counted belong to the story and to the context the person
+    typed beside it. Criteria are read for everything else here, but never
+    for the size of the story: a story is not an epic because the AI was
+    thorough about it.
+    """
     story = str(story or "")
     texts = [str(one or "") for one in (criteria or []) if str(one or "").strip()]
-    whole = story_text(story, texts)
+    said = str(context or "").strip()
+    own = story_text(story, [said] if said else [])
     # Reading order, not pack order: the pills then follow the sentence, so a
     # reader can check them off against the story as they go. The story comes
-    # first in `whole`, so what it named out loud leads anyway.
-    hits = sorted(detect_hits(whole, story), key=lambda hit: _said_at(whole, hit.triggers))
-    packs = [hit.pack for hit in hits]
-    features = [pack.short for pack in packs]
+    # first in `own`, so what it named out loud leads anyway.
+    hits = sorted(detect_hits(own, story), key=lambda hit: _said_at(own, hit.triggers))
+    features = [hit.pack.short for hit in hits]
 
     notes: list[StoryNote] = []
     capabilities = count_capabilities(story)
-    if len(packs) >= EPIC_PACKS or capabilities >= EPIC_CAPABILITIES or len(texts) >= EPIC_CRITERIA:
-        notes.append(_epic_note(features, capabilities, len(texts)))
+    if len(features) >= EPIC_FEATURES or capabilities >= EPIC_CAPABILITIES:
+        notes.append(_epic_note(features, capabilities))
 
     if not _AS_A.search(story):
         notes.append(

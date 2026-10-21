@@ -34,6 +34,11 @@ from tests.factories import (
 from tests.test_risk_radar import mode
 
 client = TestClient(main.app)
+
+
+def open_page(path: str):
+    """An example is asked for with POST, so no reader's URL can carry one."""
+    return client.post(path) if "/example" in path else client.get(path)
 ROOT = Path(__file__).resolve().parent.parent
 
 KEYS_HEADER = {"X-QAG-Keys": json.dumps([{"provider": "gemini", "key": "first"}])}
@@ -216,6 +221,10 @@ BANNED = (
     "depth will suffer",
     "have a look",
     "[confidence",
+    # The model's own markers. They are for us, not for a reader: a run
+    # showed "[VERIFY]" and "High confidence" on the story card.
+    "confidence",
+    "[verify]",
 )
 
 PAGES = (
@@ -277,7 +286,7 @@ def says(text: str, word: str) -> bool:
 
 
 def _page(path: str) -> str:
-    response = client.get(path)
+    response = open_page(path)
     assert response.status_code == 200, f"{path} returned {response.status_code}"
     return visible_text(response.text)
 
@@ -357,11 +366,11 @@ def test_the_buttons_reach_the_rendered_pages() -> None:
         "/requirements/automation": "playwright",
     }
     for path, key in pages.items():
-        assert f'data-explain="{key}"' in client.get(path).text, path
+        assert f'data-explain="{key}"' in open_page(path).text, path
 
 
 def test_a_result_card_carries_its_own_marks() -> None:
-    body = client.get("/requirements/test-cases/example").text
+    body = client.post("/requirements/test-cases/example").text
     assert 'data-explain="boundary"' in body
     assert 'data-explain="negative"' in body
 
@@ -386,3 +395,58 @@ def test_the_panel_is_readable_in_both_themes() -> None:
     assert ".explain-panel{" in css
     assert "background:var(--card)" in css.replace("\n", "").replace("  ", "")
     assert ".explain-btn:focus-visible{outline" in css
+
+
+# ── the last hard words a run turned up ─────────────────────────────────────
+
+
+def test_the_cleaner_takes_the_models_own_markers_off() -> None:
+    from qagenius.story_text import split_confidence, strip_confidence
+
+    assert strip_confidence("The limit is 5 attempts [VERIFY]") == (
+        "The limit is 5 attempts"
+    )
+    assert strip_confidence("[verify] the account locks") == "the account locks"
+    said = split_confidence("Order over $50 [VERIFY]. High confidence")
+    assert said.text == "Order over $50."
+    assert said.level == "High"
+
+
+def test_the_big_story_warning_says_it_in_plain_words() -> None:
+    from qagenius.shadow_qa.story_rules import epic_note, review_story
+    from tests.factories import PROFILE_STORY
+
+    note = epic_note(review_story(PROFILE_STORY, []))
+    assert note is not None
+    assert "Each part will get only a few tests." in note.detail
+    assert "thin" not in note.detail.lower()
+
+
+def test_no_unclear_words_is_said_as_a_sentence() -> None:
+    body = client.post("/requirements/story/example").text
+    assert "0 unclear word" not in body
+
+
+def test_the_coverage_focus_boxes_use_plain_names() -> None:
+    flow = (ROOT / "public" / "requirements_flow.js").read_text(encoding="utf-8")
+    for word in ("Normal path", "Wrong input", "At the limit", "Unusual case"):
+        assert word in flow, word
+    # The value posted is still the standard name the server checks.
+    assert 'input.value = option;' in flow
+
+
+def test_the_exports_keep_the_standard_category_names() -> None:
+    from qagenius.test_case_exports import to_csv
+    from tests.factories import case, suite
+
+    csv = to_csv(suite(case(case_id="TC-001", category="Boundary")), []).decode("utf-8-sig")
+    assert "Boundary" in csv
+    assert "At the limit" not in csv
+
+
+def test_a_sample_tells_a_reader_with_a_key_to_run_their_own() -> None:
+    body = client.post("/requirements/story/example").text
+    assert 'data-with-keys="Run it on your own story — press Check story."' in body
+    app_js = (ROOT / "public" / "app.js").read_text(encoding="utf-8")
+    assert "freshenExampleCaptions" in app_js
+    assert 'node.getAttribute("data-with-keys")' in app_js

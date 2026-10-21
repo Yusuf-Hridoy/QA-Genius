@@ -180,7 +180,7 @@ def test_run_rejects_empty_story(monkeypatch) -> None:
 
 
 def test_example_needs_no_key() -> None:
-    response = client.get("/requirements/test-cases/example")
+    response = client.post("/requirements/test-cases/example")
     assert response.status_code == 200
     body = response.text
     # The example runs the reviewers too, so it shows what a real run shows:
@@ -236,19 +236,19 @@ def test_result_has_one_card_per_case(monkeypatch) -> None:
 
 
 def test_coverage_bar_width_matches_percent() -> None:
-    body = client.get("/requirements/test-cases/example").text
+    body = client.post("/requirements/test-cases/example").text
     percent = re.search(r"(\d+)% tested", body).group(1)
     assert f'style="width:{percent}%"' in body
 
 
 def test_filter_chips_list_only_present_categories() -> None:
-    body = client.get("/requirements/test-cases/example").text
+    body = client.post("/requirements/test-cases/example").text
     chips = re.findall(r'<button type="button" class="chip[^"]*" data-filter="([^"]+)"', body)
     assert chips == ["all", "Functional", "Negative", "Boundary", "Edge Case"]
 
 
 def test_tc_data_round_trips_through_the_export_route() -> None:
-    body = client.get("/requirements/test-cases/example").text
+    body = client.post("/requirements/test-cases/example").text
     raw = body.split('<script type="application/json" id="tc-data">')[1].split("</script>")[0]
     payload = json.loads(raw)
     assert len(payload["criteria"]) == 5

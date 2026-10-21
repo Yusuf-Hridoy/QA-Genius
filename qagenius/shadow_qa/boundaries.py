@@ -411,6 +411,15 @@ _SECONDS = {
 _FAMILY = {name: "bytes" for name in _BYTES}
 _FAMILY.update({name: "seconds" for name in _SECONDS})
 
+# "the 6th attempt" and "the sixth attempt" are both "6 attempts" said the
+# way a tester narrates a run.
+_WORD_ORDINALS = {
+    "first": 1.0, "second": 2.0, "third": 3.0, "fourth": 4.0, "fifth": 5.0,
+    "sixth": 6.0, "seventh": 7.0, "eighth": 8.0, "ninth": 9.0, "tenth": 10.0,
+    "eleventh": 11.0, "twelfth": 12.0, "thirteenth": 13.0, "fifteenth": 15.0,
+    "twentieth": 20.0, "thirtieth": 30.0,
+}
+
 # Written as a word or as digits, with or without a space or hyphen before
 # the unit: "5MB", "5 MB", "5-digit", "four attempts".
 _AMOUNT = r"(?<![\w.])(\d+(?:\.\d+)?|" + "|".join(sorted(_WORD_NUMBERS, key=len, reverse=True)) + r")"
@@ -434,6 +443,51 @@ _SAID_COUNT = re.compile(
     + _unit_group(_COUNT_UNITS),
     re.IGNORECASE,
 )
+# "on the 6th attempt", "the sixth wrong password".
+_ORDINAL = (
+    r"(?<![\w.])(\d{1,3}(?:st|nd|rd|th)|"
+    + "|".join(sorted(_WORD_ORDINALS, key=len, reverse=True))
+    + r")(?![\w])"
+)
+_SAID_ORDINAL = re.compile(
+    _ORDINAL + r"\s+((?:[A-Za-z][A-Za-z-]*\s+){0,3}?)([A-Za-z][A-Za-z-]+)\b",
+    re.IGNORECASE,
+)
+# "attempts=6", "attempts: 6", "retries = 6": test data writes the unit first.
+_SAID_FIELD = re.compile(
+    r"([A-Za-z][A-Za-z_-]*)\s*[=:]\s*(\d+(?:\.\d+)?)(?![\w.])", re.IGNORECASE
+)
+# "6 wrong passwords": a count of a noun no closed list could hold. The noun
+# itself is kept, so a count never answers for a duration or a size.
+_SAID_ANY_COUNT = re.compile(
+    _AMOUNT + r"\s+((?:[A-Za-z][A-Za-z-]*\s+){0,3}?)([A-Za-z][A-Za-z-]+)\b",
+    re.IGNORECASE,
+)
+# Every unit that already belongs to a family of its own. A number in front
+# of one of these is that family's quantity, never a loose count.
+_KNOWN_UNITS = frozenset(
+    word.lower()
+    for word in (
+        *_SIZE_UNITS, *_DURATION_UNITS, *_LENGTH_UNITS, *_COUNT_UNITS,
+        "digit", "digits", "byte", "bytes", "percent", "dollar", "dollars",
+        "euro", "euros", "pound", "pounds", "usd", "eur", "gbp",
+    )
+)
+# The family a loose count is filed under, so "6 wrong passwords" answers a
+# boundary of "6 attempts" and "6 MB" never does.
+LOOSE_COUNT = "loose-count"
+# Units of things that are counted; a boundary in one of these may be
+# answered by a loose count of the same number.
+_COUNTED = frozenset(_COUNT_UNITS.values())
+COUNT_UNIT_NAMES = _COUNTED
+
+
+def _ordinal_amount(written: str) -> float | None:
+    word = written.strip().lower()
+    if word in _WORD_ORDINALS:
+        return _WORD_ORDINALS[word]
+    digits = re.match(r"(\d+)(?:st|nd|rd|th)$", word)
+    return float(digits.group(1)) if digits else None
 # A quoted code says its own length: '12345' is five digits.
 _QUOTED_CODE = re.compile(r"[\"'‘’“”](\d{2,})[\"'‘’“”]")
 # "locked for 14:00" is fourteen minutes.
@@ -477,6 +531,37 @@ def quantities(text: str) -> list[tuple[str, float]]:
     take(_SAID_LENGTH, _LENGTH_UNITS, 2)
     take(_SAID_DIGITS, {"digit": "digits", "digits": "digits"}, 2)
     take(_SAID_COUNT, _COUNT_UNITS, 3)
+
+    def take_loose(amount: float, noun: str) -> None:
+        """A count of something no unit list knows: "6 wrong passwords"."""
+        if noun.lower() in _KNOWN_UNITS:
+            return
+        said.append((LOOSE_COUNT, amount))
+
+    # "the 6th attempt" is the same run as "6 attempts".
+    for match in _SAID_ORDINAL.finditer(text):
+        amount = _ordinal_amount(match.group(1))
+        if amount is None:
+            continue
+        noun = match.group(3).lower()
+        if noun in _COUNT_UNITS:
+            said.append((_COUNT_UNITS[noun], amount))
+        else:
+            take_loose(amount, noun)
+    for match in _SAID_ANY_COUNT.finditer(text):
+        amount = _amount_of(match.group(1))
+        if amount is not None:
+            take_loose(amount, match.group(3))
+    # "attempts=6" in the test data block.
+    for match in _SAID_FIELD.finditer(text):
+        field_name = match.group(1).lower().replace("_", " ").split()[-1]
+        written = match.group(2)
+        amount = float(written)
+        if field_name in _COUNT_UNITS:
+            said.append((_COUNT_UNITS[field_name], amount))
+        elif field_name not in _KNOWN_UNITS and "." not in written:
+            # "cart_total=75.00" is money, not a count of seventy-five things.
+            said.append((LOOSE_COUNT, amount))
     for match in _QUOTED_CODE.finditer(text):
         said.append(("digits", float(len(match.group(1)))))
     for match in _CLOCK.finditer(text):
@@ -523,6 +608,11 @@ def _as_quantity(value: str) -> tuple[str, float] | None:
     return _one_quantity(amount, unit)
 
 
+def value_quantity(value: str) -> tuple[str, float] | None:
+    """One of a boundary's own values -- "4.99 MB", "$50.00" -- as a quantity."""
+    return _as_quantity(value)
+
+
 def _same(left: float, right: float) -> bool:
     return abs(left - right) <= max(abs(right), 1.0) * 1e-9
 
@@ -535,7 +625,14 @@ def _value_in(value: str, said: list[tuple[str, float]]) -> bool:
     unit, amount = wanted
     # A bare amount to the cent answers for any currency: the suite says
     # "cart_total=50.00" and the criterion says "$50".
-    wanted_units = {unit, MONEY_ANY} if unit in CURRENCIES else {unit}
+    if unit in CURRENCIES:
+        wanted_units = {unit, MONEY_ANY}
+    elif unit in _COUNTED:
+        # "6 times", "6 wrong passwords" and "the 6th try" all answer
+        # "6 attempts": the suite counted the same run, in its own words.
+        wanted_units = {*_COUNTED, LOOSE_COUNT}
+    else:
+        wanted_units = {unit}
     return any(other in wanted_units and _same(number, amount) for other, number in said)
 
 

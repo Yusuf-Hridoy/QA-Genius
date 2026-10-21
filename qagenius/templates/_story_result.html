@@ -1,7 +1,7 @@
 {% import "_confidence.html" as conf %}
 {% import "_principal_qa.html" as pq %}
 {% if is_example %}
-{% with caption = "Add a key and press Check story to run this on your own story." %}
+{% with caption = "Add a key and press Check story to run this on your own story.", with_keys = "Run it on your own story — press Check story." %}
 {% include "_example_flag.html" %}
 {% endwith %}
 {% endif %}
@@ -21,11 +21,12 @@
   <div>
     <span class="pill {{ score_tone }}">{{ (result.clarity_label | confidence).text }}</span>
     <h2>How clear: {{ clarity_score }} of 100</h2>
+    {# "0 unclear words need a number or a name" asks for nothing. #}
     <p>{{ invest_passes }} of 6 story quality checks pass.
-      {{ result.vague_phrases | length }} unclear
+      {% if result.vague_phrases %}{{ result.vague_phrases | length }} unclear
       word{{ "" if result.vague_phrases | length == 1 else "s" }}
       {{ "needs" if result.vague_phrases | length == 1 else "need" }} a number or a name
-      before anyone can test this.</p>
+      before anyone can test this.{% else %}No unclear words.{% endif %}</p>
   </div>
 </div>
 

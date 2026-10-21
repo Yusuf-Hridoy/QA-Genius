@@ -1,6 +1,7 @@
 """Pack a generated automation project, and what the checks found, into a ZIP."""
 
 import io
+import re
 import zipfile
 
 from qagenius.automation_checks import CheckReport, ProjectFile, safe_file_name
@@ -106,6 +107,29 @@ def _finding_lines(report: CheckReport) -> list[str]:
     return lines
 
 
+# What an AI note is about when it contradicts the run steps above it: it
+# builds a second, empty project beside the one that was just unzipped, or
+# moves into a folder that is not there. A real run told the reader to
+# `mkdir aurora-automation && npm init -y` directly under steps that say to
+# cd into the folder and npm install.
+_CONFLICTS_WITH_STEPS = ("mkdir", "npm init", "yarn init", "pnpm init", "git clone")
+_WRONG_FOLDER = re.compile(r"(?<![\w-])cd\s+(?!" + re.escape(TOP_FOLDER) + r"\b)\S", re.IGNORECASE)
+
+
+def useful_notes(instructions: list[str]) -> list[str]:
+    """The AI's setup notes, minus the ones the real run steps disprove."""
+    kept = []
+    for instruction in instructions or []:
+        said = str(instruction or "")
+        lowered = said.lower()
+        if any(word in lowered for word in _CONFLICTS_WITH_STEPS):
+            continue
+        if _WRONG_FOLDER.search(said):
+            continue
+        kept.append(said)
+    return kept
+
+
 def build_readme(script: AutomationScript, report: CheckReport) -> str:
     """The README that ships inside the ZIP."""
     lines = [
@@ -119,9 +143,10 @@ def build_readme(script: AutomationScript, report: CheckReport) -> str:
     ]
     lines += run_steps(script, report.files)
     lines += ["```", ""]
-    if script.setup_instructions:
+    notes = useful_notes(script.setup_instructions)
+    if notes:
         lines += ["### Notes from the AI", ""]
-        for number, instruction in enumerate(script.setup_instructions, start=1):
+        for number, instruction in enumerate(notes, start=1):
             lines.append(f"{number}. {instruction}")
         lines.append("")
     if (script.design_notes or "").strip():

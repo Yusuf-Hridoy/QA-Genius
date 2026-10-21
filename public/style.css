@@ -534,6 +534,11 @@ input[type=checkbox],input[type=radio]{width:16px;height:16px;
 .secret-row input{flex:1 1 auto;min-width:0}
 /* Show stands the same height as the field it sits against. */
 .secret-row .btn{flex:0 0 auto;height:var(--ctl-h);padding:0 14px;font-size:13px}
+/* A text box that reads like a password field, so browsers never offer to
+   fill it with a saved login. Show takes the class off. */
+.masked{-webkit-text-security:disc;text-security:disc}
+.field-error{margin:6px 0 0;font-size:12.5px;color:var(--bad-fg)}
+.field-error[hidden]{display:none}
 /* An empty state is not a form, so its buttons get air instead of a rule. */
 .empty-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap;
   margin-top:12px}
@@ -850,7 +855,11 @@ tr.diff-row td:first-child{box-shadow:inset 3px 0 0 var(--warn-line)}
 .file-tab:hover{background:var(--card-2);color:var(--text)}
 .file-tab.now{background:var(--accent-soft);color:var(--accent-ink);
   border-color:color-mix(in srgb,var(--accent) 36%,transparent);font-weight:650}
-.file-code pre.code{margin-top:0;max-height:62vh}
+/* A grid child is as wide as its widest line unless it is told otherwise,
+ * so one long line of generated code pushed the whole page sideways at
+ * 1150 px. The column may shrink; the code scrolls inside it. */
+.file-code{min-width:0}
+.file-code pre.code{margin-top:0;max-height:62vh;overflow-x:auto;max-width:100%}
 @media (max-width:768px){.file-view{grid-template-columns:1fr}}
 
 /* ----------------------------------------------------------- bug desk */
@@ -1003,8 +1012,11 @@ table.heat{border-collapse:separate;border-spacing:3px;width:100%}
  * the card can still press its Find risks and Load example buttons. */
 body[data-has-story="yes"] #risk-root [data-input-card="Your run"]{display:none}
 
-/* An out-of-date answer is kept, dimmed, and read-only until it is rebuilt. */
-.stale-result{opacity:.6}
+/* An out-of-date answer is kept and read-only until it is rebuilt. Dimming
+ * the whole block took its words under 4.5:1 against the page, so only the
+ * panel is dimmed and the text keeps its contrast. */
+.stale-result{background:var(--card-2);border-radius:var(--r);
+  box-shadow:inset 0 0 0 1px var(--border)}
 .stale-result button,.stale-result a,.stale-result input,
 .stale-result select,.stale-result summary{pointer-events:none}
 .stale-result-note{margin:0 0 8px;font-style:italic}
@@ -1014,12 +1026,14 @@ body[data-has-story="yes"] #risk-root [data-input-card="Your run"]{display:none}
 body[data-card-primary="risks"] #risk-find.btn-primary,
 body[data-card-primary="risks"] #risk-paste-find.btn-primary,
 body[data-card-primary="test_cases"] #tc-generate.btn-primary,
+body[data-card-primary="matrix"] #matrix-suggest.btn-primary,
 body[data-card-primary="automation"] #automation-generate.btn-primary{
   background:var(--card);border-color:var(--border-strong);color:var(--text);
   box-shadow:var(--shadow-1)}
 body[data-card-primary="risks"] #risk-find.btn-primary:hover,
 body[data-card-primary="risks"] #risk-paste-find.btn-primary:hover,
 body[data-card-primary="test_cases"] #tc-generate.btn-primary:hover,
+body[data-card-primary="matrix"] #matrix-suggest.btn-primary:hover,
 body[data-card-primary="automation"] #automation-generate.btn-primary:hover{
   border-color:var(--text-2);box-shadow:var(--shadow-2);filter:none}
 

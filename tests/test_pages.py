@@ -119,3 +119,28 @@ def test_the_next_row_check_page_shows_all_three_states() -> None:
     assert "next-mark tick-fresh" in body
     for state in ("Not built yet", "Old", "Matches your work"):
         assert state in body
+
+
+def _key_name(body: str) -> str:
+    import re
+
+    match = re.search(r'<input[^>]*id="drawer-key"[^>]*>', body)
+    assert match, "no key input on the page"
+    name = re.search(r'name="([^"]*)"', match.group(0))
+    assert name, "the key input has no name"
+    return name.group(1)
+
+
+def test_the_key_box_gets_a_fresh_name_every_render() -> None:
+    # A password manager matches a field by name. A name it has never seen
+    # gives it nothing to fill.
+    first = _key_name(client.get("/").text)
+    second = _key_name(client.get("/").text)
+    assert first.startswith("qag-api-key-")
+    assert second.startswith("qag-api-key-")
+    assert first != second
+
+
+def test_no_page_serves_a_password_field() -> None:
+    for path in PAGES:
+        assert 'type="password"' not in client.get(path).text, path

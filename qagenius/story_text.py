@@ -35,6 +35,10 @@ _TRAILING_LEVEL = re.compile(
     re.IGNORECASE,
 )
 _FOUND_LEVEL = re.compile(_LEVEL, re.IGNORECASE)
+# The prompt asks the model to mark anything it had to guess. The mark is
+# for us, not for the reader: "[VERIFY]" on a screen is a word nobody can
+# act on. The sentence stays; the bracket goes.
+_VERIFY = re.compile(r"\s*\[\s*verify\s*\]", re.IGNORECASE)
 # What is left after a tag comes out: a space in front of the full stop, the
 # sentence's own full stop followed by the tag's, two spaces mid-sentence.
 _SPACE_BEFORE_STOP = re.compile(r"\s+([.,;:!?])")
@@ -68,7 +72,7 @@ def split_confidence(value: object) -> Said:
     A tag at the end and a tag mid-sentence both go. The level comes from the
     last one, which is the one a model means when it writes two.
     """
-    text = "" if value is None else str(value)
+    text = _VERIFY.sub(" ", "" if value is None else str(value))
     found = list(_CONFIDENCE.finditer(text))
     cleaned = _CONFIDENCE.sub(" ", text)
     # A trailing "High confidence" is read last, and after the other labels
@@ -78,7 +82,7 @@ def split_confidence(value: object) -> Said:
         found.append(tail)
         cleaned = cleaned[: tail.start()]
     if not found:
-        return Said(text.strip(), "")
+        return Said(_tidy(cleaned), "")
     level = _FOUND_LEVEL.search(found[-1].group(0))
     return Said(_tidy(cleaned), level.group(0).capitalize() if level else "")
 

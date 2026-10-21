@@ -78,7 +78,7 @@ def test_every_requirements_page_links_to_step_four() -> None:
 
 
 def test_each_case_card_has_a_labelled_checkbox() -> None:
-    body = client.get("/requirements/test-cases/example").text
+    body = client.post("/requirements/test-cases/example").text
     assert 'aria-label="Select TC-001"' in body
     assert 'data-case-id="TC-001"' in body
     # Every case on the page is selectable, the senior tester's included.
@@ -86,7 +86,7 @@ def test_each_case_card_has_a_labelled_checkbox() -> None:
 
 
 def test_the_select_bar_starts_empty_and_disabled() -> None:
-    body = client.get("/requirements/test-cases/example").text
+    body = client.post("/requirements/test-cases/example").text
     assert 'id="select-all-cases"' in body
     assert 'id="clear-selected-cases"' in body
     assert 'aria-live="polite">0 selected<' in body
@@ -95,7 +95,7 @@ def test_the_select_bar_starts_empty_and_disabled() -> None:
 
 
 def test_the_diff_view_has_no_checkboxes() -> None:
-    body = client.get("/requirements/test-cases/example-strengthen").text
+    body = client.post("/requirements/test-cases/example-strengthen").text
     assert "tc-select" not in body
     assert "aria-label=\"Select " not in body
 
@@ -287,14 +287,14 @@ def test_a_busy_key_shows_the_friendly_card(monkeypatch) -> None:
 
 
 def test_the_example_needs_no_key_and_traces_every_case() -> None:
-    response = client.get("/requirements/automation/example")
+    response = client.post("/requirements/automation/example")
     assert response.status_code == 200
     assert "3 of 3 test cases you picked have a test that names them" in response.text
     assert "saved example" in response.text
 
 
 def test_the_example_shows_exactly_one_fixed_wait_warning() -> None:
-    body = client.get("/requirements/automation/example").text
+    body = client.post("/requirements/automation/example").text
     assert body.count("Fixed pause") == 1
 
 
@@ -302,16 +302,18 @@ def test_the_example_shows_exactly_one_fixed_wait_warning() -> None:
 
 
 def test_there_is_one_button_per_file() -> None:
-    body = client.get("/requirements/automation/example").text
-    assert body.count('class="file-tab') == 3
-    assert body.count('class="code file-body"') == 3
+    body = client.post("/requirements/automation/example").text
+    # Three files from the AI, plus the package.json and tsconfig.json a
+    # TypeScript project needs before it can be type-checked at all.
+    assert body.count('class="file-tab') == 5
+    assert body.count('class="code file-body"') == 5
     assert "pages/LoginPage.ts" in body
     assert "tests/login-lockout.spec.ts" in body
     assert "playwright.config.ts" in body
 
 
 def test_the_stat_row_counts_files_traces_syntax_and_warnings() -> None:
-    body = client.get("/requirements/automation/example").text
+    body = client.post("/requirements/automation/example").text
     assert ">3 / 3<" in body
     assert "all fine" in body
     assert ">Tests linked<" in body
@@ -319,7 +321,7 @@ def test_the_stat_row_counts_files_traces_syntax_and_warnings() -> None:
 
 
 def test_the_run_command_and_setup_steps_are_shown() -> None:
-    body = client.get("/requirements/automation/example").text
+    body = client.post("/requirements/automation/example").text
     assert "npx playwright test" in body
     assert "npm init -y" in body
     assert 'id="copy-command"' in body
@@ -341,13 +343,13 @@ def test_code_is_escaped_not_run(monkeypatch) -> None:
 
 
 def test_the_download_button_and_its_payload_are_present() -> None:
-    body = client.get("/requirements/automation/example").text
+    body = client.post("/requirements/automation/example").text
     assert 'id="download-zip"' in body
     assert 'id="automation-data"' in body
 
 
 def test_the_rendered_payload_round_trips_through_the_export_route() -> None:
-    body = client.get("/requirements/automation/example").text
+    body = client.post("/requirements/automation/example").text
     raw = body.split('id="automation-data">', 1)[1].split("</script>", 1)[0]
     payload = json.loads(raw)
     assert payload["selected_ids"] == ["TC-001", "TC-003", "TC-004"]
@@ -426,7 +428,7 @@ def test_the_key_never_reaches_the_page_or_the_logs(monkeypatch, caplog) -> None
 
 def test_the_run_it_block_starts_in_the_downloaded_folder() -> None:
     """The AI's own steps once said "mkdir aurora-automation"; these do not."""
-    body = client.get("/requirements/automation/example").text
+    body = client.post("/requirements/automation/example").text
     block = body[body.index('id="run-command"') : body.index("copy-command")]
     assert "cd qa-genius-automation" in block
     assert "mkdir" not in block
@@ -434,7 +436,7 @@ def test_the_run_it_block_starts_in_the_downloaded_folder() -> None:
 
 
 def test_the_ai_instructions_move_into_notes() -> None:
-    body = client.get("/requirements/automation/example").text
+    body = client.post("/requirements/automation/example").text
     assert "Notes from the AI" in body
     assert body.index('id="run-command"') < body.index("Notes from the AI")
 

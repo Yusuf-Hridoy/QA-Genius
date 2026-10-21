@@ -233,7 +233,7 @@
     var example = el("button", "btn", "Load example");
     example.id = "risk-example";
     example.setAttribute("type", "button");
-    example.setAttribute("hx-get", "/risks/example");
+    example.setAttribute("hx-post", "/risks/example");
     example.setAttribute("hx-target", "#risk-output");
     example.setAttribute("hx-swap", "innerHTML");
     return example;
