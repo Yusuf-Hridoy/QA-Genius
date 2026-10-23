@@ -25,12 +25,15 @@ MANIFEST
 
 # Virtual environments
 .env
-.venv
+.venv/
 env/
 venv/
 ENV/
 env.bak/
 venv.bak/
+
+# Node (only the test runner; the app has no npm dependencies)
+node_modules/
 
 # Streamlit
 .streamlit/
@@ -51,6 +54,7 @@ Thumbs.db
 
 # Local test artifacts
 .pytest_cache/
+qa_run/
 .mypy_cache/
 .ruff_cache/
 

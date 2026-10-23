@@ -1,235 +1,226 @@
-# QA-Genius v2
-FastAPI + HTMX rewrite of QA-Genius (v2 branch).
-Old Streamlit app lives on `main` and is untouched.
-Phase 1: sidebar, keys page, story check, load example.
-Live URL: TBD
+# QA-Genius
 
-## Two-reader check
-On Story check, **Run the two-reader check** asks two AI readers — one
-strict, one loose — to read the story separately, then compares them. The
-places they disagree are marked in the story text. Hover or focus a mark to
-see both readings and better wording. It uses 3 short AI calls. Both readers
-have to give a real number with a unit for every unclear word. Code then
-removes any reading the comparison invented. The numbers are matched by name
-and unit in code, so "same" and "different" are worked out, not guessed.
-Wording that is still unclear is flagged and cannot be used.
+**From a user story to a release decision — with a senior tester checking the AI's work.**
 
-## Test cases
-Requirements runs in three steps: **Story** check, **Acceptance criteria**,
-then **Test cases**. The Use these criteria button carries the story and its
-criteria to step 2, where you can edit, reorder, add and delete them; ids
-stay AC-1..AC-n by position. Step 3 writes test cases from the story plus
-those criteria, and each case shows the criteria it covers as AC chips. The
-coverage meter, the counts by kind and the chips are all worked out in code
-from the ids each case lists, never read from the AI's own summary, so a
-criterion with no test is always reported. Download CSV or Excel for the
-whole suite; the workbook adds a Coverage sheet and both formats quote any
-cell that starts with = + - or @ so a spreadsheet cannot run it as a
-formula. The run lives in your browser's sessionStorage only — the server
-never stores it.
+QA-Genius is a free, open-source workspace for QA engineers. Paste a user story and it checks how clear the story is, writes acceptance criteria and test cases, finds the ways the feature can break, plans which browsers and devices to test, writes Playwright code, and ends with one decision: **Ready to release**, **Release with known risks**, or **Not ready**.
 
-Being tested at all is not the same as being tested well, so the card also
-shows **how well tested** each criterion is: how many tests reach it, and
-whether any of them tries wrong input or sits at a limit. A criterion with one
-happy-path test is marked *needs more tests*, and the line above says what is
-really missing — *"5 of 5 criteria need more tests — 4 have no test for wrong
-input, 1 has only one test."* **Add more tests where needed** asks the AI for
-just the missing kinds of test and can only add: code keeps every existing
-test exactly as it was and drops any edit or deletion the AI tried. **Change
-with your own instruction…** takes a sentence in your own words. Either way
-the answer arrives as a before/after view with added, changed and removed
-tests counted in code, which you can **Accept** or **Keep current**, and
-**Undo last change** steps back through the last five lists you accepted.
+🔗 **Live demo:** [qa-genius-ashy.vercel.app](https://qa-genius-ashy.vercel.app) · works with **Load example**, no key needed
+🎬 _Demo video: coming soon_
 
-## Automation
-Step 3 cards carry a checkbox, so you can tick up to twelve cases and hit
-**Automate selected →** to reach step 4, where you choose a framework and
-language (Playwright, Cypress or Selenium), Page Object Model or flat
-scripts, the browsers to run, and an optional base URL. The AI writes the
-project; code then checks it, as always. The card says how many of the tests
-you picked have a test that names their id, and lists any that do not. Python
-files are read by a real parser, so *it parses* there means exactly that.
-TypeScript and JavaScript only get a **quick code check** that brackets,
-quotes and comments match — it is not a compile and not a type check, and the
-card says so. Any `waitForTimeout`, `time.sleep`, numeric `cy.wait` or
-`Thread.sleep` is flagged as a **fixed pause**, with its file and line,
-because a fixed pause makes tests slow and flaky. **Download ZIP** packs every file under one folder, with
-a README carrying the setup steps, the run command and the same checks; the
-file names the AI chose are cleaned first, so nothing can be written outside
-that folder.
+![QA-Genius home](docs/screenshots/01-home.png)
 
-## Risk radar
-**Risk radar** lists the ways this feature can break in production — security,
-performance, reliability, data, usability, accessibility and plain broken
-behaviour — and gives each one three scores from 1 to 5, with a reason: how bad
-it is, how likely it is, and how hard it is to notice. Code does the rest. The
-risk score is how bad × how likely × how hard to notice, and the level, the
-5×5 risk map, the counts and the order all come from that one sum, never from
-the model. Whether a test covers a risk is checked, not believed: a test tagged
-`risk:R1` was written for it; a test the AI names is checked on shared words
-and shows as *probably tested*, or, when the words do not match, as a doubt the
-page states plainly; and an id the AI invented is dropped with a note. A risk
-QA-Genius added itself knows the words that mean it is tested, so *"System
-prevents email enumeration"* is matched to the enumeration risk without anyone
-tagging anything. Change any score in the card and the server works it all out
-again, so the map and the order follow your judgement. **Write tests for N high
-risks with no test** sends those risks to step 3, where an add-only change
-writes tests tagged `risk:Rn` and shows them in the usual Accept / Keep current
-/ Undo view. **Download CSV** and **Download Excel** give you the risk
-register, the Excel one with a register sheet coloured by level and a risk map
-sheet.
+---
 
-## Ship check
-**Ship check** answers one question — *can we release this feature?* — with no
-API key and no AI call. Code works out every line from results the other desks
-already produced, using the same functions those pages use, so Ship check can
-never disagree with the page you just came from. Seven checks run over whatever
-your run holds: **how clear the story is** (100 minus the unclear score), the
-**two-reader check** (how far apart the readers were, and the worst
-disagreement), **criteria with a test** (any criterion with no test fails),
-**how well tested** (criteria needing more tests warn; more than half fails),
-**risks with a test** (a high risk with no test fails; a medium risk with no
-test, or a high risk matched only by a few shared words, warns), **automation**
-(a code error fails; a missing id or a fixed pause warns) and the **test
-matrix** (a matrix that misses pairs or needs runs by hand warns; it never
-fails). Each check is *fine*, *have a look*, *needs fixing* or *not done yet*,
-with the numbers behind it and a link back to the desk that fixes it. The
-decision follows in a fixed order: anything needing fixing means **Not ready**;
-otherwise a missing coverage or risk check means **Release with known risks**,
-because there is not enough to go on; otherwise any warning means **Release
-with known risks**; and only a clean sweep is **Ready to release**. A failed
-check can be accepted with a written reason of 10 to 300 characters — the
-reason is kept on the row, counts as a warning rather than a pass, and is
-removed again in one click. **Copy as Markdown** gives you the whole decision
-as a table to paste into a release thread, and **Print / save as PDF** prints
-the banner and every check with its detail open, leaving the sidebar, the
-buttons and the key chip off the page.
+## Why not just ask ChatGPT?
 
-## Test matrix
-Browsers times devices times roles times languages is hundreds of runs, so
-teams test Chrome on a desktop and hope. There is a way out: most setup bugs
-need only two things to meet, so the smallest set of runs where **every two
-options are tested together at least once** finds them without running
-everything — 216 combinations become 16 runs, and the page proves it with *85
-of 85 pairs covered*. QA-Genius suggests the things worth varying for your
-story, with a reason for each (an AI reads the story; it never decides a run).
-If the AI forgets Browser or Device, code puts them back, because almost every
-story is a screen. You then add or remove things to vary, their options, and
-combinations that can't happen such as *Firefox never on a phone*, and the
-matrix works itself out again at once, in code. Mark the runs you always want
-with **Always keep** and they stay. **Download Playwright config** gives you
-one project per run a tool can drive, with the right device, language, colour
-scheme and saved sign-in, and **Download CSV** covers the rest, including the
-runs Playwright cannot drive, which are counted rather than quietly dropped.
-The result feeds the Test matrix row of Ship check.
+You can ask any chat AI to "write test cases". You'll get a list — and then you have to check it, ask again, and remember what you asked last time. QA-Genius is built around three ideas a chat window doesn't have:
 
-## The senior tester
-Every AI call on every desk has a senior tester sitting either side of it, and
-it costs you nothing: same click, same single AI call, no key of its own, no
-waiting. **Before** the call, QA-Genius adds a short list of what a senior
-tester would insist on for this kind of feature — the email typed in capitals,
-the same error for an unknown email and a wrong password, the file of exactly
-5 MB and the one a byte over — along with the exact numbers your criteria imply
-(4 / 5 / 6 attempts, 14 / 15 / 16 minutes). **After** the call it reads what
-came back and adds what is still missing, straight into the same result: tests
-labelled **Added by senior tester** with the reason they exist and a Remove
-button, extra risks scored by the same rules as the AI's own, notes on
-automation code that never checks anything or leaves `.only` behind, and a
-warning on Story check when a story is really seven features in a trench coat.
-It never changes the AI's own work — it only adds, and everything it adds can
-be removed, with Undo. All of it is plain Python over rule packs, so it runs on
-**Load example** with no key at all.
+1. **A senior tester sits next to the AI.** Plain-code rules (no AI, no key) run in the same click. Before the AI answers, they tell it what a senior tester always checks for this kind of feature. After it answers, they add what's still missing and point out mistakes — like *"Nobody says what happens at exactly $50."*
+2. **Code works out every number.** Coverage, risk scores, the release decision, the browser/device matrix — all computed by code from your results, never guessed by the AI. The same input always gives the same answer.
+3. **Everything is connected.** The story, criteria, test cases, risks, matrix and code all know about each other. Change one criterion and every desk shows **"Old — your work changed"** with what changed.
 
-A check that is only about one narrow thing — the language an email is written
-in, rounding a second currency — carries `only_if` and waits until your story
-raises that subject, so a lockout story is never asked for a test about
-languages.
+### A real example
 
-The rules live in `qagenius/shadow_qa/packs/*.toml`, one file per kind of
-feature, and you can add your own — drop a file in and it is picked up. A pack
-wakes up on one `trigger`, a word only its kind of feature uses. Words half the
-stories in the world contain — *email*, *list*, *file*, *admin* — go in
-`weak_triggers` instead, and it takes two different ones to wake the pack: one
-of them on its own, anywhere, is ignored. Where a word was said still counts
-for order, so packs your story names out loud are offered before packs found
-only in the criteria.
+Story: *"As a shopper, I want to apply a discount coupon at checkout."* Context: *"Coupons work on orders of at least $50, with a maximum discount of $30."* With criteria that say *"more than $50"* and *"less than $50"*, QA-Genius reports — in one click, without being asked:
 
-```toml
-id = "coupons"
-name = "Coupon codes"
-short = "Coupons"
-triggers = ["coupon", "coupons", "promo code", "discount code"]
-weak_triggers = ["voucher", "discount"]
+- **"AC-1 covers 'more than $50' and AC-2 covers 'less than $50'. Nobody says what happens at exactly $50. Decide, then add it to a criterion."**
+- **"The context says 'at least $50' (so exactly $50 works) but AC-1 says 'more than $50' (so exactly $50 doesn't). Decide which is right."**
+- **"TC-016 expects a valid coupon code of exactly $50.00 to be accepted, but AC-1 says 'more than $50', so exactly $50.00 should be refused. One of them is wrong."**
+- Tests at **$49.99 / $50.00 / $50.01**, and where the $30 cap starts: **$149.99 / $150.00 / $150.01**.
+- Tests for removing items after the coupon is applied, cent rounding, a guest reusing the coupon, and two browser tabs using the same coupon at once.
 
-[[checks]]
-id = "expired"
-title = "An expired coupon is refused"
-severity = "high"
-why = "An expired code that still works gives money away."
-covered_if = ["expired", "expiry", "no longer valid"]
-only_if = []          # optional: use this check only when the story says one of these
-  [checks.test]
-  title = "Apply a coupon one day after it expired"
-  category = "Negative"
-  priority = "High"
-  pre_conditions = "A coupon SPRING10 expired yesterday"
-  steps = ["Add an item to the basket", "Apply SPRING10 and read the message"]
-  expected_result = "The coupon is refused with a message saying it has expired, and the total is unchanged."
-  test_data = "code=SPRING10"
+![Senior tester notes on the coupon story](docs/screenshots/05-senior-tester-notes.png)
+
+---
+
+## What's inside
+
+### 1. Requirements — story to test cases to code
+
+Four steps: **Story → Acceptance criteria → Test cases → Automation.**
+
+- **Story check** scores how clear the story is, runs the INVEST check, names unclear words and suggests better ones, and writes acceptance criteria. It warns when a "story" is really several features. **Use these criteria** carries the story and its criteria to step 2, where you can edit, reorder, add and delete them.
+- **Two-reader check** asks two AI readers (one strict, one relaxed) to read the story separately and shows where they disagree, right in the story text. Numbers are compared by code, so "same" and "different" are worked out, not guessed.
+- **Test cases** are written from your criteria. Each test shows which criteria it covers. The page shows how well each criterion is tested (wrong input, at the limit), and **Add more tests where needed** fills only the gaps — with a before/after view, **Accept**, **Keep current** and **Undo last change**. Download the suite as CSV or Excel.
+- **Automation** turns up to twelve tests you tick into a Playwright, Cypress or Selenium project. Code then checks it: every test linked to its test case, a quick code check, fixed pauses and tests that never check anything flagged. **Download ZIP**.
+
+![Story check](docs/screenshots/02-story-check.png)
+![Two-reader check](docs/screenshots/03-two-reader.png)
+![Test cases with senior tester additions](docs/screenshots/04-test-cases.png)
+![Automation checks](docs/screenshots/09-automation.png)
+
+### 2. Risk radar — where will this break?
+
+Lists the ways the feature can break (security, speed, reliability, data, accessibility…). Each risk gets three scores — **how bad × how likely × how hard to notice** — and code works out the risk score, the risk map and the order. It checks whether a test already covers each risk, and **Write tests for N high risks with no test** closes the gap. Download the risk register as CSV or Excel.
+
+![Risk radar](docs/screenshots/06-risk-radar.png)
+
+### 3. Test matrix — which browsers and devices?
+
+Browsers × devices × roles × languages is hundreds of combinations. QA-Genius suggests what to vary for your story, then code finds the **fewest runs where every two options are tested together** — the saved example goes from 216 combinations to 16 runs — and proves it ("85 of 85 pairs covered"). Download a ready Playwright config.
+
+![Test matrix](docs/screenshots/07-test-matrix.png)
+
+### 4. Ship check — can we release?
+
+One decision from everything above, computed by code with **no AI**. Seven checks: **How clear the story is**, **Two-reader check**, **Criteria with a test**, **How well tested**, **Risks with a test**, **Automation** and **Test matrix**. A failed check can be accepted with a written reason. **Copy as Markdown** or **Print / save as PDF**.
+
+![Ship check](docs/screenshots/08-ship-check.png)
+
+### Always up to date
+
+Every desk shows what it was built from — **Not built yet**, **Old — your work changed**, or **Matches your latest work** — and the left menu shows a dot or a tick. Anything code can redo updates by itself; anything that uses your AI key waits for your click.
+
+![Old — your work changed](docs/screenshots/10-freshness.png)
+
+---
+
+## Your key, your data
+
+- **Bring your own AI key.** The key drawer lists **Google Gemini (free)**, **Groq (free)**, **OpenAI (GPT)**, **xAI (Grok)**, **Mistral**, **Anthropic (Claude)** and **OpenRouter**. Add more than one — if one is busy or refused, the next one answers.
+- **Keys stay in your browser** (`localStorage`). They are sent only with requests that need the AI, and the server never stores or logs them.
+- **Your work stays in your browser** (`sessionStorage`). There is no database and no account.
+- **Load example** on every desk works with no key at all.
+
+![Key drawer](docs/screenshots/11-keys.png)
+
+---
+
+## Run it on your computer
+
+You need **Python 3.12+**.
+
+```bash
+git clone https://github.com/Yusuf-Hridoy/QA-Genius.git
+cd QA-Genius
+python -m venv .venv
+# Windows:  .venv\Scripts\activate
+# Mac/Linux: source .venv/bin/activate
+pip install -r requirements.txt
+uvicorn main:app --reload
 ```
 
-## Always up to date
-Every desk says, at the top, what it was built from and whether that is still
-your latest work: **Not built yet**, **Old — your work changed** or **Matches
-your latest work**, each with an icon and words, so the state never rests on
-colour alone. The card
-names the change in numbers — *"Your criteria changed 3 min ago (4 → 5)"* —
-and its button is the page's one primary action, so there is never a second
-button competing with it. Work that code can redo updates by itself: Risk
-radar re-scores coverage against your newest test cases, and Ship check
-recomputes on every open and marks any input that lags behind. Anything that
-would spend your AI key waits for a click. The sidebar carries the same
-answer as an amber dot or a green tick, so you know before you click.
+Open **http://127.0.0.1:8000**, click **Add API key** (top right), and paste a key. A free Gemini key: [aistudio.google.com/app/apikey](https://aistudio.google.com/app/apikey).
 
-## Also included (unlisted)
-**Bug desk** (`/bugs`) turns rough notes and a screenshot into a structured
-report with code-computed quality checks and Markdown/Jira exports, and
-**Quality insights** (`/insights`) reads JUnit or Playwright reports with no
-key at all, grouping failures and naming flaky tests. Both still work and are
-still tested; they are simply not in the sidebar.
+Check one key from the terminal (the key is never printed):
 
-## Troubleshooting
-- `python scripts/check_key.py` checks one provider key with a tiny JSON
-  request. It asks for the provider id and the key (hidden while typing)
-  and prints `OK <provider> <model>` or the cleaned error. The key is
-  never printed.
+```bash
+python scripts/check_key.py
+```
 
-## Plain words
-Every word on a screen is meant to be readable by a tester in their first
-month, or by one whose first language is not English: short sentences,
-everyday words, and no QA jargon standing in for an idea. The few standard
-words that stay — acceptance criteria, test case, at the limit, wrong input,
-INVEST, risk score, Playwright, given/when/then — carry a small ⓘ that says
-what they mean. Those notes live in one place, `public/plain_words.js`, and a
-template reaches one with `data-explain="boundary"`. Exports keep the standard
-QA words, because a CSV goes to a tool, not to a reader. Every AI call also
-asks for plain English, so the text that comes back reads like the rest.
-`tests/test_plain_words.py` renders every page and fails if a word from the
-banned list reaches a screen.
+## Put it online (Vercel)
+
+QA-Genius runs on Vercel's free plan with no extra setup. There is no `vercel.json`: Vercel finds `app` in `main.py` and installs `requirements.txt` by itself.
+
+1. Push the repo to GitHub.
+2. On [vercel.com](https://vercel.com) → **Add New → Project** → import the repo → **Deploy**.
+3. Open `/health` on your new link — it should answer `"ok"`.
+
+No environment variables are needed: users bring their own keys.
+
+---
+
+## How it's built
+
+- **Python + FastAPI** on the server, **Jinja2** templates, **HTMX** and a little plain JavaScript in the browser. No React, no database.
+- The **OpenAI Python library** talks to every provider through their OpenAI-compatible endpoints.
+- **"Code computes, AI writes."** The AI writes text. Code computes every number and decision, and checks the AI's output (made-up numbers, wrong test ids, unsafe file names).
+- **1,300+ automated tests** (pytest) plus **66 browser-side unit tests** (Node's built-in test runner).
+
+```
+main.py                     entry point (Vercel looks for `app` here)
+qagenius/
+  web.py                    routes
+  models.py                 the field names every desk shares
+  llm.py, providers.py      AI calls, key rotation, fallback
+  prompts.py                AI instructions
+  test_cases.py, test_case_depth.py, test_case_refine.py   test cases and "how well tested"
+  risk_radar.py             risk scores and coverage
+  pairwise.py               the test matrix maths
+  ship_check.py             the release decision
+  automation_checks.py      checks on generated code
+  shadow_qa/                the senior tester
+    packs/*.toml            rule packs, one per kind of feature
+  samples/                  the saved answers behind every Load example
+  templates/                pages
+public/                     CSS and browser JavaScript
+tests/                      pytest and JS tests
+scripts/                    check_key.py, ui_screenshots.py, shadow_qa_screens.py
+```
+
+### Also in the app, not in the menu
+
+**Bug desk** (`/bugs`) turns rough notes and a screenshot into a structured report with code-computed quality checks and Markdown/Jira exports. **Quality insights** (`/insights`) reads JUnit or Playwright reports with no key at all, groups failures and names flaky tests. Both work and are tested; they are simply not in the sidebar.
+
+## Add your own senior-tester rules
+
+The senior tester's knowledge lives in `qagenius/shadow_qa/packs/*.toml` — one file per kind of feature (login, file upload, coupons, permissions, two-factor, payments and more). Add a file and it's picked up. A pack wakes up on a word only its kind of feature uses (`triggers`); common words go in `weak_triggers` and need two to wake it.
+
+A check that is only about one narrow thing carries `only_if` and waits until your story raises that subject, so a lockout story is never asked for a test about languages.
+
+```toml
+id = "gift_cards"
+name = "Gift cards"
+short = "Gift cards"
+triggers = ["gift card", "gift cards"]
+weak_triggers = ["balance", "redeem"]
+
+[[checks]]
+id = "partial_balance"
+title = "A gift card pays part of the order and keeps the rest"
+severity = "high"
+why = "People expect the rest of their balance to stay on the card."
+covered_if = ["remaining balance", "partial", "rest of the balance"]
+only_if = []          # optional: use this check only when the story says one of these
+  [checks.test]
+  title = "Pay a $30 order with a $50 gift card"
+  category = "Functional"
+  priority = "High"
+  pre_conditions = "A gift card GC-1001 has a $50 balance"
+  steps = ["Add $30 of items to the cart", "Pay with GC-1001", "Check the gift card balance"]
+  expected_result = "The order is paid and GC-1001 shows a $20 balance."
+  test_data = "card=GC-1001, balance=50.00, order=30.00"
+```
+
+`severity` is `high`, `medium` or `low`. `category` is `Functional`, `Negative`, `Boundary` or `Edge Case`, and `priority` is `High`, `Medium` or `Low`. A test needs at least two steps. A bad file names itself in the error.
 
 ## Development
-- `pytest -q` runs the suite; `ruff check .` lints; `node --test tests/js`
-  runs the browser-side unit tests. All three must pass before a commit.
-- `python scripts/ui_screenshots.py` saves a PNG of every desk at 1366×900
-  and 390×844 into `ui-screens/` (git-ignored), so a UI change can be
-  compared side by side instead of described. It starts nothing itself:
 
-      pip install playwright          # a dev dependency, not in requirements.txt
-      playwright install chromium
-      uvicorn main:app --reload       # in one terminal
-      python scripts/ui_screenshots.py   # in another
+```bash
+pip install -e ".[dev]"
+pytest -q                          # Python tests
+ruff check .                       # lint
+node --test tests/js/*.test.mjs    # browser-side tests
+```
 
-  Pass a different base URL as the one argument, e.g.
-  `python scripts/ui_screenshots.py http://localhost:9000`. Every page is
-  shot empty or through its own **Load example** button, so no API key is
-  needed and no request reaches a provider.
+All three must pass before a commit.
+
+**Screenshots of every page.** `python scripts/ui_screenshots.py` saves a PNG of every desk at 1366×900 and 390×844 into `ui-screens/` (git-ignored), so a UI change can be compared side by side instead of described. It starts nothing itself:
+
+```bash
+pip install playwright          # a dev dependency, not in requirements.txt
+playwright install chromium
+uvicorn main:app --reload          # in one terminal
+python scripts/ui_screenshots.py   # in another
+```
+
+Pass a different base URL as the one argument, e.g. `python scripts/ui_screenshots.py http://localhost:9000`. Every page is shot empty or through its own **Load example** button, so no API key is needed and no request reaches a provider.
+
+**Plain words.** Every word on a screen is meant to be readable by a tester in their first month, or by one whose first language is not English. The few standard words that stay — acceptance criteria, test case, at the limit, wrong input, INVEST, risk score, Playwright, given/when/then — carry a small ⓘ. Those notes live in one place, `public/plain_words.js`, and a template reaches one with `data-explain="boundary"`. `tests/test_plain_words.py` renders every page and fails if a banned word reaches a screen.
+
+**Checking a key.** `python scripts/check_key.py` checks one provider key with a tiny JSON request. It asks for the provider id and the key (hidden while typing) and prints `OK <provider> <model>` or the cleaned error. The key is never printed.
+
+## Honest limits
+
+- The AI can still be wrong. The senior tester and the code checks catch many mistakes, not all. Always read what you use.
+- The senior tester's rules match words and numbers — they don't truly understand your product. Unusual domains need new rule packs.
+- TypeScript and JavaScript code gets a quick check that brackets, quotes and comments match. It is not a compile and not a type check.
+- Free AI keys have rate limits. If a key is busy, add a second one.
+
+## About
+
+Built by **Md Yusuf Ahmed**, QA Automation Engineer — [GitHub](https://github.com/Yusuf-Hridoy) · _LinkedIn: (https://www.linkedin.com/in/md-yusuf-ahmed/)
+
+The first version (a Streamlit app) is kept on the `archive/v1-streamlit` branch.
+
+License: MIT
