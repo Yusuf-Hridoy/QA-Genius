@@ -294,3 +294,64 @@ def test_every_row_is_allowed_across_many_small_inputs():
 
 def test_the_attempt_limit_is_small_enough_to_never_hang():
     assert MAX_ATTEMPTS <= 200
+
+
+# ── how many pairs each run is the first to cover ────────────────────────────
+
+
+def test_new_pairs_adds_up_to_every_pair_covered() -> None:
+    """A pair belongs to the first run that covers it, and to only one run."""
+    matrix = build_matrix(
+        [
+            Factor("Browser", ("Chrome", "Firefox", "Safari")),
+            Factor("Device", ("Desktop", "Phone")),
+            Factor("Role", ("Guest", "Member", "Admin")),
+        ],
+        [],
+    )
+    assert len(matrix.new_pairs) == len(matrix.rows)
+    assert sum(matrix.new_pairs) == matrix.covered_pairs
+    assert matrix.covered_pairs == matrix.valid_pairs
+
+
+def test_the_first_run_covers_the_most() -> None:
+    matrix = build_matrix(
+        [
+            Factor("Browser", ("Chrome", "Firefox")),
+            Factor("Device", ("Desktop", "Phone")),
+            Factor("Role", ("Guest", "Member")),
+        ],
+        [],
+    )
+    assert matrix.new_pairs[0] == max(matrix.new_pairs)
+    assert matrix.new_pairs[0] == 3  # three factors, three pairs in one row
+
+
+def test_a_run_that_covers_nothing_new_says_zero() -> None:
+    """A pinned run the rest already covers still shows up, honestly at 0."""
+    factors = [
+        Factor("Browser", ("Chrome", "Firefox")),
+        Factor("Device", ("Desktop", "Phone")),
+    ]
+    matrix = build_matrix(
+        factors,
+        [],
+        pinned=[
+            {"Browser": "Chrome", "Device": "Desktop"},
+            {"Browser": "Chrome", "Device": "Desktop"},
+        ],
+    )
+    assert matrix.new_pairs[0] == 1
+    assert matrix.new_pairs[1] == 0
+    assert sum(matrix.new_pairs) == matrix.covered_pairs
+
+
+def test_an_impossible_pair_is_never_counted_as_new() -> None:
+    matrix = build_matrix(
+        [
+            Factor("Browser", ("Chrome", "Safari")),
+            Factor("Device", ("Desktop", "Phone")),
+        ],
+        [Rule("Browser", "Safari", "Device", "Desktop")],
+    )
+    assert sum(matrix.new_pairs) == matrix.valid_pairs

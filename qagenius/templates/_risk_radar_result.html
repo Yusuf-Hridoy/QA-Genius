@@ -1,129 +1,124 @@
+{# Risks worst first, and beside them the evidence for the one you picked.
+
+   Every number here is worked out by code: the score is how bad × how likely
+   × how hard to notice, and the coverage words come from matching test cases
+   to risks, never from the AI saying so. #}
 {% import "_principal_qa.html" as pq %}
+{% from "_form_fields.html" import field %}
 {% if is_example %}
 {% with caption = "Add a key and press Find risks to run it on your own story.", with_keys = "Run it on your own story — press Find risks." %}
 {% include "_example_flag.html" %}
 {% endwith %}
 {% endif %}
-<div class="verdict" style="--pct:{{ (covered / report.counts.total * 100) | round | int if report.counts.total else 0 }};--ring-color:var(--{{ 'ok' if not report.counts.untested_high else 'bad' }}-line)">
-  <div class="score-ring">
-    <span class="score-num">{{ (covered / report.counts.total * 100) | round | int if report.counts.total else 0 }}<span class="pct">%</span></span>
-    <span class="score-of">tested</span>
-  </div>
-  <div>
-    <span class="pill {{ 'ok' if not report.counts.untested_high else 'bad' }}">
-      {% if report.counts.untested_high %}{{ report.counts.untested_high }} high risk{{ "" if report.counts.untested_high == 1 else "s" }} with no test{% else %}Every high risk has a test{% endif %}</span>
-    <h2>{{ report.counts.total }} ways this can break<span data-explain="risk-score"></span></h2>
-    <p>{{ covered }} of {{ report.counts.total }} are matched to a test you already have
-      ({{ verified_count }} tested · {{ probably_count }} probably tested).
-      Risk score = how bad × how likely × how hard to notice. Code works it out —
-      the AI does not.</p>
-  </div>
-</div>
-<div class="stat-row">
-  <div class="stat"><div class="num">{{ report.counts.total }}</div><div class="lbl">Ways this can break</div></div>
+
+<div class="stat-row stat-row-4">
+  <div class="stat"><div class="num">{{ report.counts.total }}</div><div class="lbl">Ways this can break<span data-explain="risk-score"></span></div></div>
   <div class="stat"><div class="num">{{ report.counts.high }}</div><div class="lbl">High risk</div></div>
-  <div class="stat"><div class="num">{{ covered }}<span class="unit"> / {{ report.counts.total }}</span></div><div class="lbl">{{ verified_count }} tested · {{ probably_count }} probably tested</div></div>
+  <div class="stat stat-with-ring">
+    <div>
+      <div class="num">{{ covered }}<span class="unit"> / {{ report.counts.total }}</span></div>
+      <div class="lbl">{{ verified_count }} tested · {{ probably_count }} probably tested</div>
+    </div>
+    {% set tested_pct = (covered / report.counts.total * 100) | round | int if report.counts.total else 0 %}
+    <div class="score-ring stat-ring" style="--pct:{{ tested_pct }};--ring-color:var(--{{ 'ok' if not report.counts.untested_high else 'bad' }}-line)"
+      role="img" aria-label="Tested {{ tested_pct }} percent">
+      <span class="score-num">{{ tested_pct }}<span class="pct">%</span></span>
+    </div>
+  </div>
   <div class="stat{% if report.counts.untested_high %} stat-bad{% endif %}">
     <div class="num">{{ report.counts.untested_high }}</div><div class="lbl">High risk, no test</div>
   </div>
 </div>
-<div class="risk-split">
-  <div class="card risk-heat">
-    <h3>Risk map</h3>
-    <p class="muted small">How bad goes down, how likely goes across. Click a square to see those risks.</p>
-    <table class="heat">
-      <tbody>
-        {% for row in heat_rows %}
-        <tr>
-          {# The words, not initials. Below 420px there is only room for the
-             short form, and the full one stays in the label a reader hears. #}
-          <th class="heat-axis" scope="row" aria-label="Bad {{ row.severity }}">
-            <span class="axis-long">Bad {{ row.severity }}</span><span class="axis-short" aria-hidden="true">B{{ row.severity }}</span>
-          </th>
-          {% for cell in row.cells %}
-          <td class="heat-cell {{ cell.tone }}{% if cell.ids %} has-risk{% endif %}"
-              data-cell="{{ cell.severity }}-{{ cell.likelihood }}"
-              data-ids="{{ cell.ids | join(',') }}"
-              title="How bad {{ cell.severity }} · how likely {{ cell.likelihood }}{% if cell.ids | length > 3 %} · {{ cell.ids | join(', ') }}{% endif %}">
-            {# Two ids in one cell used to run together as "R1R6". Each id is
-               its own pill in a wrapping row now, and a crowded cell keeps
-               three and counts the rest. #}
-            {% if cell.ids %}
-            <span class="heat-ids">
-              {% for risk_id in cell.ids[:3] %}<span class="pill plain">{{ risk_id }}</span>{% endfor %}
-              {% if cell.ids | length > 3 %}<span class="pill plain">+{{ cell.ids | length - 3 }}</span>{% endif %}
-            </span>
+
+<div class="req-split risk-split-2">
+  <div class="req-main">
+    <div class="card">
+      <h2 class="card-title">Highest risks first</h2>
+      <div class="risk-list" id="risk-list">
+        {% for item in report.risks %}
+        <div class="risk-card card" data-risk-id="{{ item.risk.id }}" data-level="{{ item.level }}"
+             data-coverage="{{ item.coverage }}" tabindex="0" role="button"
+             aria-label="Show the evidence for {{ item.risk.id }}">
+          <div class="risk-score-badge risk-{{ item.level }}"
+               title="Risk score {{ item.rpn }} of 125 · {{ item.level }}"
+               aria-label="Risk score {{ item.rpn }} of 125 · {{ item.level }}">
+            <span class="risk-score-num">{{ item.rpn }}</span>
+            <span class="risk-score-of">/125</span>
+          </div>
+          <div class="risk-words">
+            <p class="risk-title">{{ item.risk.id }} · {{ item.risk.title }}</p>
+            <p class="risk-effect">{{ item.risk.effect }}</p>
+            <div class="risk-chips">
+              <span class="chip chip-{{ 'bad' if item.level == 'high' else ('warn' if item.level == 'medium' else 'info') }}">{{ item.level }}</span>
+              <span class="chip">{{ item.risk.category }}</span>
+              {% if item.risk.source == principal_source %}{{ pq.label() }}{% endif %}
+              {% if item.coverage == "verified" %}
+              <span class="chip chip-ok">Tested by {{ item.covered_tests[0][0] }}</span>
+              {% elif item.coverage == "covered" %}
+              <span class="chip chip-ok">Probably tested by {{ item.covered_tests[0][0] }}</span>
+              {% elif item.coverage == "weak" %}
+              <span class="chip chip-warn" title="The AI thinks {{ item.covered_tests[0][0] }} tests this, but it doesn't look like it.">Claim doesn't match</span>
+              {% else %}
+              <span class="chip chip-bad">No test yet</span>
+              {% endif %}
+              {% for ac_id in item.risk.related_criteria %}
+              <span class="chip chip-id" title="{{ ac_text.get(ac_id, '') }}">{{ ac_id }}</span>
+              {% endfor %}
+              <span class="chip chip-ok risk-accepted-chip" hidden>Accepted</span>
+            </div>
+          </div>
+          <div class="risk-action">
+            {% if item.coverage == "none" %}
+            <button type="button" class="btn btn-sm risk-write-one" data-risk-ids="{{ item.risk.id }}">Write a test</button>
+            {% elif item.coverage == "weak" %}
+            <a class="btn btn-sm" href="/requirements/test-cases">Review</a>
+            {% else %}
+            <a class="btn btn-sm" href="/requirements/test-cases">View test</a>
             {% endif %}
-          </td>
-          {% endfor %}
-        </tr>
+          </div>
+        </div>
         {% endfor %}
-        <tr>
-          <th class="heat-axis"></th>
-          {% for likelihood in [1, 2, 3, 4, 5] %}<th class="heat-axis" aria-label="Likely {{ likelihood }}">
-            <span class="axis-long">Likely {{ likelihood }}</span><span class="axis-short" aria-hidden="true">L{{ likelihood }}</span>
-          </th>{% endfor %}
-        </tr>
-      </tbody>
-    </table>
-    <p class="heat-labels"><span>Not so bad</span><span>More likely →</span></p>
-    <p class="heat-key"><span>Lower risk</span>
-      <span class="ramp" aria-hidden="true"><i style="background:var(--seq-1)"></i><i style="background:var(--seq-2)"></i><i style="background:var(--seq-3)"></i><i style="background:var(--seq-4)"></i><i style="background:var(--seq-5)"></i><i style="background:var(--seq-6)"></i></span>
-      <span>Higher</span></p>
-    <p class="row"><a href="#" id="risk-show-all" class="small" hidden>Show all risks</a></p>
-    <h3>By category</h3>
-    <p class="row">
-      {% for name, count in report.by_category.items() %}
-      <span class="pill info">{{ name }} {{ count }}</span>
-      {% endfor %}
-    </p>
+      </div>
+    </div>
   </div>
-  <div class="risk-list" id="risk-list">
-    {% for item in report.risks %}
-    <div class="card risk-card" data-risk-id="{{ item.risk.id }}">
-      <h3>{{ item.risk.id }} · {{ item.risk.title }}</h3>
-      <p class="row">
-        <span class="pill {{ level_pill[item.level] }}">Risk score {{ item.rpn }} of 125 · {{ item.level }}</span>
-        <span class="pill neutral">{{ item.risk.category }}</span>
-        {% if item.risk.source == principal_source %}{{ pq.label() }}{% endif %}
-        <span class="muted small">Bad {{ item.risk.severity }} · Likely {{ item.risk.likelihood }} · Hidden {{ item.risk.detectability }}</span>
-      </p>
-      <p><strong>Effect:</strong> {{ item.risk.effect }}</p>
-      <p class="muted"><strong>Cause:</strong> {{ item.risk.cause }}</p>
-      {% if item.risk.source == principal_source %}
-      <p class="pq-why">The AI did not raise this one. It goes wrong on most builds of
-        this kind of feature, and it is scored by the same rules as the rest.</p>
-      {% endif %}
-      {# "Covered" is the AI's claim, checked only against shared words, so the
-         words are shown and the reader is told to confirm it. A tagged case was
-         written for the risk, so it needs no evidence. #}
-      <p class="small coverage {{ coverage_tone[item.coverage] }}">
-        {% if item.coverage == "verified" %}
-        Tested by {{ item.covered_tests[0][0] }} (tagged risk:{{ item.risk.id }})
-        {% elif item.coverage == "covered" %}
-        Probably tested by {{ item.covered_tests[0][0] }} — {{ item.covered_tests[0][1] }}{%
-          if item.covered_tests[0][3] %} · both say: {{ item.covered_tests[0][3] | join(", ") }}{% endif %}
-        {% elif item.coverage == "weak" %}
-        The AI thinks {{ item.covered_tests[0][0] }} tests this, but it doesn't look like it.
-        {% else %}
-        No test for this yet
+
+  <div class="req-side">
+    <div class="card risk-trace" id="risk-trace">
+      <h2 class="card-title">Trace to evidence</h2>
+      {% for item in report.risks %}
+      <div class="risk-detail" data-risk-id="{{ item.risk.id }}"{% if not loop.first %} hidden{% endif %}>
+        <div class="trace">
+          <span class="chip chip-id story-id-chip">STORY</span>
+          <span class="arrow" aria-hidden="true">&rarr;</span>
+          <span class="chip chip-id">{{ item.risk.id }}</span>
+          {% if item.covered_tests %}
+          <span class="arrow" aria-hidden="true">&rarr;</span>
+          <span class="chip chip-id">{{ item.covered_tests[0][0] }}</span>
+          {% else %}
+          <span class="muted small">no test yet</span>
+          {% endif %}
+        </div>
+        <p class="risk-detail-title">{{ item.risk.title }}</p>
+        <p class="muted small"><strong>Cause:</strong> {{ item.risk.cause }}</p>
+        {% if item.risk.source == principal_source %}
+        <p class="pq-why">The AI did not raise this one. It goes wrong on most builds of
+          this kind of feature, and it is scored by the same rules as the rest.</p>
         {% endif %}
-      </p>
-      {% if item.coverage == "covered" %}
-      <p class="muted small">Read the test and check it really covers this. Tag it
-        <span class="mono">risk:{{ item.risk.id }}</span> and it counts for sure.</p>
-      {% endif %}
-      {% if item.risk.related_criteria %}
-      <p class="row">
-        {% for ac_id in item.risk.related_criteria %}
-        <span class="pill neutral" title="{{ ac_text.get(ac_id, '') }}">{{ ac_id }}</span>
-        {% endfor %}
-      </p>
-      {% endif %}
-      <details>
-        <summary>Why these scores</summary>
-        {# A risk from QA-Genius's own rules has one reason for all three
-           numbers, so it says it once instead of three times. #}
+        {# The exact words behind the coverage chip, so a reader can check
+           the claim rather than take it. #}
+        <p class="small coverage {{ coverage_tone[item.coverage] }}">
+          {% if item.coverage == "verified" %}
+          Tested by {{ item.covered_tests[0][0] }} (tagged risk:{{ item.risk.id }})
+          {% elif item.coverage == "covered" %}
+          Probably tested by {{ item.covered_tests[0][0] }} — {{ item.covered_tests[0][1] }}{%
+            if item.covered_tests[0][3] %} · both say: {{ item.covered_tests[0][3] | join(", ") }}{% endif %}
+          {% elif item.coverage == "weak" %}
+          The AI thinks {{ item.covered_tests[0][0] }} tests this, but it doesn't look like it.
+          {% else %}
+          No test for this yet
+          {% endif %}
+        </p>
+        <p class="risk-why-head"><strong>Why these scores</strong></p>
         {% if item.risk.source == "principal-qa" %}
         <p class="small"><strong>How bad {{ item.risk.severity }} · how likely {{ item.risk.likelihood }} · how hard to notice {{ item.risk.detectability }}</strong>
           — {{ item.risk.severity_reason or "Typical scores for this kind of problem." }}</p>
@@ -137,10 +132,10 @@
         {% endif %}
         <div class="field">
           <div class="row score-row">
-            {% for field, label, value in [("severity", "How bad", item.risk.severity), ("likelihood", "How likely", item.risk.likelihood), ("detectability", "How hard to notice", item.risk.detectability)] %}
+            {% for name, label, value in [("severity", "How bad", item.risk.severity), ("likelihood", "How likely", item.risk.likelihood), ("detectability", "How hard to notice", item.risk.detectability)] %}
             <label class="score-field">{{ label }}
               <input type="number" min="1" max="5" step="1" value="{{ value }}"
-                     class="score-input" data-risk-id="{{ item.risk.id }}" data-field="{{ field }}">
+                     class="score-input" data-risk-id="{{ item.risk.id }}" data-field="{{ name }}">
             </label>
             {% endfor %}
           </div>
@@ -150,22 +145,119 @@
         {% else %}
         <p class="muted small">These scores are the AI's guess. Change any of them to your own.</p>
         {% endif %}
-      </details>
+        {% if item.coverage == "covered" %}
+        <p class="muted small">Read the test and check it really covers this. Tag it
+          <span class="mono">risk:{{ item.risk.id }}</span> and it counts for sure.</p>
+        {% endif %}
+
+        {# Accepting a risk is a decision, so it is written down: the reason
+           is required, the owner and the date are not. #}
+        <div class="risk-accept" data-risk-id="{{ item.risk.id }}">
+          <p class="risk-accepted-line" hidden></p>
+          <div class="row">
+            <button type="button" class="btn btn-sm risk-accept-open" data-risk-id="{{ item.risk.id }}">Accept this risk</button>
+            <button type="button" class="btn btn-sm btn-danger risk-accept-remove" data-risk-id="{{ item.risk.id }}" hidden>Remove</button>
+          </div>
+          <div class="risk-accept-form" data-risk-id="{{ item.risk.id }}" hidden>
+            {% call field("risk-reason-" ~ item.risk.id, "Why are you accepting this?",
+                          help="At least " ~ min_reason ~ " characters.", counter_max=max_reason) %}
+            <textarea id="risk-reason-{{ item.risk.id }}" class="risk-reason short" rows="3"
+                      minlength="{{ min_reason }}" maxlength="{{ max_reason }}"
+                      placeholder="Behind a feature flag for internal users until the shared counter lands."></textarea>
+            {% endcall %}
+            <div class="field-grid">
+              {% call field("risk-owner-" ~ item.risk.id, "Who owns it", optional=true) %}
+              <input type="text" id="risk-owner-{{ item.risk.id }}" class="risk-owner"
+                     maxlength="{{ max_owner }}" placeholder="Name or team">
+              {% endcall %}
+              {% call field("risk-review-" ~ item.risk.id, "Review by", optional=true) %}
+              <input type="date" id="risk-review-{{ item.risk.id }}" class="risk-review">
+              {% endcall %}
+            </div>
+            <div class="form-actions">
+              <button type="button" class="btn btn-sm risk-accept-save" data-risk-id="{{ item.risk.id }}">Save</button>
+              <button type="button" class="btn btn-sm risk-accept-cancel" data-risk-id="{{ item.risk.id }}">Cancel</button>
+              <span class="muted small risk-accept-status" aria-live="polite"></span>
+            </div>
+          </div>
+        </div>
+      </div>
+      {% endfor %}
+      <p class="note">"No test yet" is not "failed".</p>
     </div>
-    {% endfor %}
   </div>
 </div>
+
+<div class="card risk-heat">
+  <h2 class="card-title">Risk map</h2>
+  <p class="muted small">How bad goes down, how likely goes across. Click a square to see those risks.</p>
+  <table class="heat">
+    <tbody>
+      {% for row in heat_rows %}
+      <tr>
+        {# The words, not initials. Below 420px there is only room for the
+           short form, and the full one stays in the label a reader hears. #}
+        <th class="heat-axis" scope="row" aria-label="Bad {{ row.severity }}">
+          <span class="axis-long">Bad {{ row.severity }}</span><span class="axis-short" aria-hidden="true">B{{ row.severity }}</span>
+        </th>
+        {% for cell in row.cells %}
+        <td class="heat-cell {{ cell.tone }}{% if cell.ids %} has-risk{% endif %}"
+            data-cell="{{ cell.severity }}-{{ cell.likelihood }}"
+            data-ids="{{ cell.ids | join(',') }}"
+            title="How bad {{ cell.severity }} · how likely {{ cell.likelihood }}{% if cell.ids | length > 3 %} · {{ cell.ids | join(', ') }}{% endif %}">
+          {# Two ids in one cell used to run together as "R1R6". Each id is
+             its own pill in a wrapping row now, and a crowded cell keeps
+             three and counts the rest. #}
+          {% if cell.ids %}
+          <span class="heat-ids">
+            {% for risk_id in cell.ids[:3] %}<span class="pill plain">{{ risk_id }}</span>{% endfor %}
+            {% if cell.ids | length > 3 %}<span class="pill plain">+{{ cell.ids | length - 3 }}</span>{% endif %}
+          </span>
+          {% endif %}
+        </td>
+        {% endfor %}
+      </tr>
+      {% endfor %}
+      <tr>
+        <th class="heat-axis"></th>
+        {% for likelihood in [1, 2, 3, 4, 5] %}<th class="heat-axis" aria-label="Likely {{ likelihood }}">
+          <span class="axis-long">Likely {{ likelihood }}</span><span class="axis-short" aria-hidden="true">L{{ likelihood }}</span>
+        </th>{% endfor %}
+      </tr>
+    </tbody>
+  </table>
+  <p class="heat-labels"><span>Not so bad</span><span>More likely →</span></p>
+  <p class="heat-key"><span>Lower risk</span>
+    <span class="ramp" aria-hidden="true"><i style="background:var(--seq-1)"></i><i style="background:var(--seq-2)"></i><i style="background:var(--seq-3)"></i><i style="background:var(--seq-4)"></i><i style="background:var(--seq-5)"></i><i style="background:var(--seq-6)"></i></span>
+    <span>Higher</span></p>
+  <p class="row"><a href="#" id="risk-show-all" class="small" hidden>Show all risks</a></p>
+  <h3>By category</h3>
+  <p class="row">
+    {% for name, count in report.by_category.items() %}
+    <span class="chip chip-info">{{ name }} {{ count }}</span>
+    {% endfor %}
+  </p>
+</div>
+
 <script type="application/json" id="risk-data">{{ risk_data | tojson }}</script>
 <div class="card">
   <div class="row">
-    <button type="button" class="btn" id="risk-write-tests"
-            data-risk-ids="{{ untested | map(attribute='id') | join(',') }}"{% if not untested %} hidden{% endif %}>
+    {# With a gap to close, that is the one thing to press. With none, the
+       next desk is. Only one of them is ever on the page. #}
+    {% if untested %}
+    <button type="button" class="btn btn-primary" id="risk-write-tests"
+            data-risk-ids="{{ untested | map(attribute='id') | join(',') }}">
       Write tests for {{ untested | length }} high risk{% if untested | length != 1 %}s{% endif %} with no test
     </button>
+    <a class="btn btn-small ship-link" href="/ship">Ship check
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a>
+    {% else %}
+    <a class="btn btn-primary ship-link" href="/ship">Open Ship check
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a>
+    {% endif %}
+    <span class="spacer"></span>
     <button type="button" class="btn" id="risk-download-csv">Download CSV</button>
     <button type="button" class="btn" id="risk-download-xlsx">Download Excel</button>
-    <a class="btn btn-small ship-link" href="/ship">Ship check
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a>
   </div>
   <p class="answered-by">
     {% if notes %}{{ notes | join(" · ") }} · {% endif %}

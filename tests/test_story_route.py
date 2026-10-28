@@ -80,8 +80,9 @@ def test_fake_llm_returns_result_cards(monkeypatch) -> None:
     )
     assert response.status_code == 200
     body = response.text
-    assert "How clear:" in body
-    assert "48" in body  # 100 - sample ambiguity_score 52
+    # The score and its reasons sit in the right-hand column now.
+    assert "How clear, with reasons" in body
+    assert 'class="clarity-num">48' in body  # 100 - sample ambiguity_score 52
     assert "<mark>quickly</mark>" in body
     assert "Scenario:" in body
     assert "Answered by Groq (free)" in body
@@ -91,7 +92,7 @@ def test_load_example_needs_no_keys() -> None:
     response = client.post("/requirements/story/example")
     assert response.status_code == 200
     body = response.text
-    assert "How clear:" in body
+    assert "How clear, with reasons" in body
     assert "<mark>" in body
     assert "Scenario:" in body
 

@@ -5,26 +5,78 @@
 {% include "_example_flag.html" %}
 {% endwith %}
 {% endif %}
-<div class="verdict" style="--pct:{{ coverage.percent }};--ring-color:var(--{{ coverage_pill }}-line)">
-  <div class="score-ring" role="img" aria-label="Coverage {{ coverage.percent }} percent">
-    <span class="score-num">{{ coverage.percent }}<span class="pct">%</span></span>
-    <span class="score-of">tested</span>
-  </div>
-  <div>
-    <span class="pill {{ coverage_pill }}">{{ coverage.covered | length }} of {{ criteria | length }} criteria tested</span>
-    <h2>{{ counts.total }} test case{{ "" if counts.total == 1 else "s" }}</h2>
-    <p>{{ depth_line }}</p>
-  </div>
-</div>
-<div class="stat-row">
+<div class="stat-row stat-row-4">
   <div class="stat"><div class="num">{{ counts.total }}</div><div class="lbl">Test cases</div></div>
-  <div class="stat"><div class="num">{{ coverage.covered | length }} / {{ criteria | length }}</div><div class="lbl">Criteria tested</div></div>
-  <div class="stat"><div class="num">{{ counts.by_category.get("Negative", 0) }}</div><div class="lbl">Wrong input<span data-explain="negative"></span></div></div>
-  <div class="stat"><div class="num">{{ counts.by_category.get("Boundary", 0) }}</div><div class="lbl">At the limit<span data-explain="boundary"></span></div></div>
-  <div class="stat"><div class="num">{{ counts.by_priority.get("High", 0) }}</div><div class="lbl">High priority</div></div>
+  {# The ring lives inside its number now, small enough that "100%" still
+     fits inside the circle at every width. #}
+  <div class="stat stat-with-ring">
+    <div>
+      <div class="num">{{ coverage.covered | length }} / {{ criteria | length }}</div>
+      <div class="lbl">Criteria tested</div>
+    </div>
+    <div class="score-ring stat-ring" style="--pct:{{ coverage.percent }};--ring-color:var(--{{ coverage_pill }}-line)"
+      role="img" aria-label="Coverage {{ coverage.percent }} percent">
+      <span class="score-num">{{ coverage.percent }}<span class="pct">%</span></span>
+    </div>
+  </div>
+  <div class="stat{% if depth.thin_ids %} stat-warn{% endif %}"><div class="num">{{ depth.thin_ids | length }}</div><div class="lbl">Need more tests</div></div>
+  <div class="stat"><div class="num">{{ review.added | length if review else 0 }}</div><div class="lbl">Extra tests from the senior tester</div></div>
 </div>
+{% if review %}
+{# What the senior tester did to this suite, in one line. The box shows even
+   when the answer is "nothing": a box that disappears reads as rules that
+   never ran. Everything under it is detail, so it stays shut until someone
+   asks for it. #}
+<details class="card pq-review" id="pq-review">
+  <summary>
+    <span class="row pq-review-head">
+      {{ pq.label("" if review.added else "Checked by senior tester") }}
+      <strong>{{ review_line }}</strong>
+      <span class="spacer"></span>
+      <span class="pq-more-word">Show detail</span>
+    </span>
+  </summary>
+  <div class="pq-review-more">
+    {# An argument about a limit comes before everything else: one side of
+       it is wrong, and only the reader knows which. #}
+    {% if review.conflicts %}
+    <p class="pq-review-line"><strong>Disagreements about a limit</strong></p>
+    <ul class="pq-conflicts">
+      {% for note in review.conflicts %}<li>{{ note }}</li>{% endfor %}
+    </ul>
+    {% endif %}
+    {% if review.more %}
+    <p class="pq-review-line"><strong>Also worth a test</strong></p>
+    <ul>
+      {% for gap in review.more[:10] %}
+      <li><span class="pill {{ 'bad' if gap.severity == 'high' else ('warn' if gap.severity == 'medium' else 'info') }} small">{{ gap.severity }}</span>
+        {{ gap.title }} — <span class="muted">{{ gap.why }}</span></li>
+      {% endfor %}
+    </ul>
+    {% if review.more | length > 10 %}
+    <p class="muted small">…and {{ review.more | length - 10 }} more QA-Genius knows
+      about for this kind of feature. A list this long means one thing: the story
+      is too big. Split it.</p>
+    {% endif %}
+    {% endif %}
+    {% if review.quality %}
+    <p class="pq-review-line"><strong>Weak cases in the AI's own list</strong></p>
+    <ul>
+      {% for note in review.quality %}<li>{{ note }}</li>{% endfor %}
+    </ul>
+    {% endif %}
+    {# When nothing was added the line above already says this. #}
+    {% if review.covered and review.added %}
+    <p class="muted small">The AI had already thought of {{ review.covered | length }} of
+      these on its own.</p>
+    {% endif %}
+    <p class="muted small">Found by QA-Genius's own testing rules, in the same request —
+      no second AI call, no extra key.</p>
+  </div>
+</details>
+{% endif %}
 <div class="card card-section">
-  <h2>What is tested</h2>
+  <h2 class="card-title">What is tested</h2>
   <div class="meter" role="img" aria-label="Coverage {{ coverage.percent }} percent">
     <div class="meter-fill {{ coverage_pill }}" style="width:{{ coverage.percent }}%"></div>
   </div>
@@ -43,7 +95,7 @@
 </div>
 {% if depth.rows %}
 <div class="card">
-  <h2>How well each criterion is tested</h2>
+  <h2 class="card-title">How well each criterion is tested</h2>
   <div class="table-scroll">
   <table class="grid">
     <tr><th>Criterion</th><th>Tests</th><th>Kinds</th><th class="tc-reasons">Status</th></tr>
@@ -101,66 +153,22 @@
     <button type="button" class="btn btn-small btn-danger" id="clear-selected-cases">Clear</button>
     <span class="muted small" id="selected-count" aria-live="polite">0 selected</span>
     <span class="spacer"></span>
-    <button type="button" class="btn" id="automate-selected" disabled>Automate selected →</button>
+    <button type="button" class="btn btn-primary" id="automate-selected" disabled>Automate selected →</button>
   </div>
   <p class="form-note" id="select-hint"></p>
 </div>
-{% if review %}
-{# What the senior tester did to this suite, in one line. The box shows even
-   when the answer is "nothing": a box that disappears reads as rules that
-   never ran. Everything under it is detail, so it stays shut until someone
-   asks for it. #}
-<details class="card pq-review" id="pq-review">
-  <summary>
-    <span class="row pq-review-head">
-      {{ pq.label("" if review.added else "Checked by senior tester") }}
-      <strong>{{ review_line }}</strong>
-      <span class="spacer"></span>
-      <span class="pq-more-word">Show detail</span>
-    </span>
-  </summary>
-  <div class="pq-review-more">
-    {# An argument about a limit comes before everything else: one side of
-       it is wrong, and only the reader knows which. #}
-    {% if review.conflicts %}
-    <p class="pq-review-line"><strong>Disagreements about a limit</strong></p>
-    <ul class="pq-conflicts">
-      {% for note in review.conflicts %}<li>{{ note }}</li>{% endfor %}
-    </ul>
-    {% endif %}
-    {% if review.more %}
-    <p class="pq-review-line"><strong>Also worth a test</strong></p>
-    <ul>
-      {% for gap in review.more[:10] %}
-      <li><span class="pill {{ 'bad' if gap.severity == 'high' else ('warn' if gap.severity == 'medium' else 'info') }} small">{{ gap.severity }}</span>
-        {{ gap.title }} — <span class="muted">{{ gap.why }}</span></li>
-      {% endfor %}
-    </ul>
-    {% if review.more | length > 10 %}
-    <p class="muted small">…and {{ review.more | length - 10 }} more QA-Genius knows
-      about for this kind of feature. A list this long means one thing: the story
-      is too big. Split it.</p>
-    {% endif %}
-    {% endif %}
-    {% if review.quality %}
-    <p class="pq-review-line"><strong>Weak cases in the AI's own list</strong></p>
-    <ul>
-      {% for note in review.quality %}<li>{{ note }}</li>{% endfor %}
-    </ul>
-    {% endif %}
-    {# When nothing was added the line above already says this. #}
-    {% if review.covered and review.added %}
-    <p class="muted small">The AI had already thought of {{ review.covered | length }} of
-      these on its own.</p>
-    {% endif %}
-    <p class="muted small">Found by QA-Genius's own testing rules, in the same request —
-      no second AI call, no extra key.</p>
+<div id="tc-list" class="tc-table">
+  <div class="tc-head-row">
+    <span class="tc-cell tc-pick"></span>
+    <span class="tc-cell tc-col-id">ID</span>
+    <span class="tc-cell tc-col-title">Test</span>
+    <span class="tc-cell tc-col-expect">What should happen</span>
+    <span class="tc-cell tc-col-kind">Kind<span data-explain="negative"></span><span data-explain="boundary"></span></span>
+    <span class="tc-cell tc-col-priority">Priority</span>
+    <span class="tc-cell tc-col-linked">Linked to</span>
   </div>
-</details>
-{% endif %}
-<div id="tc-list">
   {% for item in cases %}
-  {% with card_case = item.case, card_ac_ids = item.ac_ids, card_select = true %}{% include "_test_case_card.html" %}{% endwith %}
+  {% with card_case = item.case, card_ac_ids = item.ac_ids, card_select = true, card_row = true %}{% include "_test_case_card.html" %}{% endwith %}
   {% endfor %}
 </div>
 <script type="application/json" id="tc-data">{{ tc_data | tojson }}</script>

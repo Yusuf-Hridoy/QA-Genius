@@ -1,83 +1,91 @@
+{# The answer in two places: the score and its reasons go in the right-hand
+   column, everything you work with goes full width under both. The second
+   part is swapped out of band, so one request fills both. #}
 {% import "_confidence.html" as conf %}
 {% import "_principal_qa.html" as pq %}
+{% import "_icons.html" as icons %}
+
+{# Full width above both columns: a saved sample says so, and a story that
+   is really several features is said before anything you can act on. #}
+<div id="story-top" hx-swap-oob="true">
 {% if is_example %}
-{% with caption = "Add a key and press Check story to run this on your own story.", with_keys = "Run it on your own story — press Check story." %}
+{% with caption = "Add a key and press Check story to run this on your own story.", with_keys = "Run it on your own story — press Check story.", keepable = true %}
 {% include "_example_flag.html" %}
 {% endwith %}
 {% endif %}
-
-{# A story that is really several features is said before the score: the
-   score is about wording, this is about scope. #}
 {{ pq.banner(epic, "recommended-split" if result.recommended_split else "") }}
-
-{# The answer opens with the one line that matters, then the numbers, then the detail.
-   Before this it was twelve cards of the same weight and you had to read all
-   of them to learn whether the story was in trouble. #}
-<div class="verdict" style="--pct:{{ clarity_score }};--ring-color:var(--{{ score_tone }}-line)">
-  <div class="score-ring">
-    <span class="score-num">{{ clarity_score }}</span>
-    <span class="score-of">/ 100</span>
-  </div>
-  <div>
-    <span class="pill {{ score_tone }}">{{ (result.clarity_label | confidence).text }}</span>
-    <h2>How clear: {{ clarity_score }} of 100</h2>
-    {# "0 unclear words need a number or a name" asks for nothing. #}
-    <p>{{ invest_passes }} of 6 story quality checks pass.
-      {% if result.vague_phrases %}{{ result.vague_phrases | length }} unclear
-      word{{ "" if result.vague_phrases | length == 1 else "s" }}
-      {{ "needs" if result.vague_phrases | length == 1 else "need" }} a number or a name
-      before anyone can test this.{% else %}No unclear words.{% endif %}</p>
-  </div>
 </div>
 
-<div class="stat-row">
-  <div class="stat">
-    <div class="num">{{ invest_passes }}<span class="unit"> / 6</span></div>
-    <div class="lbl">Story quality checks passed<span data-explain="invest"></span></div>
-    <div class="meter"><span class="meter-fill {{ 'ok' if invest_passes >= 5 else ('warn' if invest_passes >= 3 else 'bad') }}"
-      style="width:{{ (invest_passes / 6 * 100) | round | int }}%"></span></div>
+<div class="card card-raised story-clarity">
+  <h2 class="card-title">How clear, with reasons</h2>
+  <div class="clarity-score">
+    <span class="clarity-num">{{ clarity_score }}<span class="clarity-of">/100</span></span>
+    <span class="chip chip-{{ 'ok' if score_tone == 'ok' else ('warn' if score_tone == 'warn' else 'bad') }}">{{ (result.clarity_label | confidence).text }}</span>
   </div>
-  <div class="stat">
-    <div class="num">{{ result.vague_phrases | length }}</div>
-    <div class="lbl">Unclear words</div>
-  </div>
-  <div class="stat">
-    <div class="num">{{ result.generated_acceptance_criteria | length }}</div>
-    <div class="lbl">Criteria written for you</div>
-  </div>
-</div>
+  <div class="clarity-bar"><span class="clarity-bar-fill" style="width:{{ clarity_score }}%"></span></div>
+  <p class="clarity-line">{{ invest_passes }} of 6 story quality checks pass.
+    {% if result.vague_phrases %}{{ result.vague_phrases | length }} unclear
+    word{{ "" if result.vague_phrases | length == 1 else "s" }}
+    {{ "needs" if result.vague_phrases | length == 1 else "need" }} a number or a name
+    before anyone can test this.{% else %}No unclear words.{% endif %}</p>
 
-{# The one thing to do next sits above the detail, not six cards below it. #}
-<div class="panel">
-  <div class="panel-head">
-    <h2>Acceptance criteria<span data-explain="acceptance-criteria"></span></h2>
-    <span class="spacer"></span>
-    <span class="pill accent plain">{{ result.generated_acceptance_criteria | length }} written for you</span>
-  </div>
-  <div class="panel-body">
-    <pre class="code" id="ac-block">{{ acceptance_criteria }}</pre>
-    <script type="application/json" id="story-criteria">{{ criteria_list | tojson }}</script>
-    {# Ship check reads the whole analysis back out of the run. #}
-    <script type="application/json" id="story-analysis-data">{{ analysis_data | tojson }}</script>
-    <div class="row">
-      <button type="button" class="btn btn-primary" id="use-criteria">Use these criteria
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button>
-      <button type="button" class="btn" id="find-risks">Find risks
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button>
-      <button type="button" class="btn" onclick="navigator.clipboard.writeText(document.getElementById('ac-block').innerText)">Copy</button>
-      <span class="spacer"></span>
-      <span class="hint">Carries the story and these criteria to step 2, in your browser only.</span>
+  {% if reason_cards %}
+  <div class="reasons">
+    {% for reason in reason_cards %}
+    <div class="reason{% if loop.index > 5 %} reason-more{% endif %}"{% if loop.index > 5 %} hidden{% endif %}>
+      <p class="reason-title">{{ reason.title }}</p>
+      {% if reason.kind == "word" %}
+      <p class="reason-detail">{{ conf.said(reason.detail) }}</p>
+      {% if reason.say %}<p class="reason-say"><span class="reason-say-label">Say instead</span>
+        {{ conf.said(reason.say) }}</p>{% endif %}
+      {% else %}
+      <p class="reason-detail">{{ reason.detail }}</p>
+      {% endif %}
     </div>
+    {% endfor %}
+    {% if reason_cards | length > 5 %}
+    <button type="button" class="btn btn-sm" id="reasons-show-all"
+      data-count="{{ reason_cards | length - 5 }}">Show all {{ reason_cards | length }}</button>
+    {% endif %}
+  </div>
+  {% endif %}
+
+  <p class="note-box">AI suggestions are drafts. A person agrees the criteria before
+    tests are written.</p>
+</div>
+
+{# ── everything you work with, full width under the two columns ─────────── #}
+<div id="story-extra" hx-swap-oob="true">
+<div class="card">
+  <div class="row card-head">
+    <h2 class="card-title">Acceptance criteria<span data-explain="acceptance-criteria"></span></h2>
+    <span class="spacer"></span>
+    <span class="chip chip-info">{{ result.generated_acceptance_criteria | length }} written for you</span>
+  </div>
+  <pre class="code" id="ac-block">{{ acceptance_criteria }}</pre>
+  <script type="application/json" id="story-criteria">{{ criteria_list | tojson }}</script>
+  {# Ship check reads the whole analysis back out of the run. #}
+  <script type="application/json" id="story-analysis-data">{{ analysis_data | tojson }}</script>
+  {# What the senior tester found, for the Overview's one open question. #}
+  <script type="application/json" id="story-notes-data">{{ notes_data | tojson }}</script>
+  <div class="row">
+    <button type="button" class="btn btn-primary" id="use-criteria">Use these criteria
+      {{ icons.icon("arrow-right", 15) }}</button>
+    <button type="button" class="btn" id="find-risks">Find risks
+      {{ icons.icon("arrow-right", 15) }}</button>
+    <button type="button" class="btn" onclick="navigator.clipboard.writeText(document.getElementById('ac-block').innerText)">Copy</button>
+    <span class="spacer"></span>
+    <span class="hint">Carries the story and these criteria to step 2, in your browser only.</span>
   </div>
 </div>
 
 <div class="card card-section">
-  <h2>Your story</h2>
+  <h2 class="card-title">Your story</h2>
   <p>{{ highlighted_story | safe }}</p>
 </div>
 
 <div class="card card-section">
-  <h2>Story quality check (INVEST)<span data-explain="invest"></span></h2>
+  <h2 class="card-title">Story quality check (INVEST)<span data-explain="invest"></span></h2>
   <table class="grid">
     <thead><tr><th>What is checked</th><th>Result</th></tr></thead>
     <tbody>
@@ -95,7 +103,7 @@
 {{ pq.notes(shadow_notes, "" if epic else "Nothing to add — this story names its actor, its benefit, and what happens when something goes wrong.", limit_notes) }}
 
 <div class="card card-section">
-  <h2>Unclear words</h2>
+  <h2 class="card-title">Unclear words</h2>
   {% if result.vague_phrases %}
   <table class="grid">
     <thead><tr><th>Word or phrase</th><th>How bad</th><th>Why it matters</th><th>Say instead</th></tr></thead>
@@ -116,7 +124,7 @@
 </div>
 
 <div class="card card-section">
-  <h2>Better ways to write it</h2>
+  <h2 class="card-title">Better ways to write it</h2>
   <ul>
     {% for rewrite in result.suggested_rewrites %}
     <li>{{ conf.said(rewrite) }}</li>
@@ -126,7 +134,7 @@
 
 {% if missing_elements or result.risks or result.recommended_split %}
 <div class="card card-section">
-  <h2>What is still missing</h2>
+  <h2 class="card-title">What is still missing</h2>
   {% if missing_elements %}
   <h3>Things the story does not say</h3>
   <ul>
@@ -152,3 +160,9 @@
 <p class="answered-by">
   {% if notes %}{{ notes | join(" · ") }} · {% endif %}Answered by {{ provider_name }}.
 </p>
+</div>
+
+{# With an answer on screen the next step is the criteria, so this button
+   steps down to secondary and "Use these criteria" is the one in yellow. #}
+<button id="check-btn" type="submit" class="btn" data-busy-label="Checking…"
+  hx-swap-oob="true"><span class="btn-label">Check again</span></button>

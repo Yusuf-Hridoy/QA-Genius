@@ -1,6 +1,7 @@
 """The Ship check page and its result card: what a reader actually sees."""
 
 import json
+import re
 from pathlib import Path
 
 import pytest
@@ -37,6 +38,20 @@ def post(body: dict) -> str:
     return client.post("/ship/report", content=json.dumps(body)).text
 
 
+_PIECE = re.compile(r'<div class="(?:receipt-tile|card ship-row todo-row)"')
+
+
+def blocks(text: str) -> list[str]:
+    """One piece of markup per check on the page.
+
+    A check shows up as a tile in the receipt and, when something has to be
+    done about it, again in the list of what to do next. Each piece runs to
+    the start of the next one.
+    """
+    starts = [m.start() for m in _PIECE.finditer(text)] + [len(text)]
+    return [text[one:nxt] for one, nxt in zip(starts, starts[1:])]
+
+
 # ---------- the shell ----------
 
 
@@ -69,7 +84,7 @@ def test_the_banner_tone_matches_the_verdict(tone, label):
         body["duel_summary"] = {"agreement_pct": 95, "forks": []}
         body["test_cases"]["criteria"] = body["test_cases"]["criteria"][:2]
     text = post(body)
-    assert f"ship-verdict ship-{tone}" in text
+    assert f"ship-banner ship-{tone}" in text
     assert label in text
 
 
@@ -81,22 +96,23 @@ def test_the_banner_counts_the_checks_that_ran():
 
 
 def test_a_pass_row_carries_no_accept_button():
-    rows = client.post("/ship/example").text.split('class="card ship-row"')
+    rows = blocks(client.post("/ship/example").text)
     passing = [row for row in rows if 'data-status="pass"' in row]
     assert passing
     assert all("Accept this risk and say why" not in row for row in passing)
 
 
 def test_a_warn_row_carries_no_accept_button():
-    rows = client.post("/ship/example").text.split('class="card ship-row"')
+    rows = blocks(client.post("/ship/example").text)
     warning = [row for row in rows if 'data-status="warn"' in row]
     assert warning
     assert all("Accept this risk and say why" not in row for row in warning)
 
 
 def test_a_fail_row_carries_the_accept_form():
-    rows = client.post("/ship/example").text.split('class="card ship-row"')
-    failing = [row for row in rows if 'data-status="fail"' in row][0]
+    rows = blocks(client.post("/ship/example").text)
+    failing = [row for row in rows if 'class="ship-accept-form"' in row][0]
+    assert "Accept this risk and say why" in failing
     assert "Accept this risk and say why" in failing
     assert 'class="ship-accept-form"' in failing
     assert 'minlength="10"' in failing and 'maxlength="300"' in failing
@@ -107,7 +123,8 @@ def test_an_accepted_row_shows_the_note_and_a_way_back():
     body["acceptances"] = {"risks": REASON}
     text = post(body)
     assert f"<em>Accepted: {REASON}</em>" in text
-    assert "Undo accept" in text
+    # The way back out of an acceptance is the same word on both desks.
+    assert "ship-unaccept" in text and ">Remove<" in text
 
 
 def test_a_script_tag_in_a_reason_shows_as_text():
@@ -173,7 +190,7 @@ def test_the_sidebar_does_not_offer_performance():
 
 def test_the_home_page_sends_you_to_ship_check():
     body = client.get("/").text
-    assert 'class="desk" href="/ship"' in body
+    assert 'class="action-card" href="/ship"' in body
 
 
 def test_the_risk_result_still_links_on_to_ship_check():

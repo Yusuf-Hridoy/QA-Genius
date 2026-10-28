@@ -82,14 +82,14 @@ def _fake_generate(captured: list | None = None, suite: CaseList | None = None):
 def test_criteria_page_renders() -> None:
     response = client.get("/requirements/criteria")
     assert response.status_code == 200
-    assert '<span class="step-n">2</span><span class="step-text">Acceptance criteria</span>' in response.text
-    assert '<span class="step-n">1</span><span class="step-text">Story</span>' in response.text
+    assert '<span class="step-n">02</span><span class="step-text">Acceptance criteria</span>' in response.text
+    assert '<span class="step-n">01</span><span class="step-text">Story</span>' in response.text
 
 
 def test_test_cases_page_renders() -> None:
     response = client.get("/requirements/test-cases")
     assert response.status_code == 200
-    assert '<span class="step-n">3</span><span class="step-text">Test cases</span>' in response.text
+    assert '<span class="step-n">03</span><span class="step-text">Test cases</span>' in response.text
 
 
 def test_run_without_keys_opens_drawer() -> None:
@@ -112,7 +112,7 @@ def test_run_sends_criteria_and_focus_to_the_ai(monkeypatch) -> None:
 def test_run_renders_chips_and_coverage(monkeypatch) -> None:
     monkeypatch.setattr(llm, "generate_json", _fake_generate())
     body = client.post("/requirements/test-cases/run", data=FORM, headers=KEYS_HEADER).text
-    assert '<span class="pill accent"' in body
+    assert '<span class="pill accent' in body
     assert "AC-1" in body and "AC-2" in body
     assert "100% tested" in body
     assert "meter-fill" in body
@@ -232,7 +232,10 @@ def test_export_rejects_a_broken_result() -> None:
 def test_result_has_one_card_per_case(monkeypatch) -> None:
     monkeypatch.setattr(llm, "generate_json", _fake_generate())
     body = client.post("/requirements/test-cases/run", data=FORM, headers=KEYS_HEADER).text
-    assert body.count('class="card tc-card"') == 2
+    # Each case is one row that opens in place. The senior tester's own
+    # cases carry pq-case too, so the plain rows are the AI's two.
+    assert body.count('class="card tc-card tc-row-card"') == 2
+    assert body.count('class="tc-select"') == body.count('class="card tc-card')
 
 
 def test_coverage_bar_width_matches_percent() -> None:

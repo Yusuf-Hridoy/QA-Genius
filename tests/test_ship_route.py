@@ -1,5 +1,6 @@
 """Ship check routes. No key, no AI call, nothing stored."""
 
+import html
 import json
 import re
 
@@ -12,7 +13,7 @@ from qagenius.ship_check import CHECK_IDS
 
 client = TestClient(main.app)
 
-_ROW = re.compile(r'data-check="(?P<id>\w+)" data-status="(?P<status>\w+)"')
+
 
 REASON = "Behind a feature flag for internal users until the shared counter lands."
 
@@ -28,7 +29,14 @@ def no_ai(monkeypatch):
 
 
 def statuses(body: str) -> dict[str, str]:
-    return {m.group("id"): m.group("status") for m in _ROW.finditer(body)}
+    """Every check and what it came back as, in CHECK_IDS order.
+
+    The page shows only the checks that ran, so the statuses are read from
+    the report the page carries as data rather than from its layout.
+    """
+    block = body.split('id="ship-data">', 1)[1].split("</script>", 1)[0]
+    data = json.loads(html.unescape(block))
+    return {item["id"]: item["status"] for item in data["items"]}
 
 
 def sample() -> dict:
@@ -46,7 +54,7 @@ def post(body: dict):
 def test_the_page_loads():
     response = client.get("/ship")
     assert response.status_code == 200
-    assert "Can we release this feature?" in response.text
+    assert "Make the release call with the reasons attached." in response.text
 
 
 def test_the_page_says_no_ai_and_no_key():
@@ -191,8 +199,22 @@ def test_the_markdown_block_is_present_and_parses():
 
 
 def test_the_rows_come_in_check_ids_order():
-    found = [m.group("id") for m in _ROW.finditer(client.post("/ship/example").text)]
+    found = statuses(client.post("/ship/example").text)
     assert tuple(found) == CHECK_IDS
+
+
+def test_the_page_shows_a_tile_for_every_check_that_ran():
+    """Checks that never ran are one muted line, not seven empty tiles."""
+    text = client.post("/ship/example").text
+    ran = [
+        check_id
+        for check_id, status in statuses(text).items()
+        if status != "not_checked"
+    ]
+    assert ran
+    for check_id in ran:
+        assert f'data-check="{check_id}" data-status=' in text
+    assert "Not run yet:" in text
 
 
 def test_accept_with_reason_appears_only_on_a_failed_row():
@@ -218,11 +240,11 @@ def test_an_accepted_note_is_escaped_not_run():
 
 
 def test_the_verdict_banner_carries_the_tone_of_the_verdict():
-    assert "ship-verdict ship-bad" in client.post("/ship/example").text
+    assert "ship-banner ship-bad" in client.post("/ship/example").text
 
     body = sample()
     body["acceptances"] = {"risks": REASON}
-    assert "ship-verdict ship-warn" in post(body).text
+    assert "ship-banner ship-warn" in post(body).text
 
 
 def test_a_clean_run_gets_the_ok_banner():
@@ -234,7 +256,7 @@ def test_a_clean_run_gets_the_ok_banner():
     body["duel_summary"] = {"agreement_pct": 95, "forks": []}
     body["test_cases"]["criteria"] = body["test_cases"]["criteria"][:2]
     text = post(body).text
-    assert "ship-verdict ship-ok" in text
+    assert "ship-banner ship-ok" in text
     assert "All checks passed." in text
 
 
@@ -327,7 +349,7 @@ def test_the_header_says_the_inputs_are_old():
     # older, and the header says so rather than the reason trailing off.
     text = _stale(sample(), ["risks"])
     assert "Worked out just now — some inputs are older" in text
-    assert 'class="pill warn ship-stale-header"' in text
+    assert 'class="chip chip-warn ship-stale-header"' in text
 
 
 def test_nothing_is_said_when_no_input_is_stale():
@@ -338,7 +360,9 @@ def test_nothing_is_said_when_no_input_is_stale():
 
 def test_an_unknown_id_is_ignored_rather_than_shown():
     text = _stale(sample(), ["nonsense", "../../etc/passwd", "risks"])
-    assert text.count("Built from older work") == 1
+    # One note on the page. The report also travels as JSON for the Overview,
+    # so the note is counted where a reader would see it.
+    assert text.count('class="muted small ship-stale-note"') == 1
     assert "nonsense" not in text
 
 

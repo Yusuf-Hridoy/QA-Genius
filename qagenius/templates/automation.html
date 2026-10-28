@@ -2,13 +2,13 @@
 {% block title %}Automation — QA-Genius{% endblock %}
 {% block top_title %}Requirements · Automation{% endblock %}
 {% block content %}
-{% with step = 4 %}{% include "_steps.html" %}{% endwith %}
 <div class="page-head">
-  <span class="eyebrow">Step 4 of 4</span>
-  <h1>Generate a runnable project</h1>
+  <span class="eyebrow">01 &middot; Requirements</span>
+  <h1 class="page-title">Give engineering a test they can use.</h1>
   <p class="lede">Pick the tests worth automating. You get a Playwright<span data-explain="playwright"></span>,
     Cypress or Selenium project you can download and run.</p>
 </div>
+{% with step = 4 %}{% include "_steps.html" %}{% endwith %}
 {# The one component that says what this desk is built from and whether
    that is still current. run_state.js + source_card.js fill it. #}
 <div id="source-card" class="source-card" data-desk="automation" role="status" aria-live="polite"></div>

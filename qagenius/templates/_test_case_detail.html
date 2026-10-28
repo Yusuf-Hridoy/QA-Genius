@@ -1,0 +1,24 @@
+{# Everything inside one test case: the same words whether it is read as a
+   card or opened out of a row. #}
+<p><strong>Before you start:</strong> {{ card_detail.pre_conditions }}</p>
+<ol class="tc-steps">
+  {% for step in card_detail.steps %}<li>{{ step }}</li>{% endfor %}
+</ol>
+<p><strong>What should happen:</strong> {{ card_detail.expected_result }}</p>
+{% if card_detail.test_data %}
+<p class="mono small"><strong>Data to use:</strong> {{ card_detail.test_data }}</p>
+{% endif %}
+{% if card_detail.bdd_scenario %}
+<details><summary>Given / When / Then version<span data-explain="given-when-then"></span></summary><pre class="code">{{ card_detail.bdd_scenario }}</pre></details>
+{% endif %}
+<p class="muted small">Easy to automate? {{ card_detail.automation_feasibility }} · work to automate: {{ card_detail.automation_effort }}</p>
+{% if detail_pq %}
+{% set why = pq_reason(card_detail) %}
+{% if why %}<p class="pq-why">Why a senior tester always asks for this: {{ why }}</p>{% endif %}
+{% if detail_select %}
+<p class="row pq-card-actions">
+  <button type="button" class="btn btn-small btn-danger pq-remove" data-case-id="{{ card_detail.id }}">Remove</button>
+  <span class="hint">Undo brings it back.</span>
+</p>
+{% endif %}
+{% endif %}

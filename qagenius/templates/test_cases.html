@@ -2,13 +2,13 @@
 {% block title %}Test cases — QA-Genius{% endblock %}
 {% block top_title %}Requirements · Test cases{% endblock %}
 {% block content %}
-{% with step = 3 %}{% include "_steps.html" %}{% endwith %}
 <div class="page-head">
-  <span class="eyebrow">Step 3 of 4</span>
-  <h1>Turn criteria into test cases<span data-explain="test-case"></span></h1>
+  <span class="eyebrow">01 &middot; Requirements</span>
+  <h1 class="page-title">Turn criteria into test cases.<span data-explain="test-case"></span></h1>
   <p class="lede">Write tests for the normal path, for wrong input, for the limits and for
     unusual cases<span data-explain="edge-case"></span>. See which criteria they reach, then fill the gaps before you automate.</p>
 </div>
+{% with step = 3 %}{% include "_steps.html" %}{% endwith %}
 {# The one component that says what this desk is built from and whether
    that is still current. run_state.js + source_card.js fill it. #}
 <div id="source-card" class="source-card" data-desk="test_cases" role="status" aria-live="polite"></div>
