@@ -10,6 +10,7 @@
   var RUN_KEY = "qag.run";
   var STORY_IN_LINE = 120;
   var MIN_REASON = 10;
+  var MAX_OWNER = 60;
   var MAX_REASON = 300;
 
   function byId(id) {
@@ -76,6 +77,8 @@
     /* The test matrix says which browsers and devices the runs cover. */
     if (run.matrix && run.matrix.runs) payload.matrix = run.matrix;
     payload.acceptances = run.ship_acceptances || {};
+    /* A risk accepted on the Risk radar counts here too. */
+    payload.risk_acceptances = run.risk_acceptances || {};
     /* Which checks were built from work the run has since moved past. */
     payload.stale_inputs = staleChecks(run);
     return payload;
@@ -246,10 +249,18 @@
       }
       return;
     }
+    var owner = form.querySelector(".ship-owner");
+    var review = form.querySelector(".ship-review");
     var run = readRun();
     if (!run) return;
     if (!run.ship_acceptances) run.ship_acceptances = {};
-    run.ship_acceptances[checkId] = reason;
+    /* Who owns it and when to look again are both optional, and both are
+     * kept beside the reason rather than in a second place. */
+    run.ship_acceptances[checkId] = {
+      reason: reason,
+      owner: owner ? owner.value.trim().slice(0, MAX_OWNER) : "",
+      review_date: review ? review.value : ""
+    };
     writeRun(run);
     runCheck();
   }
@@ -317,6 +328,27 @@
 
   /* ---------- wiring ---------- */
 
+  function toggleGradeWhy() {
+    var button = byId("grade-circle");
+    var panel = byId("grade-why");
+    if (!button || !panel) return;
+    var open = button.getAttribute("aria-expanded") === "true";
+    button.setAttribute("aria-expanded", open ? "false" : "true");
+    panel.hidden = open;
+  }
+
+  function closeGradeWhy() {
+    var button = byId("grade-circle");
+    var panel = byId("grade-why");
+    if (!button || !panel || panel.hidden) return;
+    button.setAttribute("aria-expanded", "false");
+    panel.hidden = true;
+  }
+
+  document.addEventListener("keydown", function (event) {
+    if (event.key === "Escape") closeGradeWhy();
+  });
+
   document.addEventListener("click", function (event) {
     var target = event.target;
     if (!target || !target.closest) return;
@@ -333,6 +365,12 @@
       printReport();
       return;
     }
+    /* The grade circle opens the sums behind the letter, and closes again. */
+    if (target.closest("#grade-circle")) {
+      toggleGradeWhy();
+      return;
+    }
+    if (!target.closest("#grade-why")) closeGradeWhy();
     var accept = target.closest(".ship-accept");
     if (accept) {
       openAcceptForm(accept.getAttribute("data-check"));

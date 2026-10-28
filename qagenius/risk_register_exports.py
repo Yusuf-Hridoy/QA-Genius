@@ -7,6 +7,7 @@ from openpyxl import Workbook
 from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.utils import get_column_letter
 
+from qagenius.acceptance import Acceptance, read as read_acceptance
 from qagenius.risk_radar import RiskReport, ScoredRisk
 from qagenius.test_case_exports import safe_cell
 
@@ -28,6 +29,10 @@ COLUMNS = (
     "Severity reason",
     "Likelihood reason",
     "Detectability reason",
+    # Empty unless somebody accepted this risk and wrote why.
+    "Accepted",
+    "Owner",
+    "Review by",
 )
 
 HEAT_SHEET = "Heat map"
@@ -60,13 +65,24 @@ _WRAP_COLUMNS = (
     "Severity reason",
     "Likelihood reason",
     "Detectability reason",
+    "Accepted",
 )
 # Columns Excel should treat as numbers, not text.
 _NUMBER_COLUMNS = ("Severity", "Likelihood", "Detectability", "RPN")
 
 
-def _row(item: ScoredRisk) -> list:
+def _accepted(
+    acceptances: dict | None, risk_id: str
+) -> Acceptance | None:
+    """What was written when this risk was accepted, if it was."""
+    if not acceptances:
+        return None
+    return read_acceptance(acceptances.get(risk_id))
+
+
+def _row(item: ScoredRisk, acceptances: dict | None = None) -> list:
     risk = item.risk
+    accepted = _accepted(acceptances, risk.id)
     return [
         safe_cell(risk.id),
         safe_cell(risk.title),
@@ -85,20 +101,25 @@ def _row(item: ScoredRisk) -> list:
         safe_cell(risk.severity_reason),
         safe_cell(risk.likelihood_reason),
         safe_cell(risk.detectability_reason),
+        safe_cell(accepted.reason if accepted else ""),
+        safe_cell(accepted.owner if accepted else ""),
+        safe_cell(accepted.review_date if accepted else ""),
     ]
 
 
-def to_csv(report: RiskReport) -> bytes:
+def to_csv(report: RiskReport, acceptances: dict | None = None) -> bytes:
     """UTF-8 with a BOM, so Excel opens it without an import step."""
     buffer = io.StringIO()
     writer = csv.writer(buffer, quoting=csv.QUOTE_MINIMAL, lineterminator="\r\n")
     writer.writerow(COLUMNS)
     for item in report.risks:
-        writer.writerow(_row(item))
+        writer.writerow(_row(item, acceptances))
     return ("\ufeff" + buffer.getvalue()).encode("utf-8")
 
 
-def _write_register_sheet(sheet, report: RiskReport) -> None:
+def _write_register_sheet(
+    sheet, report: RiskReport, acceptances: dict | None = None
+) -> None:
     sheet.append(list(COLUMNS))
     for cell in sheet[1]:
         cell.font = Font(bold=True)
@@ -108,7 +129,7 @@ def _write_register_sheet(sheet, report: RiskReport) -> None:
         sheet.column_dimensions[letter].width = _WIDTHS.get(name, _DEFAULT_WIDTH)
     level_column = COLUMNS.index("Level") + 1
     for item in report.risks:
-        sheet.append(_row(item))
+        sheet.append(_row(item, acceptances))
         fill = LEVEL_FILLS.get(item.level)
         if fill is not None:
             sheet.cell(row=sheet.max_row, column=level_column).fill = fill
@@ -141,12 +162,12 @@ def _write_heat_sheet(sheet, report: RiskReport) -> None:
         sheet.column_dimensions[get_column_letter(column)].width = 16
 
 
-def to_xlsx(report: RiskReport) -> bytes:
+def to_xlsx(report: RiskReport, acceptances: dict | None = None) -> bytes:
     """A workbook with the register and the heat map it is drawn from."""
     book = Workbook()
     register = book.active
     register.title = REGISTER_SHEET
-    _write_register_sheet(register, report)
+    _write_register_sheet(register, report, acceptances)
     _write_heat_sheet(book.create_sheet(HEAT_SHEET), report)
     buffer = io.BytesIO()
     book.save(buffer)

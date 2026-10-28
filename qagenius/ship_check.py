@@ -7,7 +7,9 @@ a reader just came from.
 """
 
 from dataclasses import dataclass, field, replace
+from datetime import date
 
+from qagenius.acceptance import Acceptance, note as acceptance_note, read as read_acceptance
 from qagenius.automation_checks import check_project
 from qagenius.models import (
     AmbiguityAnalysis,
@@ -77,6 +79,9 @@ VERDICT_LABELS = {
 MAX_DETAILS = 8
 # A written reason short enough to be a shrug is not a risk acceptance.
 MIN_REASON, MAX_REASON = 10, 300
+# A review date that has gone by is not an accepted risk any more: somebody
+# said they would look again by then, and nobody has.
+REVIEW_PASSED = "Review date passed — look at this again."
 
 CLARITY_PASS, CLARITY_WARN = 70, 50
 AGREEMENT_PASS = 70
@@ -93,6 +98,11 @@ class ShipCheckItem:
     accepted_note: str = ""
     # Set when the browser says this check's inputs lag the latest work.
     stale_note: str = ""
+    # Who owns the accepted risk and when they said they would look again.
+    # Both are optional; neither changes the decision on its own.
+    owner: str = ""
+    review_date: str = ""
+    review_passed: bool = False
 
 
 @dataclass(frozen=True)
@@ -138,7 +148,16 @@ class ShipInputs:
     automation_selected_ids: list[str] = field(default_factory=list)
     insights: Insights | None = None
     matrix: "MatrixRun | None" = None
-    acceptances: dict[str, str] = field(default_factory=dict)
+    # A written reason, in any of the shapes a browser may have saved.
+    acceptances: dict[str, Acceptance | dict | str] = field(default_factory=dict)
+    # Risks accepted on the Risk radar, by risk id. Same shapes, same
+    # rule: a reason is required, an owner and a date are not.
+    risk_acceptances: dict[str, Acceptance | dict | str] = field(
+        default_factory=dict
+    )
+    # The day the report is worked out. Only a review date is read against
+    # it, and tests hand it their own day.
+    today: date | None = None
     # Check ids the browser believes were built from older work.
     stale_inputs: list[str] = field(default_factory=list)   # check id -> reason
 
@@ -349,6 +368,23 @@ def _depth(inputs: ShipInputs, criteria: list[Criterion]) -> ShipCheckItem:
     return _item("depth", status, summary, details)
 
 
+def accepted_risk_ids(
+    acceptances: dict[str, Acceptance | dict | str],
+    today: date | None = None,
+) -> set[str]:
+    """Risk ids someone accepted in writing, and whose review date still holds.
+
+    A review date that has gone by takes the risk back out of this set: it
+    counts as untested again until somebody looks at it.
+    """
+    found = set()
+    for risk_id, raw in (acceptances or {}).items():
+        one = read_acceptance(raw)
+        if one is not None and not one.passed(today):
+            found.add(str(risk_id).upper())
+    return found
+
+
 def _risks(inputs: ShipInputs) -> ShipCheckItem:
     analysis = inputs.risk_analysis
     if analysis is None:
@@ -357,16 +393,27 @@ def _risks(inputs: ShipInputs) -> ShipCheckItem:
     if not cases:
         cases = list(inputs.risk_cases)
     report = score_risks(analysis, cases)
+    # A risk the team accepted in writing is not an untested risk any more.
+    # It is still on the page, with its reason, owner and date beside it.
+    accepted = accepted_risk_ids(inputs.risk_acceptances, inputs.today)
 
     def pick(level: str, coverage: str) -> list:
         return [
-            one for one in report.risks if one.level == level and one.coverage == coverage
+            one
+            for one in report.risks
+            if one.level == level
+            and one.coverage == coverage
+            and str(one.risk.id).upper() not in accepted
         ]
 
     # Risk radar's "untested high" count and this bucket are one function, so
     # a risk whose only evidence is an AI claim the words do not back is high
     # and untested on both desks. A run showed 1 here and 2 there.
-    high_loose = loose_risks(report.risks, "high")
+    high_loose = [
+        one
+        for one in loose_risks(report.risks, "high")
+        if str(one.risk.id).upper() not in accepted
+    ]
     high_none, high_weak = pick("high", "none"), pick("high", "weak")
     medium_none, medium_weak = pick("medium", "none"), pick("medium", "weak")
     # A real run said "1 high risk has no test" while five medium ones were
@@ -390,11 +437,17 @@ def _risks(inputs: ShipInputs) -> ShipCheckItem:
         status = "warn"
         summary = medium_part
     else:
-        status = "pass"
+        # Nothing is left untested -- but if that is only true because the
+        # team signed something off, this check is "accepted", not "fine".
+        # A written reason is not a test, and the grade must not read as if
+        # it were.
+        status = "accepted" if accepted else "pass"
         summary = (
             f"Every high and medium risk has a test "
             f"({_plural(report.counts['total'], 'risk')} scored)"
         )
+        if accepted:
+            summary += f" · {_plural(len(accepted), 'risk')} accepted in writing"
 
     # Worst first, and each line says which level it belongs to: the old list
     # was five unlabelled rows under a summary that mentioned one risk.
@@ -403,7 +456,26 @@ def _risks(inputs: ShipInputs) -> ShipCheckItem:
         + ("no test" if one.coverage == "none" else RISK_WEAK_NOTE)
         for one in high_none + high_weak + medium_none + medium_weak
     ]
-    return _item("risks", status, summary, details)
+    item = _item("risks", status, summary, details)
+    if status == "accepted":
+        note = _accepted_risk_note(inputs.risk_acceptances, accepted)
+        item = replace(item, accepted_note=note)
+    return item
+
+
+def _accepted_risk_note(
+    acceptances: dict[str, Acceptance | dict | str], ids: set[str]
+) -> str:
+    """Who accepted what, in the order the risks were written down."""
+    lines = []
+    for risk_id, raw in (acceptances or {}).items():
+        if str(risk_id).upper() not in ids:
+            continue
+        one = read_acceptance(raw)
+        if one is None:
+            continue
+        lines.append(f"{risk_id}: {acceptance_note(one)}")
+    return " · ".join(lines)
 
 
 def _automation(inputs: ShipInputs) -> ShipCheckItem:
@@ -442,21 +514,35 @@ def _automation(inputs: ShipInputs) -> ShipCheckItem:
     return _item("automation", status, summary, details)
 
 
-def _accepted(item: ShipCheckItem, acceptances: dict[str, str]) -> ShipCheckItem:
-    """A written reason turns a fail into an accepted risk. Nothing else."""
+def _accepted(
+    item: ShipCheckItem,
+    acceptances: dict[str, Acceptance | dict | str],
+    today: date | None = None,
+) -> ShipCheckItem:
+    """A written reason turns a fail into an accepted risk. Nothing else.
+
+    A review date that has gone by takes it back to "check this": the team
+    agreed to look again by then, so the acceptance has run out.
+    """
     if item.status != "fail":
         return item
-    reason = str(acceptances.get(item.id) or "").strip()
-    if not MIN_REASON <= len(reason) <= MAX_REASON:
+    # Strings, dicts and Acceptance objects all arrive here: a run saved
+    # before owners existed must still open.
+    one = read_acceptance(acceptances.get(item.id))
+    if one is None:
         return item
+    passed = one.passed(today)
     return ShipCheckItem(
         id=item.id,
         title=item.title,
-        status="accepted",
+        status="warn" if passed else "accepted",
         summary=item.summary,
         details=item.details,
         link=item.link,
-        accepted_note=reason,
+        accepted_note=acceptance_note(one, today),
+        owner=one.owner,
+        review_date=one.review_date,
+        review_passed=passed,
     )
 
 
@@ -559,7 +645,10 @@ def compute_ship_report(inputs: ShipInputs) -> ShipReport:
         "automation": _automation(inputs),
         "matrix": _matrix(inputs),
     }
-    items = [_accepted(built[check_id], inputs.acceptances) for check_id in CHECK_IDS]
+    items = [
+        _accepted(built[check_id], inputs.acceptances, inputs.today)
+        for check_id in CHECK_IDS
+    ]
     items = _with_stale_notes(items, inputs.stale_inputs)
 
     counts = {

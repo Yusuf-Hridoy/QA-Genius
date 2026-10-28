@@ -7,6 +7,10 @@
 
   var RUN_KEY = "qag.run";
   var RESCORE_DELAY = 400;
+  /* The same limits the server checks, so a reason is never written twice. */
+  var MIN_REASON = 10;
+  var MAX_REASON = 300;
+  var MAX_OWNER = 60;
   var rescoreTimer = null;
 
   function readRun() {
@@ -401,7 +405,10 @@
       cases: cases.length ? cases : shown.cases || [],
       criteria: criteriaTexts(run).length
         ? criteriaTexts(run)
-        : shown.criteria || []
+        : shown.criteria || [],
+      /* The register carries what was accepted, so a downloaded file says
+       * why a risk with no test was signed off and who is watching it. */
+      risk_acceptances: run.risk_acceptances || {}
     };
   }
 
@@ -413,6 +420,11 @@
     target.innerHTML = html;
     if (window.htmx) window.htmx.process(target);
     if (remember !== false) rememberDisplayed();
+    /* The first risk is the one on screen until someone picks another, and
+     * any risk already accepted says so on its card. */
+    pickFirstRisk();
+    paintAcceptances();
+    paintPagePill();
     // The card may need to dim what just landed.
     if (window.QAGRun) window.QAGRun.announceResult();
   }
@@ -515,10 +527,11 @@
       });
   }
 
-  /* Hand the untested high risks to step 3, which writes the test cases. */
-  function writeTests() {
+  /* Hand risks with no test to step 3, which writes the test cases.
+   * The button says which ones: the whole set, or the one card it sits on. */
+  function writeTests(button) {
     var data = displayedData();
-    var button = document.getElementById("risk-write-tests");
+    button = button || document.getElementById("risk-write-tests");
     if (!data || !data.analysis || !button) return;
     var ids = (button.getAttribute("data-risk-ids") || "")
       .split(",")
@@ -542,7 +555,199 @@
     window.location.href = "/requirements/test-cases";
   }
 
+  /* The counts beside the page title, read off what is on screen. */
+  function paintPagePill() {
+    if (!window.QAG || !window.QAG.setPagePill) return;
+    var cards = document.querySelectorAll("#risk-list .risk-card");
+    if (!cards.length) {
+      window.QAG.setPagePill("");
+      return;
+    }
+    var untested = 0;
+    Array.prototype.forEach.call(cards, function (card) {
+      /* The same bucket the stat card counts: a high risk with no test, and
+       * one whose only evidence is a claim the words do not back. */
+      var coverage = card.getAttribute("data-coverage");
+      if (
+        card.getAttribute("data-level") === "high" &&
+        (coverage === "none" || coverage === "weak")
+      ) {
+        untested += 1;
+      }
+    });
+    window.QAG.setPagePill(
+      cards.length + " risks · " + untested + " high with no test"
+    );
+  }
+
+  /* ---------- picking a risk, and accepting one ---------- */
+
+  /* The card you picked, and the evidence panel beside it, are one choice. */
+  function pickRisk(riskId) {
+    var cards = document.querySelectorAll("#risk-list .risk-card");
+    Array.prototype.forEach.call(cards, function (card) {
+      card.classList.toggle("picked", card.getAttribute("data-risk-id") === riskId);
+    });
+    var details = document.querySelectorAll("#risk-trace .risk-detail");
+    Array.prototype.forEach.call(details, function (detail) {
+      detail.hidden = detail.getAttribute("data-risk-id") !== riskId;
+    });
+  }
+
+  /* The first risk is shown until someone picks another one. */
+  function pickFirstRisk() {
+    var first = document.querySelector("#risk-list .risk-card");
+    if (first) pickRisk(first.getAttribute("data-risk-id"));
+  }
+
+  function acceptances() {
+    var run = readRun() || {};
+    return run.risk_acceptances || {};
+  }
+
+  function acceptanceFor(riskId) {
+    var one = acceptances()[riskId];
+    if (!one) return null;
+    if (typeof one === "string") return { reason: one, owner: "", review_date: "" };
+    return one;
+  }
+
+  function datePassed(text) {
+    if (!text) return false;
+    var today = new Date();
+    var day = new Date(text + "T00:00:00");
+    if (isNaN(day.getTime())) return false;
+    today.setHours(0, 0, 0, 0);
+    return day < today;
+  }
+
+  /* What an accepted risk says on the card and in the panel. */
+  function paintAcceptances() {
+    var cards = document.querySelectorAll("#risk-list .risk-card");
+    Array.prototype.forEach.call(cards, function (card) {
+      var riskId = card.getAttribute("data-risk-id");
+      var one = acceptanceFor(riskId);
+      var chip = card.querySelector(".risk-accepted-chip");
+      if (chip) {
+        chip.hidden = !one;
+        var passed = one && datePassed(one.review_date);
+        chip.textContent = passed ? "Review date passed" : "Accepted";
+        chip.className =
+          "chip risk-accepted-chip " + (passed ? "chip-bad" : "chip-ok");
+      }
+      var box = document.querySelector('.risk-accept[data-risk-id="' + riskId + '"]');
+      if (!box) return;
+      var line = box.querySelector(".risk-accepted-line");
+      var open = box.querySelector(".risk-accept-open");
+      var remove = box.querySelector(".risk-accept-remove");
+      if (line) {
+        line.hidden = !one;
+        if (one) {
+          var parts = ["Accepted: " + one.reason];
+          if (one.owner) parts.push("Owner: " + one.owner);
+          if (one.review_date) {
+            parts.push(
+              (datePassed(one.review_date) ? "Review date passed " : "Review by ") +
+                one.review_date
+            );
+          }
+          line.textContent = parts.join(" · ");
+        }
+      }
+      if (open) open.textContent = one ? "Change" : "Accept this risk";
+      if (remove) remove.hidden = !one;
+    });
+  }
+
+  function acceptForm(riskId) {
+    return document.querySelector('.risk-accept-form[data-risk-id="' + riskId + '"]');
+  }
+
+  function openAccept(riskId) {
+    var form = acceptForm(riskId);
+    if (!form) return;
+    var one = acceptanceFor(riskId);
+    var reason = form.querySelector(".risk-reason");
+    var owner = form.querySelector(".risk-owner");
+    var review = form.querySelector(".risk-review");
+    if (one) {
+      if (reason) reason.value = one.reason || "";
+      if (owner) owner.value = one.owner || "";
+      if (review) review.value = one.review_date || "";
+    }
+    form.hidden = false;
+    if (reason) reason.focus();
+  }
+
+  function saveAccept(riskId) {
+    var form = acceptForm(riskId);
+    if (!form) return;
+    var reason = form.querySelector(".risk-reason");
+    var status = form.querySelector(".risk-accept-status");
+    var text = reason ? reason.value.trim() : "";
+    if (text.length < MIN_REASON || text.length > MAX_REASON) {
+      if (status) {
+        status.textContent =
+          "Write between " + MIN_REASON + " and " + MAX_REASON + " characters.";
+      }
+      return;
+    }
+    var owner = form.querySelector(".risk-owner");
+    var review = form.querySelector(".risk-review");
+    var run = readRun() || {};
+    if (!run.risk_acceptances) run.risk_acceptances = {};
+    run.risk_acceptances[riskId] = {
+      reason: text,
+      owner: owner ? owner.value.trim().slice(0, MAX_OWNER) : "",
+      review_date: review ? review.value : ""
+    };
+    writeRun(run);
+    form.hidden = true;
+    if (status) status.textContent = "";
+    paintAcceptances();
+  }
+
+  function removeAccept(riskId) {
+    var run = readRun() || {};
+    if (run.risk_acceptances) delete run.risk_acceptances[riskId];
+    writeRun(run);
+    var form = acceptForm(riskId);
+    if (form) form.hidden = true;
+    paintAcceptances();
+  }
+
   document.addEventListener("click", function (event) {
+    var acceptOpen = closest(event.target, ".risk-accept-open");
+    if (acceptOpen) {
+      openAccept(acceptOpen.getAttribute("data-risk-id"));
+      return;
+    }
+    var acceptSave = closest(event.target, ".risk-accept-save");
+    if (acceptSave) {
+      saveAccept(acceptSave.getAttribute("data-risk-id"));
+      return;
+    }
+    var acceptCancel = closest(event.target, ".risk-accept-cancel");
+    if (acceptCancel) {
+      var shut = acceptForm(acceptCancel.getAttribute("data-risk-id"));
+      if (shut) shut.hidden = true;
+      return;
+    }
+    var acceptRemove = closest(event.target, ".risk-accept-remove");
+    if (acceptRemove) {
+      removeAccept(acceptRemove.getAttribute("data-risk-id"));
+      return;
+    }
+    var writeOne = closest(event.target, ".risk-write-one");
+    if (writeOne) {
+      writeTests(writeOne);
+      return;
+    }
+    var card = closest(event.target, ".risk-card");
+    if (card) {
+      pickRisk(card.getAttribute("data-risk-id"));
+      return;
+    }
     var cell = closest(event.target, ".heat-cell");
     if (cell) {
       pickCell(cell);
@@ -562,8 +767,17 @@
       return;
     }
     if (closest(event.target, "#risk-write-tests")) {
-      writeTests();
+      writeTests(null);
     }
+  });
+
+  /* A card is a button, so the keyboard picks one the same way. */
+  document.addEventListener("keydown", function (event) {
+    if (event.key !== "Enter" && event.key !== " ") return;
+    var card = closest(event.target, ".risk-card");
+    if (!card) return;
+    event.preventDefault();
+    pickRisk(card.getAttribute("data-risk-id"));
   });
 
   document.addEventListener("input", function (event) {
@@ -582,6 +796,9 @@
     if (!path && detail && detail.xhr) path = detail.xhr.responseURL || "";
     if (path.indexOf("/risks/") === -1) return;
     rememberDisplayed();
+    pickFirstRisk();
+    paintAcceptances();
+    paintPagePill();
   });
 
   document.addEventListener("DOMContentLoaded", function () {

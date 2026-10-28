@@ -92,7 +92,8 @@ def test_run_works_with_a_story_alone(monkeypatch) -> None:
     assert "Acceptance criteria:\n(none yet)" in user
     assert "Existing test cases:\n(none yet)" in user
     # The page still renders; clean_analysis drops the ids the AI invented.
-    assert 'class="risk-split"' in response.text
+    # Two columns: the risks, and the evidence for the one picked.
+    assert 'class="req-split risk-split-2"' in response.text
     assert "error-card" not in response.text
 
 
@@ -268,16 +269,18 @@ def test_the_heat_map_has_every_cell_and_the_ids_in_the_right_one() -> None:
     assert "pill" not in cell
 
 
-def test_the_rpn_pill_is_coloured_by_level(monkeypatch) -> None:
+def test_the_score_badge_is_coloured_by_level(monkeypatch) -> None:
+    """The badge carries the level, and says the whole sentence out loud."""
     monkeypatch.setattr(llm, "generate_json", _never)
     levels = {
-        "bad": mode("R1", severity=5, likelihood=4, detectability=4),
-        "warn": mode("R1", severity=4, likelihood=3, detectability=3),
-        "ok": mode("R1", severity=2, likelihood=2, detectability=2),
+        "high": mode("R1", severity=5, likelihood=4, detectability=4),
+        "medium": mode("R1", severity=4, likelihood=3, detectability=3),
+        "low": mode("R1", severity=2, likelihood=2, detectability=2),
     }
-    for tone, risk in levels.items():
+    for level, risk in levels.items():
         body = client.post("/risks/rescore", json=_body(_analysis(risk))).text
-        assert f'<span class="pill {tone}">Risk score' in body
+        assert f'class="risk-score-badge risk-{level}"' in body
+        assert f'· {level}"' in body
 
 
 def test_the_card_shows_the_reasons_and_the_test_idea() -> None:

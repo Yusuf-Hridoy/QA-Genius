@@ -1,51 +1,89 @@
 {% extends "base.html" %}
-{% block title %}QA-Genius — the quality desk{% endblock %}
+{% import "_icons.html" as icons %}
+{% block title %}QA-Genius — the quality workshop{% endblock %}
 {% block top_title %}Overview{% endblock %}
 {% block content %}
+{# Everything with a number in it is filled in by home.js from the run in
+   this browser. The page is complete and readable before that happens. #}
 <div class="page-head">
-  <span class="eyebrow">QA-Genius</span>
-  <h1>Four desks between a vague story and a release you can defend.</h1>
-  <p class="lede">Bring your own API key. It stays in this browser and is never kept on
-    our server. Start anywhere. Each desk works on its own, and Requirements carries one
-    story all the way to a project you can run.</p>
+  <span class="eyebrow">Welcome to QA-Genius</span>
+  <h1 class="page-title page-title-hero">Make the next release easier to trust.</h1>
+  <p class="lede">One clear path from story to release. See what's tested, what's
+    missing, and why.</p>
   <div class="row">
-    <a href="/requirements/story" class="btn btn-primary">Start with a story
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a>
+    <a href="/requirements/story" class="btn btn-primary" id="hero-go">
+      <span class="btn-label">Start with a story</span> {{ icons.icon("arrow-right", 15) }}</a>
+    <a href="/ship" class="btn">See release decision</a>
   </div>
 </div>
 
-<div class="desk-grid">
-  <a class="desk" href="/requirements/story">
-    <span class="desk-mark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h12l4 4v12H4z"/><path d="M16 4v4h4"/><path d="M8 13h8M8 17h5"/></svg></span>
-    <h3>Requirements</h3>
-    <p>See how clear a story is, agree the acceptance criteria, then write and automate
-      the test cases. Four steps, one run.</p>
-    <span class="go">Story check
-      <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span>
+<ol class="steps" id="overview-steps">
+  <li data-desk="story"><a href="/requirements/story"><span class="step-n">01</span>
+    <span class="step-text">Story</span><span class="step-state"></span></a></li>
+  <li data-desk="risks"><a href="/risks"><span class="step-n">02</span>
+    <span class="step-text">Risks</span><span class="step-state"></span></a></li>
+  <li data-desk="matrix"><a href="/requirements/matrix"><span class="step-n">03</span>
+    <span class="step-text">Matrix</span><span class="step-state"></span></a></li>
+  <li data-desk="ship"><a href="/ship"><span class="step-n">04</span>
+    <span class="step-text">Ship</span><span class="step-state"></span></a></li>
+</ol>
+
+<div class="overview-grid">
+  <section class="bench" id="workbench" aria-labelledby="bench-label">
+    <div class="bench-top">
+      <span class="bench-label" id="bench-label">Quality workbench</span>
+      {# The story switcher, the id and status chip, and a way to start
+         another story. Filled in by home.js from this browser. #}
+      <span class="bench-slot" id="bench-slot" hidden></span>
+    </div>
+    <p class="bench-others" id="bench-others" hidden></p>
+    <div class="bench-body" id="bench-body">
+      <p class="bench-story bench-empty">No story yet</p>
+      <p class="bench-sub">Check a story and this is where it lives, with its
+        score and the one question still open.</p>
+      <div class="row bench-actions">
+        <a class="btn" href="/requirements/story?example=1" id="bench-example">Load an example</a>
+      </div>
+    </div>
+  </section>
+
+  <section class="card attention" id="attention" aria-labelledby="attention-title">
+    <div class="attention-head">
+      <h2 class="card-title" id="attention-title">What needs attention</h2>
+      <span class="count-badge" id="attention-count" hidden>0</span>
+    </div>
+    <div id="attention-list">
+      <p class="muted">Nothing to see yet. Check a story and the gaps show up here.</p>
+    </div>
+    <p class="attention-foot"><a href="/ship" id="attention-all">See everything in Ship check
+      {{ icons.icon("arrow-right", 13) }}</a></p>
+  </section>
+</div>
+
+<div class="action-cards">
+  <a class="action-card" href="/requirements/story">
+    {{ icons.tile("file-text") }}
+    <h3 class="card-title">Clarify a story</h3>
+    <p>Turn a vague request into criteria your team can agree on.</p>
+    <span class="go">Story {{ icons.icon("arrow-right", 13) }}</span>
   </a>
-  <a class="desk" href="/risks">
-    <span class="desk-mark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4.5"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3"/></svg></span>
-    <h3>Risk radar</h3>
-    <p>List the ways this feature can break. Score each one by how bad, how likely and
-      how hard to notice it is. Then see which ones have no test.</p>
-    <span class="go">Find risks
-      <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span>
+  <a class="action-card" href="/risks">
+    {{ icons.tile("target", "alert") }}
+    <h3 class="card-title">Find blind spots</h3>
+    <p>See which risks have no test yet.</p>
+    <span class="go">Risk radar {{ icons.icon("arrow-right", 13) }}</span>
   </a>
-  <a class="desk" href="/requirements/matrix">
-    <span class="desk-mark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg></span>
-    <h3>Test matrix</h3>
-    <p>Browsers times devices times roles is hundreds of runs. Code finds the fewest
-      runs where every two options are still tested together, and proves it.</p>
-    <span class="go">Build a matrix
-      <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span>
+  <a class="action-card" href="/requirements/matrix">
+    {{ icons.tile("grid", "info") }}
+    <h3 class="card-title">Trim the test matrix</h3>
+    <p>Test the combinations that matter, not every one.</p>
+    <span class="go">Test matrix {{ icons.icon("arrow-right", 13) }}</span>
   </a>
-  <a class="desk" href="/ship">
-    <span class="desk-mark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 7 9.5 17.5 4 12"/></svg></span>
-    <h3>Ship check</h3>
-    <p>One decision: Ready to release, Release with known risks, or Not ready. Code
-      works it out from what the other desks found. No AI, no key.</p>
-    <span class="go">Check a release
-      <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span>
+  <a class="action-card" href="/ship">
+    {{ icons.tile("flag", "ok") }}
+    <h3 class="card-title">Explain the release decision</h3>
+    <p>Get a decision with the reasons attached.</p>
+    <span class="go">Ship check {{ icons.icon("arrow-right", 13) }}</span>
   </a>
 </div>
 
@@ -60,3 +98,4 @@
   </div>
 </div>
 {% endblock %}
+{% block scripts %}<script src="/home.js" defer></script>{% endblock %}

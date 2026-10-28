@@ -47,13 +47,16 @@ NOT_RUN = item("automation", "Automation", "not_checked", "Not run yet")
 
 def test_the_header_and_the_table():
     text = to_markdown(small_report(PASS, FAIL, NOT_RUN), STORY)
-    head, rest = text.split("\n## Details", 1)
+    head, rest = text.split("\n## Why that grade", 1)
     assert head.rstrip("\n").split("\n") == [
         "# Ship check — Not ready",
         "1 check failed: Risks with a test.",
         "",
         f"**Story:** {STORY}",
         f"**Checked:** 2 of 3 · {date.today().isoformat()}",
+        # 2 of 4 points: fine plus needs fixing, and the cap bites
+        # nothing this low.
+        "**Grade:** F — 2 of 4 points",
         "",
         "| Check | Status | Summary |",
         "|---|---|---|",

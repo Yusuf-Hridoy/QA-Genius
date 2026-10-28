@@ -12,9 +12,11 @@ requirements.txt and the deployed app never imports it:
     pip install playwright
     playwright install chromium
 
-The PNGs land in ui-screens/, which git ignores. Nothing here needs an API
-key: every page is shot empty or with its own Load example button, so no
-request ever reaches a provider.
+The PNGs land in ui-screens/redesign-r1/, which git ignores. Nothing here
+needs an API key: every page is shot empty or with its own Load example
+button, so no request ever reaches a provider.
+
+Each page is shot four times: light and dark, 1440 and 390 wide.
 """
 
 from __future__ import annotations
@@ -23,11 +25,12 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-OUT = ROOT / "ui-screens"
+OUT = ROOT / "ui-screens" / "redesign-r1"
 
 DEFAULT_BASE = "http://127.0.0.1:8000"
 
-SIZES = {"desktop": (1366, 900), "phone": (390, 844)}
+SIZES = {"desktop": (1440, 900), "phone": (390, 844)}
+THEMES = ("light", "dark")
 
 # name, path, what to press first (None = shoot the page as it loads).
 # Most Load example buttons are built by JS and carry no id, so they are
@@ -37,6 +40,9 @@ EXAMPLE = 'button:has-text("Load example")'
 # Ship check comes first: its Load example button is part of the empty
 # state, and every later example writes a run into sessionStorage.
 SHOTS: list[tuple[str, str, str | None]] = [
+    # The Overview is the page this phase rebuilt, so it is shot first both
+    # empty and with a story behind it (the Ship check example writes one).
+    ("overview-empty", "/", None),
     # The rings at 0, 7, 44 and 100 percent: the number has to sit inside the
     # circle at both widths, so this one is shot before any desk runs.
     ("rings", "/dev/rings", None),
@@ -45,12 +51,17 @@ SHOTS: list[tuple[str, str, str | None]] = [
     ("ship-check-example", "/ship", EXAMPLE),
     ("story-empty", "/requirements/story", None),
     ("story-example", "/requirements/story", "#load-example"),
+    # Now the run holds a story, so the Overview has something to show.
+    ("overview-with-run", "/", None),
     ("test-cases-example", "/requirements/test-cases", EXAMPLE),
     ("automation-example", "/requirements/automation", EXAMPLE),
     ("risk-radar-example", "/risks", EXAMPLE),
     ("bug-desk-empty", "/bugs", None),
     ("bug-desk-example", "/bugs", "#bug-example"),
     ("insights-example", "/insights", "#insights-example"),
+    ("criteria-desk", "/requirements/criteria", None),
+    ("stories-empty", "/stories", None),
+    ("matrix-desk", "/requirements/matrix", None),
     ("keys-drawer", "/requirements/story", "#key-chip"),
 ]
 
@@ -77,34 +88,40 @@ def main(argv: list[str]) -> int:
         return 2
 
     base = (argv[1] if len(argv) > 1 else DEFAULT_BASE).rstrip("/")
-    OUT.mkdir(exist_ok=True)
+    OUT.mkdir(parents=True, exist_ok=True)
     written: list[Path] = []
 
     with sync_playwright() as play:
         browser = play.chromium.launch()
         try:
-            for label, (width, height) in SIZES.items():
-                context = browser.new_context(
-                    viewport={"width": width, "height": height},
-                    device_scale_factor=2,
-                )
-                page = context.new_page()
-                for name, path, click in SHOTS:
-                    page.goto(base + path, wait_until="domcontentloaded")
-                    _settle(page)
-                    if click:
-                        target = page.locator(click)
-                        if target.count() == 0:
-                            # Worth a PNG of the page as it stands anyway.
-                            print(f"note: no {click} on {path}, shooting as-is")
-                        else:
-                            target.first.click()
-                            _settle(page)
-                    shot = OUT / f"{name}-{label}.png"
-                    page.screenshot(path=str(shot), full_page=True)
-                    written.append(shot)
-                    print(f"wrote {shot.relative_to(ROOT)}")
-                context.close()
+            for theme in THEMES:
+                for label, (width, height) in SIZES.items():
+                    context = browser.new_context(
+                        viewport={"width": width, "height": height},
+                        device_scale_factor=2,
+                    )
+                    # The theme is read from localStorage before the first
+                    # paint, so it is set before any page is opened.
+                    context.add_init_script(
+                        "try{localStorage.setItem('qag.theme','%s')}catch(e){}" % theme
+                    )
+                    page = context.new_page()
+                    for name, path, click in SHOTS:
+                        page.goto(base + path, wait_until="domcontentloaded")
+                        _settle(page)
+                        if click:
+                            target = page.locator(click)
+                            if target.count() == 0:
+                                # Worth a PNG of the page as it stands anyway.
+                                print(f"note: no {click} on {path}, shooting as-is")
+                            else:
+                                target.first.click()
+                                _settle(page)
+                        shot = OUT / f"{name}-{theme}-{label}.png"
+                        page.screenshot(path=str(shot), full_page=True)
+                        written.append(shot)
+                        print(f"wrote {shot.relative_to(ROOT)}")
+                    context.close()
         finally:
             browser.close()
 

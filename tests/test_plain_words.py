@@ -229,6 +229,7 @@ BANNED = (
 
 PAGES = (
     "/",
+    "/stories",
     "/requirements/story",
     "/requirements/criteria",
     "/requirements/test-cases",
@@ -298,6 +299,35 @@ def test_no_page_shows_a_word_a_new_tester_would_look_up() -> None:
         for word in BANNED:
             if says(text, word):
                 offences.append(f"{path}: {word}")
+    assert offences == []
+
+
+# The redesign brought a few words of its own. "Quality workbench" is the
+# name of the card that holds your story, and it is plain enough to stay.
+ALLOWED_NEW_WORDS = ("quality workbench", "ship check", "risk radar", "test matrix")
+
+# Decoration from the owner's mockups that is not in the app and must not
+# creep back in: a page says what is true, not what sounds good.
+NOT_OURS = (
+    "brighter tomorrow",
+    "confident releases",
+    "cobalt poppy",
+)
+
+
+def test_the_words_the_redesign_added_are_plain_enough_to_keep() -> None:
+    """None of the new names is a word the guard would turn away."""
+    for phrase in ALLOWED_NEW_WORDS:
+        assert not any(says(phrase, word) for word in BANNED), phrase
+
+
+def test_no_page_carries_decoration_that_is_not_true() -> None:
+    offences: list[str] = []
+    for path in PAGES:
+        text = _page(path)
+        for phrase in NOT_OURS:
+            if phrase in text:
+                offences.append(f"{path}: {phrase}")
     assert offences == []
 
 

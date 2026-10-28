@@ -35,25 +35,49 @@ def test_home_lists_every_desk_and_does_not_redirect() -> None:
     assert response.status_code == 200
     body = response.text
     for href in ("/requirements/story", "/risks", "/requirements/matrix", "/ship"):
-        assert f'class="desk" href="{href}"' in body, href
+        assert f'class="action-card" href="{href}"' in body, href
 
 
 def test_home_cards_follow_the_sidebar_order() -> None:
     body = client.get("/").text
     order = ["/requirements/story", "/risks", "/requirements/matrix", "/ship"]
-    found = [body.index(f'class="desk" href="{href}"') for href in order]
+    found = [body.index(f'class="action-card" href="{href}"') for href in order]
     assert found == sorted(found)
 
 
 def test_home_lists_four_desks_and_hides_two() -> None:
     """Bug desk and Quality insights still work; they are just not listed."""
     body = client.get("/").text
-    assert body.count('class="desk"') == 4
+    assert body.count('class="action-card"') == 4
     assert "Bug desk" not in body
     assert "Quality insights" not in body
     assert "Performance" not in body
-    assert "Four desks between a vague story" in body
-    assert "Build a matrix" in body
+    assert "Make the next release easier to trust." in body
+    assert "Trim the test matrix" in body
+
+
+def _content(body: str) -> str:
+    """The page itself, without the key drawer that sits behind every page."""
+    start = body.index('<main class="content">')
+    return body[start : body.index("</main>", start)]
+
+
+def test_home_has_one_main_button() -> None:
+    """One yellow button per screen. On the Overview it is the hero link."""
+    page = _content(client.get("/").text)
+    assert page.count("btn-primary") == 1
+    assert 'id="hero-go"' in page
+
+
+def test_home_carries_the_workbench_and_the_attention_panel() -> None:
+    body = client.get("/").text
+    assert 'id="workbench"' in body
+    assert "Quality workbench" in body
+    assert 'id="attention-list"' in body
+    assert "What needs attention" in body
+    # R4 fills this slot with the story switcher; it is empty until then.
+    assert 'id="bench-slot"' in body
+    assert "/home.js" in body
 
 
 def test_the_performance_desk_is_gone() -> None:

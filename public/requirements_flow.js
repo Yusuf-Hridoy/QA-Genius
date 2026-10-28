@@ -152,6 +152,131 @@
     if (node) node.value = value;
   }
 
+  /* ---------- the story's own id and status ---------- */
+
+  var LABEL_OK = /^[A-Za-z0-9_-]{1,24}$/;
+
+  function labelBox() {
+    return document.getElementById("story-label");
+  }
+
+  /* The id in the form, written into the run so every desk can quote it. */
+  function saveStoryLabel() {
+    var box = labelBox();
+    if (!box) return;
+    var wanted = box.value.trim();
+    var run = readRun() || {};
+    if (wanted && !LABEL_OK.test(wanted)) {
+      box.setAttribute("aria-invalid", "true");
+      return;
+    }
+    box.removeAttribute("aria-invalid");
+    if (wanted) run.story_label = wanted;
+    else delete run.story_label;
+    writeRun(run);
+  }
+
+  /* The form shows whatever the run already holds. */
+  function fillStoryLabel() {
+    var box = labelBox();
+    if (!box) return;
+    var run = readRun() || {};
+    var saved =
+      run.story_label ||
+      (window.QAGStories && window.QAGStories.active()
+        ? window.QAGStories.active().label
+        : "");
+    if (saved && !box.value) box.value = saved;
+  }
+
+  function draftPop(open) {
+    var pop = document.getElementById("draft-pop");
+    if (!pop) return;
+    if (open) {
+      var run = readRun() || {};
+      var label = document.getElementById("draft-label");
+      var status = document.getElementById("draft-status");
+      var box = labelBox();
+      if (label) label.value = (box && box.value.trim()) || run.story_label || "";
+      if (status) status.value = run.story_status || "draft";
+    }
+    pop.hidden = !open;
+  }
+
+  /* Save draft: the id, the status, and the run as it stands. */
+  function saveDraft() {
+    var label = document.getElementById("draft-label");
+    var status = document.getElementById("draft-status");
+    var line = document.getElementById("draft-status-line");
+    var wanted = label ? label.value.trim() : "";
+    if (wanted && !LABEL_OK.test(wanted)) {
+      if (line) {
+        line.textContent = "Use letters, numbers, - and _ only.";
+      }
+      if (label) label.setAttribute("aria-invalid", "true");
+      return;
+    }
+    if (label) label.removeAttribute("aria-invalid");
+    /* A draft is what is on screen right now, not only what has been
+     * checked: the words in the box go into the run first. */
+    var run = readRun() || {};
+    var typed = fieldValue("user_story");
+    if (typed.trim()) {
+      run.story = typed;
+      run.story_type = fieldValue("story_type") || "User story";
+      run.context = fieldValue("context");
+    }
+    if (wanted) run.story_label = wanted;
+    run.story_status = status ? status.value : "draft";
+    delete run.story_is_example;
+    writeRun(run);
+
+    var store = window.QAGStories;
+    var problem = "";
+    if (store) {
+      if (!store.active()) {
+        var made = store.create({ run: run, label: wanted || "" });
+        problem = made.error;
+      } else {
+        problem = store.saveActive(run);
+      }
+    }
+    var box = labelBox();
+    if (box && wanted) box.value = wanted;
+    var shown =
+      (store && store.active() ? store.active().label : wanted) || wanted;
+    var word =
+      window.QAGStoriesUI && status
+        ? window.QAGStoriesUI.statusWord(status.value)
+        : "Draft";
+    if (line) {
+      line.textContent = problem
+        ? "Couldn't save — browser storage is full."
+        : "Saved as " + shown + " · " + word;
+    }
+    if (!problem) {
+      draftPop(false);
+      if (window.QAGStoriesUI) window.QAGStoriesUI.paint();
+      toast("Saved as " + shown + " · " + word);
+    }
+  }
+
+  /* One line that says what just happened, and then goes away. */
+  function toast(words) {
+    var holder = document.getElementById("qag-toast");
+    if (!holder) {
+      holder = el("div", "toast");
+      holder.id = "qag-toast";
+      holder.setAttribute("role", "status");
+      document.body.appendChild(holder);
+    }
+    holder.textContent = words;
+    holder.classList.add("toast-on");
+    window.setTimeout(function () {
+      holder.classList.remove("toast-on");
+    }, 3000);
+  }
+
   /* The criteria the story check drafted, as plain strings. */
   function storyCriteriaTexts() {
     var holder = document.getElementById("story-criteria");
@@ -335,6 +460,18 @@
     writeRun(run);
   }
 
+  /* The Overview asks "what is the one thing to answer next?". The answer
+   * comes from what the senior tester already found, so it travels with the
+   * story rather than being worked out again. */
+  function saveStoryNotes() {
+    var notes = readJsonBlock("story-notes-data");
+    if (!notes) return;
+    var run = readRun();
+    if (!sameStory(run)) return;
+    run.story_notes = notes;
+    writeRun(run);
+  }
+
   function saveDuelSummary() {
     var duel = readJsonBlock("duel-data");
     if (!duel) return;
@@ -463,19 +600,14 @@
     }
     run.criteria = renumber(run.criteria);
 
-    var card = el("div", "card");
-    card.appendChild(el("h2", "", "Acceptance criteria"));
-    card.appendChild(
-      el("p", "muted", "From your story. Edit freely — ids follow the order.")
-    );
+    var split = el("div", "req-split");
 
-    var list = el("div", "ac-list");
-    run.criteria.forEach(function (criterion, index) {
-      list.appendChild(criterionRow(run, criterion, index));
-    });
-    card.appendChild(list);
-
-    var add = el("button", "btn", "+ Add criterion");
+    /* ---- left: the criteria themselves ---- */
+    var card = el("div", "card req-main");
+    var head = el("div", "row card-head");
+    head.appendChild(el("h2", "card-title", "Acceptance criteria"));
+    head.appendChild(el("span", "spacer"));
+    var add = el("button", "btn btn-sm", "+ Add criterion");
     add.setAttribute("type", "button");
     add.addEventListener("click", function () {
       run.criteria.push({ id: "", text: "" });
@@ -485,13 +617,208 @@
       var boxes = document.querySelectorAll("#criteria-root .ac-row textarea");
       if (boxes.length) boxes[boxes.length - 1].focus();
     });
-    card.appendChild(add);
-    card.appendChild(storyDetails(run));
-    root.appendChild(card);
+    head.appendChild(add);
+    card.appendChild(head);
+    card.appendChild(
+      el("p", "muted small", "From your story. Edit freely — ids follow the order.")
+    );
 
-    var actions = el("div", "card");
-    var actionBar = el("div", "form-actions");
-    var generate = el("button", "btn btn-primary", "Generate test cases →");
+    var list = el("div", "ac-list");
+    run.criteria.forEach(function (criterion, index) {
+      list.appendChild(criterionRow(run, criterion, index));
+    });
+    card.appendChild(list);
+    card.appendChild(storyDetails(run));
+    split.appendChild(card);
+
+    /* ---- right: what each criterion is linked to ---- */
+    split.appendChild(linkedCard(run));
+    root.appendChild(split);
+    syncGenerate(run);
+    fieldsReady(root);
+  }
+
+  /* ---------- what a criterion is linked to ---------- */
+
+  var AC_ID = /\bAC-\d+\b/gi;
+
+  function caseList(run) {
+    if (run && run.test_cases && run.test_cases.result) {
+      return run.test_cases.result.test_cases || [];
+    }
+    return [];
+  }
+
+  /* The test cases that name this criterion in their "Linked to" line. */
+  function casesFor(run, id) {
+    var wanted = String(id || "").toUpperCase();
+    var found = [];
+    caseList(run).forEach(function (one) {
+      var said = String((one && one.traceability) || "").toUpperCase();
+      var ids = said.match(AC_ID) || [];
+      if (ids.indexOf(wanted) !== -1 && found.indexOf(one.id) === -1) {
+        found.push(one.id);
+      }
+    });
+    return found;
+  }
+
+  /* A note from the senior tester that names this criterion by id. */
+  function decisionNotes(run, id) {
+    var notes = ((run && run.story_notes) || {}).limit_notes || [];
+    var wanted = String(id || "").toUpperCase();
+    return notes.filter(function (note) {
+      var ids = String(note || "").toUpperCase().match(AC_ID) || [];
+      return ids.indexOf(wanted) !== -1;
+    });
+  }
+
+  function squashed(text) {
+    return String(text || "").replace(/\s+/g, " ").trim();
+  }
+
+  /* Edited since the test cases were written: the suite keeps the list it
+   * was built from, so the two can be compared line for line. */
+  function changedSinceTests(run, index, criterion) {
+    var built = run && run.test_cases ? run.test_cases.criteria : null;
+    if (!built || index >= built.length) return false;
+    return squashed(built[index]) !== squashed(criterion.text);
+  }
+
+  var STATUS = {
+    decision: { words: "Needs a decision", chip: "chip-warn", tile: "warn", icon: "alert" },
+    changed: { words: "Changed", chip: "chip-info", tile: "info", icon: "refresh" },
+    tested: { words: "Tested", chip: "chip-ok", tile: "ok", icon: "check" },
+    none: { words: "No tests yet", chip: "", tile: "quiet", icon: "dot" }
+  };
+
+  function statusOfCriterion(run, criterion, index) {
+    if (decisionNotes(run, criterion.id).length) return "decision";
+    if (changedSinceTests(run, index, criterion)) return "changed";
+    if (casesFor(run, criterion.id).length) return "tested";
+    return "none";
+  }
+
+  var ICON_PATHS = {
+    alert: [
+      "M10.3 3.9 2.6 17.1a2 2 0 0 0 1.7 3h15.4a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z",
+      "M12 9v4M12 17h.01"
+    ],
+    check: ["M20 6 9 17l-5-5"],
+    refresh: [
+      "M20 11a8 8 0 0 0-13.7-5.3L4 8",
+      "M4 4v4h4",
+      "M4 13a8 8 0 0 0 13.7 5.3L20 16",
+      "M20 20v-4h-4"
+    ],
+    dot: ["M12 8v8M8 12h8"]
+  };
+
+  function iconTile(name, tone) {
+    var tile = el("span", "icon-tile tile-" + tone);
+    var svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    svg.setAttribute("viewBox", "0 0 24 24");
+    svg.setAttribute("fill", "none");
+    svg.setAttribute("stroke", "currentColor");
+    svg.setAttribute("stroke-width", "1.5");
+    svg.setAttribute("stroke-linecap", "round");
+    svg.setAttribute("stroke-linejoin", "round");
+    svg.setAttribute("aria-hidden", "true");
+    (ICON_PATHS[name] || ICON_PATHS.dot).forEach(function (d) {
+      var path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+      path.setAttribute("d", d);
+      svg.appendChild(path);
+    });
+    tile.appendChild(svg);
+    return tile;
+  }
+
+  /* "Scenario: …" is the line a reader recognises; without one, the first
+   * eight words do the same job. */
+  function headline(text) {
+    var first = squashed(text).split(/(?=Given\b|When\b|Then\b)/)[0];
+    var line = squashed(first) || squashed(text);
+    if (/^Scenario:/i.test(line)) return line;
+    var words = squashed(text).split(" ");
+    return words.slice(0, 8).join(" ") + (words.length > 8 ? "…" : "");
+  }
+
+  function arrowMark() {
+    var mark = el("span", "arrow", "→");
+    mark.setAttribute("aria-hidden", "true");
+    return mark;
+  }
+
+  /* R4 gives a story its own id; until then every trace starts at STORY. */
+  function storyLabel(run) {
+    var label = run && run.story_label ? String(run.story_label).trim() : "";
+    return label || "STORY";
+  }
+
+  function traceRow(run, criterion) {
+    var row = el("div", "trace");
+    row.appendChild(el("span", "chip chip-id", storyLabel(run)));
+    row.appendChild(arrowMark());
+    row.appendChild(el("span", "chip chip-id", criterion.id));
+    var cases = casesFor(run, criterion.id);
+    if (cases.length) {
+      row.appendChild(arrowMark());
+      row.appendChild(el("span", "chip chip-id", cases.join(", ")));
+    } else {
+      row.appendChild(el("span", "muted small", "no test yet"));
+    }
+    return row;
+  }
+
+  function linkedCard(run) {
+    var card = el("div", "card req-side");
+    var head = el("div", "row card-head");
+    head.appendChild(el("h2", "card-title", "What's linked"));
+    head.appendChild(el("span", "spacer"));
+    var all = run.criteria.filter(function (one) {
+      return one.text.trim() !== "";
+    });
+    var linked = all.filter(function (one) {
+      return casesFor(run, one.id).length > 0;
+    });
+    head.appendChild(
+      el(
+        "span",
+        "chip " + (all.length && linked.length === all.length ? "chip-ok" : ""),
+        linked.length + " / " + all.length + " linked"
+      )
+    );
+    card.appendChild(head);
+
+    var rows = el("div", "trace-rows");
+    all.slice(0, 6).forEach(function (one) {
+      rows.appendChild(traceRow(run, one));
+    });
+    if (all.length > 6) {
+      rows.appendChild(el("p", "muted small", "and " + (all.length - 6) + " more"));
+    }
+    if (!all.length) {
+      rows.appendChild(el("p", "muted", "Nothing to link yet. Add a criterion first."));
+    }
+    card.appendChild(rows);
+
+    all.forEach(function (one) {
+      decisionNotes(run, one.id).forEach(function (note) {
+        card.appendChild(el("p", "note note-warn", note));
+      });
+    });
+
+    var actions = el("div", "form-actions");
+    var back = el("a", "btn", "Back to story");
+    back.setAttribute("href", "/requirements/story");
+    actions.appendChild(back);
+    var stale =
+      !!window.QAGRun && window.QAGRun.statusOf("test_cases", run).state === "stale";
+    var generate = el(
+      "button",
+      "btn btn-primary",
+      stale ? "Update test cases →" : "Generate test cases →"
+    );
     generate.setAttribute("type", "button");
     generate.id = "generate-test-cases";
     generate.addEventListener("click", function () {
@@ -500,17 +827,15 @@
       writeRun(current);
       window.location.href = "/requirements/test-cases";
     });
-    actionBar.appendChild(generate);
-    actions.appendChild(actionBar);
+    actions.appendChild(generate);
+    card.appendChild(actions);
     /* A disabled button says why, and not only in a title attribute. The
      * line is always here so typing can show and hide it without a redraw
      * that would take the caret out of the box being typed in. */
     var why = el("p", "form-note", "Add at least one criterion to generate test cases.");
     why.id = "generate-why";
-    actions.appendChild(why);
-    root.appendChild(actions);
-    syncGenerate(run);
-    fieldsReady(root);
+    card.appendChild(why);
+    return card;
   }
 
   /* Is there anything to generate test cases from? */
@@ -537,12 +862,24 @@
 
   function criterionRow(run, criterion, index) {
     var row = el("div", "ac-row");
-    row.appendChild(el("span", "pill mono", criterion.id));
+    var state = statusOfCriterion(run, criterion, index);
+    var look = STATUS[state];
+    row.setAttribute("data-state", state);
+    row.appendChild(iconTile(look.icon, look.tile));
+
+    var words = el("div", "ac-words");
+    words.appendChild(el("p", "ac-title", headline(criterion.text) || criterion.id));
+
+    var shown = el("p", "ac-text", squashed(criterion.text));
+    shown.setAttribute("tabindex", "0");
+    shown.setAttribute("role", "button");
+    shown.setAttribute("aria-label", "Edit " + criterion.id);
 
     var box = el("textarea");
     box.setAttribute("rows", "3");
     box.setAttribute("aria-label", "Text of " + criterion.id);
     box.value = criterion.text;
+    box.hidden = true;
     box.addEventListener("input", function () {
       run.criteria[index].text = box.value;
       run.criteria = renumber(run.criteria);
@@ -550,8 +887,31 @@
       growTextarea(box);
       syncGenerate(run);
     });
-    row.appendChild(box);
+    /* Leaving the box puts the words back, so the row reads as a sentence
+     * again rather than as a form that never closes. */
+    box.addEventListener("blur", function () {
+      renderCriteria();
+    });
 
+    function openEditor() {
+      shown.hidden = true;
+      box.hidden = false;
+      growTextarea(box);
+      box.focus();
+    }
+    shown.addEventListener("click", openEditor);
+    shown.addEventListener("keydown", function (event) {
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        openEditor();
+      }
+    });
+    words.appendChild(shown);
+    words.appendChild(box);
+    row.appendChild(words);
+
+    var side = el("div", "ac-side");
+    side.appendChild(el("span", "chip " + look.chip, look.words));
     var buttons = el("div", "row ac-actions");
     buttons.appendChild(
       moveButton(run, index, -1, "↑", "Move " + criterion.id + " up")
@@ -582,11 +942,8 @@
       yes.focus();
     });
     buttons.appendChild(remove);
-    row.appendChild(buttons);
-
-    setTimeout(function () {
-      growTextarea(box);
-    }, 0);
+    side.appendChild(buttons);
+    row.appendChild(side);
     return row;
   }
 
@@ -609,6 +966,7 @@
     });
     return button;
   }
+
 
   /* ---------- step 3: the test cases page ---------- */
 
@@ -817,20 +1175,25 @@
 
   function selectedCasesCard(cases) {
     var card = el("div", "card");
-    card.appendChild(el("h2", null, "Selected test cases"));
-    card.appendChild(
-      el("p", "muted", cases.length + " test case" + (cases.length === 1 ? "" : "s"))
-    );
-    var list = el("ul", "picked-cases");
+    var head = el("div", "row card-head");
+    head.appendChild(el("h2", "card-title", "Selected test cases"));
+    head.appendChild(el("span", "spacer"));
+    var change = el("a", "btn btn-sm", "Change selection");
+    change.setAttribute("href", "/requirements/test-cases");
+    head.appendChild(change);
+    card.appendChild(head);
+    /* One chip per case: the id people quote, then what it is about. */
+    var list = el("div", "picked-chips");
     cases.forEach(function (one) {
-      list.appendChild(el("li", null, one.id + " · " + one.title));
+      var chip = el("span", "chip picked-chip");
+      chip.appendChild(el("span", "picked-id", one.id));
+      chip.appendChild(document.createTextNode(" · " + one.title));
+      list.appendChild(chip);
     });
     card.appendChild(list);
-    var change = el("a", null, "Change selection");
-    change.setAttribute("href", "/requirements/test-cases");
-    var line = el("p", "muted small");
-    line.appendChild(change);
-    card.appendChild(line);
+    card.appendChild(
+      el("p", "muted small", cases.length + " test case" + (cases.length === 1 ? "" : "s"))
+    );
     return card;
   }
 
@@ -1010,7 +1373,11 @@
   function visibleCode() {
     var bodies = document.querySelectorAll(".file-body");
     for (var i = 0; i < bodies.length; i += 1) {
-      if (!bodies[i].hidden) return bodies[i].textContent;
+      if (bodies[i].hidden) continue;
+      /* The line-number gutter lives in the <pre> beside the <code>, so
+       * the code itself is what Copy reads. */
+      var code = bodies[i].querySelector("code");
+      return (code || bodies[i]).textContent;
     }
     return "";
   }
@@ -1284,6 +1651,24 @@
     renderList(next);
   }
 
+  /* A matrix run no tool can do is not the automation's fault, but whoever
+   * reads the checks column should know somebody still has to run it. */
+  function showManualNote() {
+    var note = document.getElementById("automation-manual-note");
+    if (!note) return;
+    var run = readRun() || {};
+    var manual = run.matrix && run.matrix.manual_only ? run.matrix.manual_only : 0;
+    note.hidden = !manual;
+  }
+
+  /* A sample on screen is nobody's story, so it is never saved over one. */
+  function markExampleStory(isExample) {
+    var run = readRun() || {};
+    if (isExample) run.story_is_example = true;
+    else delete run.story_is_example;
+    writeRun(run);
+  }
+
   function undoLastChange() {
     var run = readRun() || {};
     var history = run.test_cases_history || [];
@@ -1418,8 +1803,40 @@
     var remove = closest(event.target, ".pq-remove");
     if (remove) {
       removePrincipalCase(remove.getAttribute("data-case-id"));
+      return;
+    }
+    /* A row in the test-cases table opens in place. The row is the button,
+     * so it works from the keyboard without a second control. */
+    var row = closest(event.target, ".tc-row-main");
+    if (row) {
+      toggleRow(row);
+      return;
+    }
+    if (closest(event.target, "#save-draft")) {
+      draftPop(true);
+      return;
+    }
+    if (closest(event.target, "#draft-save")) {
+      saveDraft();
+      return;
+    }
+    if (closest(event.target, "#draft-cancel")) {
+      draftPop(false);
     }
   });
+
+  document.addEventListener("input", function (event) {
+    if (closest(event.target, "#story-label")) saveStoryLabel();
+  });
+
+  function toggleRow(row) {
+    var card = closest(row, ".tc-card");
+    var body = card ? card.querySelector(".tc-body") : null;
+    if (!body) return;
+    var open = row.getAttribute("aria-expanded") === "true";
+    row.setAttribute("aria-expanded", open ? "false" : "true");
+    body.hidden = open;
+  }
 
   document.addEventListener("change", function (event) {
     var form = document.getElementById("automation-form");
@@ -1475,7 +1892,9 @@
     if (path.indexOf("/requirements/story/run") !== -1 ||
         path.indexOf("/requirements/story/example") !== -1) {
       saveStoryResultToRun();
+      markExampleStory(path.indexOf("/requirements/story/example") !== -1);
       saveStoryAnalysis();
+      saveStoryNotes();
       /* Load example swaps in a duel result alongside the story one. */
       saveDuelSummary();
     }
@@ -1488,6 +1907,7 @@
     }
     if (path.indexOf("/requirements/automation/") !== -1) {
       saveAutomationToRun();
+      showManualNote();
     }
     if (path.indexOf("/requirements/test-cases/run") !== -1) {
       rememberDisplayed(true);
@@ -1505,6 +1925,7 @@
 
   document.addEventListener("DOMContentLoaded", function () {
     restoreStoryPage();
+    fillStoryLabel();
     renderCriteria();
     renderTestCases();
     renderAutomation();

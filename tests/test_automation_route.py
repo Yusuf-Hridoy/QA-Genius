@@ -59,8 +59,8 @@ class _Spy:
 def test_the_page_shows_the_step_bar() -> None:
     response = client.get("/requirements/automation")
     assert response.status_code == 200
-    assert '<span class="step-n">4</span><span class="step-text">Automation</span>' in response.text
-    assert '<span class="step-n">3</span><span class="step-text">Test cases</span>' in response.text
+    assert '<span class="step-n">04</span><span class="step-text">Automation</span>' in response.text
+    assert '<span class="step-n">03</span><span class="step-text">Test cases</span>' in response.text
 
 
 def test_every_requirements_page_links_to_step_four() -> None:
@@ -306,7 +306,7 @@ def test_there_is_one_button_per_file() -> None:
     # Three files from the AI, plus the package.json and tsconfig.json a
     # TypeScript project needs before it can be type-checked at all.
     assert body.count('class="file-tab') == 5
-    assert body.count('class="code file-body"') == 5
+    assert body.count('class="code code-dark file-body"') == 5
     assert "pages/LoginPage.ts" in body
     assert "tests/login-lockout.spec.ts" in body
     assert "playwright.config.ts" in body

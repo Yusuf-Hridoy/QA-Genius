@@ -90,7 +90,7 @@ def test_load_example_includes_duel_without_key() -> None:
     body = response.text
     assert "Two-reader check" in body
     assert "fork-mark" in body
-    assert "How clear:" in body
+    assert "How clear, with reasons" in body
 
 
 def test_duel_error_renders_error_card(monkeypatch) -> None:

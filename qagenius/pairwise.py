@@ -52,6 +52,10 @@ class Matrix:
     covered_pairs: int  # must equal valid_pairs for any workable input
     impossible_pairs: tuple[tuple[str, str, str, str], ...]
     pinned_rows: int
+    # How many pairs each run is the first to cover, in table order. The
+    # numbers add up to covered_pairs, so a reader can see why a run is in
+    # the list at all.
+    new_pairs: tuple[int, ...] = ()
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -335,6 +339,13 @@ def build_matrix(
         total *= len(factor.values)
 
     covered = {pair for row in rows for pair in _covered_by(row)} - blocked
+    # Walked in table order: a pair belongs to the first run that covers it.
+    seen: set[tuple[int, int, int, int]] = set()
+    new_pairs: list[int] = []
+    for row in rows:
+        fresh = (_covered_by(row) - blocked) - seen
+        new_pairs.append(len(fresh))
+        seen |= fresh
     return Matrix(
         factors=tuple(factors),
         rows=tuple(
@@ -354,4 +365,5 @@ def build_matrix(
             for i, a, j, b in impossible
         ),
         pinned_rows=pinned_count,
+        new_pairs=tuple(new_pairs),
     )

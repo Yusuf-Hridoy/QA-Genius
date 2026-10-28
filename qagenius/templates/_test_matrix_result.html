@@ -1,10 +1,6 @@
 {# The matrix itself: how few runs, and the proof they cover everything.
    Every number here came out of qagenius/pairwise.py, never from an AI. #}
-<div class="stat-row">
-  <div class="stat">
-    <div class="num"><s>{{ matrix.all_combinations }}</s></div>
-    <div class="lbl">Every combination</div>
-  </div>
+<div class="stat-row stat-row-4">
   <div class="stat stat-accent">
     <div class="num">{{ matrix.rows | length }}</div><div class="lbl">Runs you need</div>
   </div>
@@ -12,6 +8,15 @@
     <div class="num">{{ matrix.covered_pairs }}<span class="unit"> / {{ matrix.valid_pairs }}</span>
       {%- if matrix.covered_pairs == matrix.valid_pairs %} ✓{% endif %}</div>
     <div class="lbl">Pairs tested together<span data-explain="pairwise"></span></div>
+    {# Impossible pairs are not counted, so this is never a share of
+       something bigger. They are said in words instead. #}
+    {% if matrix.impossible_pairs %}
+    <p class="muted small">{{ matrix.impossible_pairs | length }} pair{{ "" if matrix.impossible_pairs | length == 1 else "s" }} can't happen</p>
+    {% endif %}
+  </div>
+  <div class="stat">
+    <div class="num"><s>{{ matrix.all_combinations }}</s></div>
+    <div class="lbl">Every combination</div>
   </div>
   {# Runs nobody can automate are worth knowing about, not an error. #}
   <div class="stat{% if manual_only %} stat-warn{% endif %}">
@@ -20,22 +25,26 @@
 </div>
 
 <div class="card">
-  <h2>Runs</h2>
+  <h2 class="card-title">Runs</h2>
   <div class="table-scroll">
   <table class="grid matrix-table">
     <tr>
       <th>Run</th>
       {% for factor in matrix.factors %}<th>{{ factor.name }}</th>{% endfor %}
+      <th>New pairs</th>
       <th>Can a tool run it?</th>
       <th class="matrix-pin-col"><span class="visually-hidden">Always keep</span></th>
     </tr>
     {% for row in matrix.rows %}
     <tr{% if loop.index0 < matrix.pinned_rows %} class="matrix-pinned"{% endif %}>
-      <td class="mono small">{{ run_ids[loop.index0] }}</td>
+      <td class="mono small">{% if loop.index0 < matrix.pinned_rows %}<span class="matrix-pin-mark" aria-hidden="true">📌</span> {% endif %}{{ run_ids[loop.index0] }}</td>
       {% for value in row %}<td>{{ value }}</td>{% endfor %}
+      {# How many pairs this run is the first to cover, counted by code in
+         table order. The column adds up to the pairs covered. #}
+      <td><span class="chip{% if matrix.new_pairs and matrix.new_pairs[loop.index0] %} chip-info{% endif %}">+{{ matrix.new_pairs[loop.index0] if matrix.new_pairs else 0 }}</span></td>
       <td>
-        {% if row_is_manual[loop.index0] %}<span class="pill warn">test by hand</span>
-        {% else %}<span class="pill ok plain">yes</span>{% endif %}
+        {% if row_is_manual[loop.index0] %}<span class="chip chip-warn">test by hand</span>
+        {% else %}<span class="chip chip-ok">yes</span>{% endif %}
       </td>
       <td>
         <button type="button" class="btn btn-small matrix-pin"
@@ -58,10 +67,11 @@
 <script type="application/json" id="matrix-data">{{ matrix_data | tojson }}</script>
 <div class="card">
   <div class="row">
-    <button type="button" class="btn btn-primary" id="download-matrix-config">Download Playwright config</button>
+    <a class="btn btn-primary ship-link" href="/ship">Use in Ship check
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a>
+    <span class="spacer"></span>
+    <button type="button" class="btn" id="download-matrix-config">Download Playwright config</button>
     <button type="button" class="btn" id="download-matrix-csv">Download CSV</button>
-    <a class="btn btn-small ship-link" href="/ship">Ship check
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a>
   </div>
   <p class="muted small" id="matrix-download-status" aria-live="polite"></p>
 </div>

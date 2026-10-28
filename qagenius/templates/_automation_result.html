@@ -1,94 +1,184 @@
+{# The project on the left, what was checked on the right.
+
+   Every number here is computed from the files themselves: what parses,
+   which test case each file names, and what a senior tester's rules send
+   back. Writing code is not running it, and the right-hand column says so. #}
 {% import "_principal_qa.html" as pq %}
 <div class="stat-row">
   <div class="stat"><div class="num">{{ report.files | length }}</div><div class="lbl">Files</div></div>
   <div class="stat"><div class="num">{{ report.traced | length }} / {{ traced_total }}</div><div class="lbl">Tests linked</div></div>
   <div class="stat"><div class="num">{{ syntax_label }}</div><div class="lbl">Code check</div></div>
   <div class="stat"><div class="num">{{ warnings | length }}</div><div class="lbl">Warnings</div></div>
-  <div class="stat{% if principal_findings %} stat-accent{% endif %}">
+  <div class="stat{% if principal_findings %} stat-warn{% endif %}">
     <div class="num">{{ principal_findings | length }}</div><div class="lbl">Senior tester</div>
   </div>
 </div>
-<div class="card">
-  <h2>Checks</h2>
-  <p>{{ report.traced | length }} of {{ traced_total }} test cases you picked have a test that names them</p>
-  <p class="row">
-    {% for case_id in report.traced %}<span class="pill ok">{{ case_id }}</span>{% endfor %}
-    {% for case_id in report.missing %}<span class="pill bad">No test mentions {{ case_id }}</span>{% endfor %}
-  </p>
-  <table class="grid">
-    <tr><th>File</th><th>Code check</th></tr>
-    {% for file in report.files %}
-    {% set status = report.syntax.get(file.name, "not checked") %}
-    <tr>
-      <td class="mono small">{{ file.name }}</td>
-      <td>
-        {% if status == "error" %}<span class="pill bad">error</span>
-        {% elif status == "not checked" %}<span class="pill neutral">not done yet</span>
-        {% else %}<span class="pill ok">{{ syntax_words.get(status, status) }}</span>{% endif %}
-      </td>
-    </tr>
-    {% endfor %}
-  </table>
-  {% if report.findings %}
-  <ul class="findings">
-    {% for finding in report.findings %}
-    <li class="{{ finding.level }}">
-      <span class="mono small">{{ finding.file }}{% if finding.line %}:{{ finding.line }}{% endif %}</span>
-      {% if is_pq_finding(finding) %}{{ pq.label() }}{% endif %}
-      — {{ finding_text(finding) }}
-    </li>
-    {% endfor %}
-  </ul>
-  {% endif %}
-  <p class="muted small">Python is read by a real parser. TypeScript and JavaScript only get a
-    quick check that brackets and quotes match. That is not a compile.</p>
-</div>
-<div class="card">
-  <h2>Files</h2>
-  <div class="file-view">
-    <div class="file-list">
-      {% for file in report.files %}
-      <button type="button" class="file-tab btn{% if loop.first %} now{% endif %}" data-file="{{ loop.index0 }}">{{ file.name }}</button>
-      {% endfor %}
-    </div>
-    <div class="file-code">
-      <div class="row">
-        <button type="button" class="btn btn-small" id="copy-code">Copy</button>
-        <span class="muted small" id="copy-status" aria-live="polite"></span>
+
+<div class="req-split">
+  <div class="req-main">
+    <div class="card">
+      <h2 class="card-title">The project</h2>
+      <div class="file-view">
+        <div class="file-list">
+          {% for file in report.files %}
+          <button type="button" class="file-tab btn{% if loop.first %} now{% endif %}" data-file="{{ loop.index0 }}">{{ file.name }}</button>
+          {% endfor %}
+        </div>
+        <div class="file-code">
+          <div class="row file-code-head">
+            <button type="button" class="btn btn-sm" id="copy-code">Copy</button>
+            <span class="muted small" id="copy-status" aria-live="polite"></span>
+          </div>
+          {% for file in report.files %}
+          {# The gutter sits outside <code>, so Copy never picks up the
+             numbers with the lines. #}
+          <pre class="code code-dark file-body" data-file="{{ loop.index0 }}"{% if not loop.first %} hidden{% endif %}><span class="code-gutter" aria-hidden="true">{% for n in range(1, (file.code.split("
+") | length) + 1) %}{{ n }}{{ "
+" if not loop.last }}{% endfor %}</span><code>{{ file.code }}</code></pre>
+          {% endfor %}
+        </div>
       </div>
-      {% for file in report.files %}
-      <pre class="code file-body" data-file="{{ loop.index0 }}"{% if not loop.first %} hidden{% endif %}><code>{{ file.code }}</code></pre>
-      {% endfor %}
+      {# Criterion, test case, and the line of code that names it. Each part
+         is read out of the files; none of it is asked of the AI. #}
+      {% if trace_rows %}
+      <div class="trace-rows">
+        {% for row in trace_rows %}
+        <div class="trace">
+          {% if row.ac %}<span class="chip chip-id">{{ row.ac }}</span><span class="arrow" aria-hidden="true">&rarr;</span>{% endif %}
+          <span class="chip chip-id">{{ row.case }}</span>
+          {% if row.where %}<span class="arrow" aria-hidden="true">&rarr;</span><span class="chip chip-id">{{ row.where }}</span>{% endif %}
+        </div>
+        {% endfor %}
+      </div>
+      {% endif %}
+    </div>
+
+    {# These steps are computed by automation_exports.run_steps from the files
+       in the ZIP, so they start in the folder you downloaded instead of
+       making a new empty one. The AI's own notes sit underneath. #}
+    <div class="card">
+      <h2 class="card-title">Run it</h2>
+      <pre class="code code-dark"><code id="run-command">{% for step in run_it %}{{ step }}{{ "\n" if not loop.last }}{% endfor %}</code></pre>
+      <div class="row">
+        <button type="button" class="btn btn-sm" id="copy-command">Copy</button>
+        <span class="muted small" id="command-status" aria-live="polite"></span>
+      </div>
+      {# Only the notes the run steps above do not disprove: a note telling
+         the reader to mkdir a new folder and npm init builds an empty project
+         beside the one they just unzipped. #}
+      {% if ai_notes %}
+      <details>
+        <summary>Notes from the AI</summary>
+        <ol class="setup-steps">
+          {% for step in ai_notes %}<li>{{ step }}</li>{% endfor %}
+        </ol>
+        <p class="muted small">QA-Genius does not follow these — the commands above are
+          worked out from the project you downloaded.</p>
+      </details>
+      {% endif %}
+    </div>
+
+    {% if script.design_notes %}
+    <details class="card"><summary>Design notes</summary><p class="muted">{{ script.design_notes }}</p></details>
+    {% endif %}
+  </div>
+
+  <div class="req-side">
+    <div class="card">
+      <h2 class="card-title">Checks</h2>
+      <div class="check-tiles">
+        <div class="check-tile {{ 'tile-ok' if not report.missing else 'tile-bad' }}">
+          <span class="check-mark">{{ "✓" if not report.missing else "!" }}</span>
+          <div>
+            <p class="check-title">Linked to test cases
+              ({{ report.traced | length }} of {{ traced_total }})</p>
+            <p class="check-line">{{ report.traced | length }} of {{ traced_total }} test cases you picked have a test that names them</p>
+            {% for case_id in report.missing %}
+            <p class="check-line">No test mentions {{ case_id }}</p>
+            {% endfor %}
+          </div>
+        </div>
+
+        <div class="check-tile {{ 'tile-ok' if not errors else 'tile-bad' }}">
+          <span class="check-mark">{{ "✓" if not errors else "!" }}</span>
+          <div>
+            <p class="check-title">Code check ({{ syntax_label }})</p>
+            <p class="check-line">Python is read by a real parser. TypeScript and
+              JavaScript only get a quick check that brackets and quotes match.
+              That is not a compile.</p>
+            <details class="check-more">
+              <summary>File by file</summary>
+              <table class="grid">
+                <tr><th>File</th><th>Code check</th></tr>
+                {% for file in report.files %}
+                {% set status = report.syntax.get(file.name, "not checked") %}
+                <tr>
+                  <td class="mono small">{{ file.name }}</td>
+                  <td>
+                    {% if status == "error" %}<span class="chip chip-bad">error</span>
+                    {% elif status == "not checked" %}<span class="chip">not done yet</span>
+                    {% else %}<span class="chip chip-ok">{{ syntax_words.get(status, status) }}</span>{% endif %}
+                  </td>
+                </tr>
+                {% endfor %}
+              </table>
+              {% if warnings or errors %}
+              <ul class="findings">
+                {% for finding in errors + warnings %}
+                <li class="{{ finding.level }}">
+                  <span class="mono small">{{ finding.file }}{% if finding.line %}:{{ finding.line }}{% endif %}</span>
+                  — {{ finding_text(finding) }}
+                </li>
+                {% endfor %}
+              </ul>
+              {% endif %}
+            </details>
+          </div>
+        </div>
+
+        <div class="check-tile {{ 'tile-warn' if principal_findings else 'tile-ok' }}">
+          <span class="check-mark">{{ "!" if principal_findings else "✓" }}</span>
+          <div>
+            <p class="check-title">Senior tester
+              ({{ principal_findings | length }} finding{{ "" if principal_findings | length == 1 else "s" }})</p>
+            {% if principal_findings %}
+            <details class="check-more">
+              <summary>What they found</summary>
+              <ul class="findings">
+                {% for finding in principal_findings %}
+                <li class="{{ finding.level }}">
+                  <span class="mono small">{{ finding.file }}{% if finding.line %}:{{ finding.line }}{% endif %}</span>
+                  {% if is_pq_finding(finding) %}{{ pq.label() }}{% endif %}
+                  — {{ finding_text(finding) }}
+                </li>
+                {% endfor %}
+              </ul>
+            </details>
+            {% else %}
+            <p class="check-line">Nothing to send back.</p>
+            {% endif %}
+          </div>
+        </div>
+
+        <div class="check-tile tile-info">
+          <span class="check-mark">i</span>
+          <div>
+            <p class="check-title">Not run yet</p>
+            <p class="check-line">Writing code doesn't run it. Run it on your machine
+              to get a result.</p>
+          </div>
+        </div>
+      </div>
+      <p class="note" id="automation-manual-note" hidden>Your test matrix has a run no
+        tool can do. Someone has to do that one by hand.</p>
+      <div class="form-actions">
+        <button type="button" class="btn btn-primary" id="download-zip">Download ZIP</button>
+      </div>
+      <p class="muted small" id="automation-status" aria-live="polite"></p>
     </div>
   </div>
 </div>
-{# These steps are computed by automation_exports.run_steps from the files in
-   the ZIP, so they start in the folder you downloaded instead of making a new
-   empty one. The AI's own instructions sit underneath, as notes. #}
-<div class="card">
-  <h2>Run it</h2>
-  <pre class="code"><code id="run-command">{% for step in run_it %}{{ step }}{{ "\n" if not loop.last }}{% endfor %}</code></pre>
-  <div class="row">
-    <button type="button" class="btn btn-small" id="copy-command">Copy</button>
-    <span class="muted small" id="command-status" aria-live="polite"></span>
-  </div>
-  {# Only the notes the run steps above do not disprove: a note telling the
-     reader to mkdir a new folder and npm init builds an empty project beside
-     the one they just unzipped. #}
-  {% if ai_notes %}
-  <details>
-    <summary>Notes from the AI</summary>
-    <ol class="setup-steps">
-      {% for step in ai_notes %}<li>{{ step }}</li>{% endfor %}
-    </ol>
-    <p class="muted small">QA-Genius does not follow these — the commands above are
-      worked out from the project you downloaded.</p>
-  </details>
-  {% endif %}
-</div>
-{% if script.design_notes %}
-<details class="card"><summary>Design notes</summary><p class="muted">{{ script.design_notes }}</p></details>
-{% endif %}
+
 <script type="application/json" id="automation-data">{{ automation_data | tojson }}</script>
 {# Where to go next, and whether each of those desks is still current.
    next_steps.js fills the status words; the links work without it. #}
@@ -108,10 +198,6 @@
   </a>
 </div>
 <div class="card">
-  <div class="row">
-    <button type="button" class="btn" id="download-zip">Download ZIP</button>
-  </div>
-  <p class="muted small" id="automation-status" aria-live="polite"></p>
   {% if notes %}
   <p class="muted small">{{ notes | join(" · ") }}</p>
   {% endif %}

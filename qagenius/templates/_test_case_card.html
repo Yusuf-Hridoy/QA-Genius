@@ -1,5 +1,42 @@
+{# One test case, in one of two shapes.
+
+   card_row = true  -> a row in the test-cases table that opens in place.
+   otherwise        -> the whole card, which is what the before/after view
+                       and anything else that shows a case on its own uses.
+
+   Both shapes keep the same hooks: .tc-card with its data-category for the
+   filter chips, .tc-select for the selection bar, .pq-remove for undo. #}
 {% import "_principal_qa.html" as pq %}
 {% set card_pq = is_principal is defined and is_principal(card_case) %}
+{% if card_row %}
+<div class="card tc-card tc-row-card{% if card_pq %} pq-case{% endif %}" data-category="{{ card_case.category }}">
+  <div class="tc-row">
+    <span class="tc-cell tc-pick">
+      <input type="checkbox" class="tc-select" data-case-id="{{ card_case.id }}" aria-label="Select {{ card_case.id }}">
+    </span>
+    <button type="button" class="btn tc-row-main" aria-expanded="false"
+      aria-controls="tc-body-{{ card_case.id }}">
+      <span class="tc-cell tc-col-id"><span class="chip chip-id">{{ card_case.id }}</span></span>
+      <span class="tc-cell tc-col-title">{{ card_case.title }}
+        {% if card_pq %}{{ pq.label() }}{% endif %}</span>
+      <span class="tc-cell tc-col-expect">{{ card_case.expected_result }}</span>
+      <span class="tc-cell tc-col-kind"><span class="chip chip-{{ 'bad' if card_case.category == 'Negative' else ('warn' if card_case.category == 'Boundary' else ('info' if card_case.category == 'Edge Case' else 'ok')) }}">{{ category_words.get(card_case.category, card_case.category) }}</span></span>
+      <span class="tc-cell tc-col-priority"><span class="chip chip-{{ 'bad' if card_case.priority == 'High' else ('warn' if card_case.priority == 'Medium' else '') }}">{{ card_case.priority }}</span></span>
+      <span class="tc-cell tc-col-linked">
+        {% if card_ac_ids %}{% for ac_id in card_ac_ids %}<span class="pill accent chip-id" title="{{ ac_text[ac_id] }}">{{ ac_id }}</span>{% endfor %}
+        {% else %}<span class="muted small">not linked yet</span>{% endif %}
+      </span>
+      <svg class="row-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+        stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>
+    </button>
+  </div>
+  <div class="tc-body" id="tc-body-{{ card_case.id }}" hidden>
+    {% with card_detail = card_case, detail_pq = card_pq, detail_select = card_select %}
+    {% include "_test_case_detail.html" %}
+    {% endwith %}
+  </div>
+</div>
+{% else %}
 <div class="card tc-card{% if card_pq %} pq-case{% endif %}{% if card_class %} {{ card_class }}{% endif %}" data-category="{{ card_case.category }}">
   <h3>{% if card_select %}<input type="checkbox" class="tc-select" data-case-id="{{ card_case.id }}" aria-label="Select {{ card_case.id }}"> {% endif %}{{ card_case.id }} · {{ card_case.title }}</h3>
   <p class="row">
@@ -12,26 +49,8 @@
     <span class="pill neutral">not linked yet</span>
     {% endif %}
   </p>
-  <p><strong>Before you start:</strong> {{ card_case.pre_conditions }}</p>
-  <ol class="tc-steps">
-    {% for step in card_case.steps %}<li>{{ step }}</li>{% endfor %}
-  </ol>
-  <p><strong>What should happen:</strong> {{ card_case.expected_result }}</p>
-  {% if card_case.test_data %}
-  <p class="mono small"><strong>Data to use:</strong> {{ card_case.test_data }}</p>
-  {% endif %}
-  {% if card_case.bdd_scenario %}
-  <details><summary>Given / When / Then version<span data-explain="given-when-then"></span></summary><pre class="code">{{ card_case.bdd_scenario }}</pre></details>
-  {% endif %}
-  <p class="muted small">Easy to automate? {{ card_case.automation_feasibility }} · work to automate: {{ card_case.automation_effort }}</p>
-  {% if card_pq %}
-  {% set why = pq_reason(card_case) %}
-  {% if why %}<p class="pq-why">Why a senior tester always asks for this: {{ why }}</p>{% endif %}
-  {% if card_select %}
-  <p class="row pq-card-actions">
-    <button type="button" class="btn btn-small btn-danger pq-remove" data-case-id="{{ card_case.id }}">Remove</button>
-    <span class="hint">Undo brings it back.</span>
-  </p>
-  {% endif %}
-  {% endif %}
+  {% with card_detail = card_case, detail_pq = card_pq, detail_select = card_select %}
+  {% include "_test_case_detail.html" %}
+  {% endwith %}
 </div>
+{% endif %}

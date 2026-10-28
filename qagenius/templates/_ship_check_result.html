@@ -1,5 +1,8 @@
-{# The decision, then one row per check. Every number on this page was computed
-   by qagenius/ship_check.py; no AI text reaches it, so nothing is marked safe. #}
+{# The decision, the evidence behind it, and what to do next.
+
+   Every number on this page was computed by qagenius/ship_check.py and the
+   grade by qagenius/ship_grade.py. No AI text reaches either, so nothing
+   here is marked safe on a model's say-so. #}
 {% from "_form_fields.html" import field %}
 {% if is_example %}
 {% with caption = "Run the other desks on your own story, then come back here." %}
@@ -7,79 +10,175 @@
 {% endwith %}
 {% endif %}
 <div class="ship-report"{% if is_example %} data-example="1"{% endif %}>
-  <div class="verdict ship-verdict ship-{{ verdict_tone }}">
-    <div>
-      <span class="pill {{ verdict_tone }}">Decision</span>
+  <div class="ship-banner ship-{{ verdict_tone }}">
+    <div class="ship-banner-words">
+      <span class="ship-banner-label">Decided by rules</span>
       <h2 class="ship-verdict-label">{{ verdict_label }}</h2>
       <p>{{ report.verdict_reason }}</p>
       {% if report.stale %}
-      {# The verdict is this minute's; some of what it read is not. #}
-      <p class="pill warn ship-stale-header">Worked out just now — some inputs are older</p>
+      {# The decision is this minute's; some of what it read is not. #}
+      <p class="chip chip-warn ship-stale-header">Worked out just now — some inputs are older</p>
       {% endif %}
       <p class="muted small">{{ report.checked }} of {{ total_checks }} checks ran</p>
     </div>
+    {% if grade %}
+    {# The letter is arithmetic on the rows below. Press it for the sums. #}
+    <div class="grade-holder">
+      <button type="button" class="btn grade-circle" id="grade-circle"
+              aria-expanded="false" aria-controls="grade-why"
+              aria-label="Grade {{ grade.letter }}. Why this grade?">
+        <span class="grade-letter">{{ grade.letter }}</span>
+      </button>
+      <div class="grade-why card" id="grade-why" hidden>
+        <p class="grade-why-head"><strong>Why {{ grade.letter }}: {{ grade.points }} of
+          {{ grade.max_points }} points</strong></p>
+        <ul class="grade-lines">
+          {% for line in grade.lines %}<li>{{ line }}</li>{% endfor %}
+        </ul>
+      </div>
+    </div>
+    {% endif %}
   </div>
 
   {% if ignored %}
   <p class="muted small">Some saved data could not be read, so these were skipped: {{ ignored | join(", ") }}</p>
   {% endif %}
 
-  <div class="ship-checks">
-    {% for item in report.items %}
-    <div class="card ship-row" data-check="{{ item.id }}" data-status="{{ item.status }}">
-      <div class="row ship-row-head">
-        <span class="pill {{ status_tones[item.status] }}">{{ status_labels[item.status] }}</span>
-        <strong class="ship-row-title">{{ item.title }}</strong>
-        <span class="spacer"></span>
-        <a class="small ship-row-link" href="{{ item.link }}">Open {{ tools[item.id] }} →</a>
-      </div>
-      <p class="ship-row-summary">{{ item.summary }}</p>
-      {% if item.stale_note %}
-      <p class="muted small ship-stale-note">{{ item.stale_note }}</p>
-      {% endif %}
+  {% set ran = report.items | rejectattr("status", "equalto", "not_checked") | list %}
+  {% set not_run = report.items | selectattr("status", "equalto", "not_checked") | list %}
+  {% set todo = report.items | selectattr("status", "in", ["fail", "warn"]) | list %}
+  {% set fine = report.items | selectattr("status", "in", ["pass", "accepted"]) | list %}
 
-      {% if item.status == "accepted" and item.accepted_note %}
-      <p class="ship-accepted-note"><em>Accepted: {{ item.accepted_note }}</em></p>
-      <div class="row">
-        <button type="button" class="btn btn-small btn-danger ship-unaccept" data-check="{{ item.id }}">Undo accept</button>
-      </div>
-      {% endif %}
-
-      {% if item.details %}
-      <details class="ship-details">
-        <summary>Details</summary>
-        <ul>
-          {% for line in item.details %}<li>{{ line }}</li>{% endfor %}
-        </ul>
-      </details>
-      {% endif %}
-
-      {% if item.status == "fail" %}
-      <div class="row ship-accept-row">
-        <button type="button" class="btn btn-small ship-accept" data-check="{{ item.id }}">Accept this risk and say why</button>
-      </div>
-      <div class="ship-accept-form" data-check="{{ item.id }}" hidden>
-        {% call field("ship-reason-" ~ item.id, "Why are you releasing with this?",
-                      help="At least " ~ min_reason ~ " characters.", counter_max=max_reason) %}
-        <textarea id="ship-reason-{{ item.id }}" class="ship-reason short" rows="3"
-                  minlength="{{ min_reason }}" maxlength="{{ max_reason }}"
-                  placeholder="Behind a feature flag for internal users until the shared counter lands."></textarea>
-        {% endcall %}
-        <div class="form-actions">
-          <button type="button" class="btn btn-primary btn-small ship-accept-save" data-check="{{ item.id }}">Accept</button>
-          <button type="button" class="btn btn-small ship-accept-cancel" data-check="{{ item.id }}">Cancel</button>
-          <span class="muted small ship-accept-status" aria-live="polite"></span>
+  <div class="req-split">
+    <div class="req-main">
+      <div class="card">
+        <h2 class="card-title">Evidence receipt</h2>
+        <div class="receipt">
+          {% for item in ran %}
+          <div class="receipt-tile" data-check="{{ item.id }}" data-status="{{ item.status }}">
+            <span class="icon-tile tile-{{ 'ok' if item.status == 'pass' else ('warn' if item.status in ['warn', 'accepted'] else 'bad') }}">
+              <span class="receipt-mark" aria-hidden="true">{{ "✓" if item.status == "pass" else ("!" if item.status in ["warn", "accepted"] else "✕") }}</span>
+            </span>
+            <div class="receipt-words">
+              <p class="receipt-title">{{ item.title }}</p>
+              <p class="receipt-line">{{ item.summary }}</p>
+              {% if item.accepted_note %}
+              <p class="receipt-line"><em>{{ item.accepted_note }}</em></p>
+              {% endif %}
+              {% if item.review_passed %}
+              <p><span class="chip chip-bad">Review date passed</span></p>
+              {% endif %}
+              {% if item.stale_note %}
+              <p class="muted small ship-stale-note">{{ item.stale_note }}</p>
+              {% endif %}
+              {% if item.details %}
+              <details class="ship-details">
+                <summary>Details</summary>
+                <ul>
+                  {% for line in item.details %}<li>{{ line }}</li>{% endfor %}
+                </ul>
+              </details>
+              {% endif %}
+            </div>
+          </div>
+          {% endfor %}
         </div>
+        {% if not_run %}
+        <p class="muted small">Not run yet:
+          {{ not_run | map(attribute="title") | join(", ") }}.</p>
+        {% endif %}
+        <p class="note">The decision comes from rules and your results — not AI text.</p>
+      </div>
+    </div>
+
+    <div class="req-side">
+      <div class="card">
+        <div class="row card-head">
+          <h2 class="card-title">What to do next</h2>
+          <span class="spacer"></span>
+          <span class="chip{% if not todo %} chip-ok{% endif %}">{{ fine | length }} / {{ ran | length }} fine</span>
+        </div>
+        {% if not todo %}
+        <p class="muted">Nothing is waiting on you. Every check that ran came back fine.</p>
+        {% endif %}
+        <div class="todo-list">
+          {% for item in todo %}
+          <div class="card ship-row todo-row" data-check="{{ item.id }}" data-status="{{ item.status }}">
+            <div class="row ship-row-head">
+              <span class="chip chip-{{ 'bad' if item.status == 'fail' else 'warn' }}">{{ "✕" if item.status == "fail" else "!" }} {{ status_labels[item.status] }}</span>
+              <strong class="ship-row-title">{{ item.title }}</strong>
+            </div>
+            <p class="ship-row-summary">{{ item.summary }}</p>
+            <div class="row">
+              <a class="btn btn-sm ship-row-link" href="{{ item.link }}">Open {{ tools[item.id] }} →</a>
+              {% if item.status == "fail" %}
+              <button type="button" class="btn btn-sm ship-accept" data-check="{{ item.id }}">Accept this risk and say why</button>
+              {% endif %}
+            </div>
+            {% if item.status == "fail" %}
+            <div class="ship-accept-form" data-check="{{ item.id }}" hidden>
+              {% call field("ship-reason-" ~ item.id, "Why are you releasing with this?",
+                            help="At least " ~ min_reason ~ " characters.", counter_max=max_reason) %}
+              <textarea id="ship-reason-{{ item.id }}" class="ship-reason short" rows="3"
+                        minlength="{{ min_reason }}" maxlength="{{ max_reason }}"
+                        placeholder="Behind a feature flag for internal users until the shared counter lands."></textarea>
+              {% endcall %}
+              {# Both of these are optional. A date nobody agreed is worse than
+                 no date, so neither is ever filled in for you. #}
+              <div class="field-grid">
+                {% call field("ship-owner-" ~ item.id, "Who owns it", optional=true) %}
+                <input type="text" id="ship-owner-{{ item.id }}" class="ship-owner"
+                       maxlength="{{ max_owner }}" placeholder="Name or team">
+                {% endcall %}
+                {% call field("ship-review-" ~ item.id, "Review by", optional=true) %}
+                <input type="date" id="ship-review-{{ item.id }}" class="ship-review">
+                {% endcall %}
+              </div>
+              <div class="form-actions">
+                <button type="button" class="btn btn-sm ship-accept-save" data-check="{{ item.id }}">Accept</button>
+                <button type="button" class="btn btn-sm ship-accept-cancel" data-check="{{ item.id }}">Cancel</button>
+                <span class="muted small ship-accept-status" aria-live="polite"></span>
+              </div>
+            </div>
+            {% endif %}
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+
+      {% set accepted = report.items | selectattr("status", "equalto", "accepted") | list %}
+      {% if accepted %}
+      <div class="card">
+        <h2 class="card-title">Accepted risks</h2>
+        {% for item in accepted %}
+        <div class="ship-row accepted-row" data-check="{{ item.id }}">
+          <p class="receipt-title">{{ item.title }}</p>
+          <p class="ship-accepted-note"><em>Accepted: {{ item.accepted_note }}</em></p>
+          <div class="row">
+            <button type="button" class="btn btn-small btn-danger ship-unaccept" data-check="{{ item.id }}">Remove</button>
+          </div>
+        </div>
+        {% endfor %}
       </div>
       {% endif %}
     </div>
-    {% endfor %}
   </div>
 
   <script type="application/json" id="ship-md">{{ markdown | tojson }}</script>
+  {# The same report as data, for any page that needs the facts rather than
+     the layout. The Overview reads this out of the HTML this route returns,
+     so there is one decision in the app and one place that computes it. #}
+  <script type="application/json" id="ship-data">{{ ship_data | tojson }}</script>
   <div class="card ship-actions">
     <div class="row">
+      {# The one main button is the most useful next thing: the first check
+         that needs fixing, or the copy nobody has to retype. #}
+      {% if todo %}
+      <a class="btn btn-primary" href="{{ todo[0].link }}">Open {{ tools[todo[0].id] }} →</a>
       <button type="button" class="btn" id="ship-copy-md">Copy as Markdown</button>
+      {% else %}
+      <button type="button" class="btn btn-primary" id="ship-copy-md">Copy as Markdown</button>
+      {% endif %}
       <button type="button" class="btn" id="ship-print">Print / save as PDF</button>
       <span class="muted small" id="ship-copy-status" aria-live="polite"></span>
     </div>

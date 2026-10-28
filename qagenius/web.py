@@ -2,6 +2,7 @@ import base64
 import html
 import json
 import logging
+import re
 import secrets
 from dataclasses import replace
 from pathlib import Path
@@ -96,6 +97,12 @@ from qagenius.story_text import (
     strip_confidence_deep,
     without_criteria_lines,
 )
+from qagenius.acceptance import (
+    MAX_OWNER,
+    Acceptance,
+    read_all as read_acceptances,
+)
+from qagenius.ship_grade import grade_for
 from qagenius.ship_check import (
     CHECK_IDS,
     MAX_DETAILS,
@@ -130,6 +137,7 @@ from qagenius.test_case_refine import (
     strengthen_instruction,
 )
 from qagenius.test_cases import (
+    AC_ID,
     COVERAGE_FOCUS_OPTIONS,
     Criterion,
     build_user_text,
@@ -160,6 +168,9 @@ REFINE_MODES = ("strengthen", "instruction", "risks")
 RISKS_JSON_LIMIT = 50000
 SELECTED_JSON_LIMIT = 100000
 EXPORT_BODY_LIMIT = 500000
+# More accepted risks than this on one run is a sign of a pasted file, not
+# of a team that wrote that many reasons.
+MAX_RISK_ACCEPTANCES = 60
 BASE_URL_LIMIT = 200
 SCREENSHOT_TYPES = ("image/png", "image/jpeg", "image/webp")
 SCREENSHOT_LIMIT = 2 * 1024 * 1024
@@ -249,6 +260,12 @@ def health() -> str:
 def index(request: Request) -> HTMLResponse:
     """The overview: what each desk does and where the key lives."""
     return templates.TemplateResponse(request, "home.html", {"active": "home"})
+
+
+@app.get("/stories", response_class=HTMLResponse)
+def stories_page(request: Request) -> HTMLResponse:
+    """Every story this browser has saved. The server holds none of them."""
+    return templates.TemplateResponse(request, "stories.html", {"active": "stories"})
 
 
 @app.get("/requirements/story", response_class=HTMLResponse)
@@ -530,6 +547,72 @@ def _shadow_story(
     return epic, [note for note in found if not note.epic]
 
 
+def _story_reasons(
+    epic: StoryNote | None,
+    notes: list[StoryNote],
+    limit_notes: list[str],
+    result: AmbiguityAnalysis,
+) -> list[dict]:
+    """Why the score is what it is, worst first.
+
+    The senior tester's rules come before the AI's reading of the words: a
+    limit nobody has decided costs more than a loose adjective.
+    """
+    reasons: list[dict] = []
+    if epic:
+        reasons.append(
+            {
+                "kind": "epic",
+                "title": epic.title,
+                "detail": epic.advice or epic.detail,
+                "say": "",
+            }
+        )
+    for note in limit_notes:
+        reasons.append(
+            {
+                "kind": "limit",
+                "title": "A limit nobody has decided",
+                "detail": note,
+                "say": "",
+            }
+        )
+    for note in notes:
+        reasons.append(
+            {"kind": "note", "title": note.title, "detail": note.detail, "say": ""}
+        )
+    for phrase in result.vague_phrases:
+        reasons.append(
+            {
+                "kind": "word",
+                "title": f"“{phrase.phrase}” is not something anyone can test",
+                "detail": phrase.suggestion,
+                "say": phrase.replacement,
+            }
+        )
+    return reasons
+
+
+def _story_notes_data(
+    epic: StoryNote | None,
+    notes: list[StoryNote],
+    limit_notes: list[str],
+) -> dict:
+    """What the senior tester said about the story, as plain data."""
+    return {
+        "epic": (
+            {"title": epic.title, "detail": epic.detail, "advice": epic.advice}
+            if epic
+            else None
+        ),
+        "notes": [
+            {"level": note.level, "title": note.title, "detail": note.detail}
+            for note in notes
+        ],
+        "limit_notes": list(limit_notes),
+    }
+
+
 def _story_result_context(
     request: Request,
     story: str,
@@ -569,6 +652,29 @@ def _story_result_context(
         # Ship check and Risk radar read this back and have nowhere to put
         # a confidence pill, so the tags come off before it is stored.
         "analysis_data": strip_confidence_deep(result.model_dump()),
+        # The same notes as data. The Overview picks the one open question
+        # worth answering next out of this; nothing here is recomputed.
+        "reason_cards": _story_reasons(
+            epic,
+            shadow_notes,
+            limit_conflicts(
+                with_context(
+                    number_criteria(result.generated_acceptance_criteria), context
+                ),
+                [],
+            ),
+            result,
+        ),
+        "notes_data": _story_notes_data(
+            epic,
+            shadow_notes,
+            limit_conflicts(
+                with_context(
+                    number_criteria(result.generated_acceptance_criteria), context
+                ),
+                [],
+            ),
+        ),
         # Criteria were drafted, so "no acceptance criteria" is no longer
         # true. Ship check drops the same lines.
         "missing_elements": without_criteria_lines(
@@ -746,8 +852,14 @@ def story_example(request: Request) -> HTMLResponse:
         + "</textarea>"
     )
     body = templates.get_template("_story_result.html").render(context)
-    duel_body = templates.get_template("_duel_result.html").render(
-        _duel_from_sample(form["user_story"])
+    # The story answer lands in the right-hand column, so the two-reader
+    # check is sent to its own full-width slot rather than beside it.
+    duel_body = (
+        '<div id="duel-output" hx-swap-oob="true">'
+        + templates.get_template("_duel_result.html").render(
+            _duel_from_sample(form["user_story"])
+        )
+        + "</div>"
     )
     return HTMLResponse(story_field + type_field + context_field + body + duel_body)
 
@@ -1538,6 +1650,37 @@ def _finding_text(finding) -> str:
     return message[len(PRINCIPAL_PREFIX):] if _is_pq_finding(finding) else message
 
 
+def _automation_trace(report: CheckReport, cases: list[TestCase]) -> list[dict]:
+    """Criterion to test case to the line of code that names it.
+
+    Every part of this is read out of the files: the id is searched for in
+    the code and the line it lands on is counted. Nothing is asked of the AI.
+    """
+    ac_by_case = {
+        case.id: AC_ID.findall(case.traceability or "") for case in cases
+    }
+    rows: list[dict] = []
+    for case_id in report.traced:
+        where = ""
+        for project_file in report.files:
+            lines = (project_file.code or "").splitlines()
+            found = next(
+                (at for at, line in enumerate(lines, 1) if case_id in line), 0
+            )
+            if found:
+                where = f"{project_file.name}:{found}"
+                break
+        ac_ids = ac_by_case.get(case_id) or []
+        rows.append(
+            {
+                "ac": f"AC-{ac_ids[0]}" if ac_ids else "",
+                "case": case_id,
+                "where": where,
+            }
+        )
+    return rows
+
+
 def _automation_result_context(
     script: AutomationScript,
     report: CheckReport,
@@ -1545,6 +1688,7 @@ def _automation_result_context(
     notes: list[str],
     provider_name: str,
     is_example: bool = False,
+    cases: list[TestCase] | None = None,
 ) -> dict:
     # The two stats mean one thing each: Syntax is about the code parsing,
     # Principal QA is about what a reviewer would send back. No finding is
@@ -1572,6 +1716,8 @@ def _automation_result_context(
         "run_it": run_steps(script, report.files),
         # The AI's own notes, minus the ones the run steps above disprove.
         "ai_notes": useful_notes(script.setup_instructions),
+        # Criterion -> test case -> the line of code, read from the files.
+        "trace_rows": _automation_trace(report, cases or []),
         # What the Download ZIP button posts back to the export route.
         "automation_data": {
             "script": script.model_dump(),
@@ -1656,6 +1802,7 @@ def automation_run(
             selected_ids,
             notes,
             provider["name"] if provider else "unknown provider",
+            cases=cases,
         ),
     )
 
@@ -2077,6 +2224,8 @@ class RiskBody(BaseModel):
     analysis: RiskAnalysis
     cases: list[TestCase] = []
     criteria: list[str] = []
+    # What was accepted on this desk, so the register carries it too.
+    risk_acceptances: dict = {}
 
     @field_validator("criteria")
     @classmethod
@@ -2193,6 +2342,10 @@ def _risk_result_context(
         "provider_name": provider_name,
         "answered_line": answered_line,
         "principal_source": PRINCIPAL_SOURCE,
+        # The accept form on this desk writes the same shape Ship check reads.
+        "min_reason": MIN_REASON,
+        "max_reason": MAX_REASON,
+        "max_owner": MAX_OWNER,
     }
 
 
@@ -2222,13 +2375,12 @@ def risks_page(request: Request) -> HTMLResponse:
         "risk_radar.html",
         {
             "active": "risks",
-            "page_title": "Where this feature is most likely to break",
+            "page_title": "Find what could break before it breaks.",
             "page_lede": (
-                "Risk radar reads your story, criteria and tests. It lists the ways "
-                "this feature can break, gives each one a risk score, and checks if "
-                "a test already covers it."
+                "Risk scores are worked out by code. Each one links to its reason "
+                "and the next useful test."
             ),
-            "eyebrow": "Risk radar",
+            "eyebrow": "02 · Risk radar",
         },
     )
 
@@ -2350,7 +2502,7 @@ def risks_example(request: Request) -> HTMLResponse:
 def risks_export_csv(payload: RiskBody) -> Response:
     report = score_risks(payload.analysis, payload.cases)
     return Response(
-        content=risk_register_exports.to_csv(report),
+        content=risk_register_exports.to_csv(report, payload.risk_acceptances),
         media_type="text/csv; charset=utf-8",
         headers={
             "Content-Disposition": 'attachment; filename="qa-genius-risk-register.csv"'
@@ -2362,7 +2514,7 @@ def risks_export_csv(payload: RiskBody) -> Response:
 def risks_export_xlsx(payload: RiskBody) -> Response:
     report = score_risks(payload.analysis, payload.cases)
     return Response(
-        content=risk_register_exports.to_xlsx(report),
+        content=risk_register_exports.to_xlsx(report, payload.risk_acceptances),
         media_type=(
             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         ),
@@ -2466,19 +2618,32 @@ def _ship_stale(raw: dict) -> list[str]:
     return [one for one in value if isinstance(one, str) and one in CHECK_IDS]
 
 
-def _ship_acceptances(raw: dict, ignored: list[str]) -> dict[str, str]:
-    """check id -> written reason. Unknown ids and non-text drop out."""
+def _ship_acceptances(raw: dict, ignored: list[str]) -> dict[str, Acceptance]:
+    """check id -> what was accepted. Unknown ids and bad shapes drop out.
+
+    A run saved before owners existed holds a plain string here, so both
+    shapes are read.
+    """
     value = raw.get("acceptances")
     if value is None:
         return {}
     if not isinstance(value, dict):
         ignored.append(SHIP_PART_LABELS["acceptances"])
         return {}
-    return {
-        key: value[key]
-        for key in CHECK_IDS
-        if isinstance(value.get(key), str) and value[key].strip()
-    }
+    return read_acceptances(value, CHECK_IDS)
+
+
+# A risk id as the Risk radar writes it: R-01, R-12.
+_RISK_ID = re.compile(r"^R-?\d{1,3}$", re.IGNORECASE)
+
+
+def _risk_acceptances(raw: dict) -> dict[str, Acceptance]:
+    """risk id -> what the Risk radar accepted. Ids it does not recognise drop out."""
+    value = raw.get("risk_acceptances")
+    if not isinstance(value, dict):
+        return {}
+    keys = [key for key in value if isinstance(key, str) and _RISK_ID.match(key)]
+    return read_acceptances(value, keys[:MAX_RISK_ACCEPTANCES])
 
 
 def _ship_inputs(raw: dict) -> tuple[ShipInputs, list[str]]:
@@ -2514,6 +2679,7 @@ def _ship_inputs(raw: dict) -> tuple[ShipInputs, list[str]]:
             insights=_ship_part(raw, "insights", insights_from_dict, ignored),
             matrix=_ship_part(raw, "matrix", matrix_from_dict, ignored),
             acceptances=_ship_acceptances(raw, ignored),
+            risk_acceptances=_risk_acceptances(raw),
             stale_inputs=_ship_stale(raw),
         ),
         ignored,
@@ -2551,8 +2717,57 @@ def _ship_result(
             "markdown": ship_report_exports.to_markdown(report, story),
             "min_reason": MIN_REASON,
             "max_reason": MAX_REASON,
+            "max_owner": MAX_OWNER,
+            "grade": grade_for(report),
+            "ship_data": _ship_data(report, story, is_example),
         },
     )
+
+
+def _ship_data(report: ShipReport, story: str, is_example: bool) -> dict:
+    """The report as plain data, for a page that wants the facts not the layout."""
+    grade = grade_for(report)
+    return {
+        "grade": (
+            {
+                "letter": grade.letter,
+                "percent": grade.percent,
+                "points": grade.points,
+                "max_points": grade.max_points,
+                "capped": grade.capped,
+                "lines": list(grade.lines),
+            }
+            if grade
+            else None
+        ),
+        "decision": report.verdict,
+        "decision_label": VERDICT_LABELS[report.verdict],
+        "decision_reason": report.verdict_reason,
+        "tone": SHIP_VERDICT_TONES[report.verdict],
+        "checked": report.checked,
+        "total": len(report.items),
+        "counts": dict(report.counts),
+        "stale": report.stale,
+        "is_example": is_example,
+        "story": story[:STORY_IN_BANNER],
+        "items": [
+            {
+                "id": item.id,
+                "title": item.title,
+                "status": item.status,
+                "status_label": SHIP_STATUS_LABELS[item.status],
+                "summary": item.summary,
+                "link": item.link,
+                "tool": TOOLS.get(item.id, ""),
+                "accepted_note": item.accepted_note,
+                "stale_note": item.stale_note,
+                "owner": item.owner,
+                "review_date": item.review_date,
+                "review_passed": item.review_passed,
+            }
+            for item in report.items
+        ],
+    }
 
 
 @app.get("/ship", response_class=HTMLResponse)
@@ -2563,12 +2778,11 @@ def ship_page(request: Request) -> HTMLResponse:
         "ship_check.html",
         {
             "active": "ship",
-            "page_title": "Can we release this feature?",
+            "page_title": "Make the release call with the reasons attached.",
             "page_lede": (
-                "Ship check reads what the other desks already worked out and turns "
-                "it into one decision you can defend. Nothing is sent to an AI."
+                "Rules and your own results decide this — not AI text."
             ),
-            "eyebrow": "Ship check",
+            "eyebrow": "04 · Ship check",
         },
     )
 
@@ -2799,13 +3013,12 @@ def matrix_page(request: Request) -> HTMLResponse:
         "test_matrix.html",
         {
             "active": "matrix",
-            "page_title": "Which runs actually need testing?",
+            "page_title": "Test the combinations that matter.",
             "page_lede": (
-                "Browsers times devices times roles times languages is hundreds of "
-                "runs. Code works out the fewest runs where every two options are "
-                "still tested together, and proves it."
+                "Code finds the fewest runs where every two options are tested "
+                "together, and proves it."
             ),
-            "eyebrow": "Test matrix",
+            "eyebrow": "03 · Test matrix",
         },
     )
 

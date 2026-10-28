@@ -87,7 +87,9 @@ def test_the_banner_sits_above_the_score(monkeypatch) -> None:
         data={"user_story": PROFILE_STORY},
         headers=KEYS_HEADER,
     ).text
-    assert body.index("pq-epic") < body.index('class="verdict"')
+    # The banner is swapped into its own slot above both columns, so it is
+    # still the first thing on the page and the first thing in the answer.
+    assert body.index("pq-epic") < body.index('class="clarity-num"')
 
 
 def test_the_lockout_story_shows_no_banner(monkeypatch) -> None:

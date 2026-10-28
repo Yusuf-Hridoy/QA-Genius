@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% import "_icons.html" as icons %}
+{% block title %}My stories — QA-Genius{% endblock %}
+{% block top_title %}My stories{% endblock %}
+{% block content %}
+{% from "_form_fields.html" import field %}
+{# Everything on this page is read from this browser by public/stories.js.
+   The server knows nothing about any of it. #}
+<div class="page-head">
+  <span class="eyebrow">My stories</span>
+  <h1 class="page-title">All your stories in one place.</h1>
+  <p class="lede">Saved in this browser until you delete them.</p>
+</div>
+
+<div class="card stories-bar">
+  <div class="row">
+    {% call field("stories-search", "Search", hint="By ID or by what the story says.") %}
+    <input type="search" id="stories-search" placeholder="CART-204, or saved cart…">
+    {% endcall %}
+    {% call field("stories-status", "Status") %}
+    <select id="stories-status">
+      <option value="all">All statuses</option>
+      <option value="draft">Draft</option>
+      <option value="review">Ready for review</option>
+      <option value="done">Done</option>
+    </select>
+    {% endcall %}
+    {% call field("stories-sort", "Sort by") %}
+    <select id="stories-sort">
+      <option value="edited">Last edited</option>
+      <option value="label">ID</option>
+    </select>
+    {% endcall %}
+    <span class="spacer"></span>
+    <button type="button" class="btn btn-primary" id="stories-new">New story
+      {{ icons.icon("arrow-right", 15) }}</button>
+  </div>
+</div>
+
+<div id="stories-list"></div>
+
+<div class="card">
+  <h2 class="card-title">Keep a copy, or start again</h2>
+  <p class="muted">Your stories live in this browser only. Export writes them all to one
+    file you can keep or move to another computer.</p>
+  <div class="row">
+    <button type="button" class="btn" id="stories-export">Export all (JSON)</button>
+    <button type="button" class="btn" id="stories-import">Import</button>
+    <input type="file" id="stories-file" accept="application/json,.json" hidden>
+    <span class="spacer"></span>
+    <button type="button" class="btn btn-danger" id="stories-delete-all">Delete all my stories</button>
+  </div>
+  <p class="muted small" id="stories-io-status" aria-live="polite"></p>
+  <div class="card delete-all-box" id="delete-all-box" hidden>
+    <p class="note note-bad">This deletes every story in this browser. It cannot be
+      undone.</p>
+    {% call field("delete-all-word", "Type DELETE to confirm") %}
+    <input type="text" id="delete-all-word" placeholder="DELETE" autocomplete="off">
+    {% endcall %}
+    <div class="form-actions">
+      <button type="button" class="btn btn-danger" id="delete-all-go">Delete them all</button>
+      <button type="button" class="btn" id="delete-all-cancel">Cancel</button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}<script src="/stories.js" defer></script>{% endblock %}

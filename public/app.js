@@ -174,7 +174,7 @@
       if (dot) {
         dot.hidden = true;
       }
-      text.textContent = "Add API key";
+      text.textContent = "Add AI key";
     }
     /* On a narrow phone the words are hidden, so the chip carries them. */
     chip.setAttribute("aria-label", text.textContent);
@@ -931,7 +931,9 @@
         ? li.previousElementSibling.dataset.needs
         : "story";
       if (has(needs)) {
-        li.classList.add("done");
+        /* Reachable, not finished: a step you can open still shows its
+         * number. Only a step behind you shows a tick. */
+        li.classList.add("ready");
         return;
       }
       li.classList.add("locked");
@@ -1254,6 +1256,43 @@
     active.scrollIntoView({ inline: "center", block: "nearest" });
   }
 
+  /* The Overview offers "Load an example" for a reader with no story yet.
+   * It cannot run the example itself - the example lives on the Story desk -
+   * so it links here with ?example=1 and this presses the button. */
+  function initExampleLink() {
+    if (new URLSearchParams(window.location.search).get("example") !== "1") return;
+    var button = document.getElementById("load-example");
+    if (button) button.click();
+  }
+
+  /* "Show all" on a list that was cut to five. One handler on the document,
+   * because the list arrives with an HTMX swap long after this runs. */
+  function initShowAll() {
+    document.addEventListener("click", function (event) {
+      var button = event.target;
+      while (button && button !== document) {
+        if (button.id === "reasons-show-all") break;
+        button = button.parentNode;
+      }
+      if (!button || button === document || !button.id) return;
+      var card = button.parentNode;
+      var hidden = card.querySelectorAll(".reason-more");
+      Array.prototype.forEach.call(hidden, function (one) {
+        one.hidden = false;
+      });
+      button.hidden = true;
+    });
+  }
+
+  /* The outlined pill beside a page title. A desk calls this once it knows
+   * its own numbers; an empty text hides the pill again. */
+  function setPagePill(text) {
+    var pill = document.getElementById("page-pill");
+    if (!pill) return;
+    pill.textContent = text || "";
+    pill.hidden = !text;
+  }
+
   function initHomeKeyButton() {
     var btn = document.getElementById("home-add-key");
     if (btn) {
@@ -1273,6 +1312,8 @@
     initInputCards();
     initScrollToAnswer();
     initHomeKeyButton();
+    initExampleLink();
+    initShowAll();
     initFields();
     initNavScroll();
   });
@@ -1354,6 +1395,7 @@
   });
 
   window.QAG = {
+    setPagePill: setPagePill,
     NOT_A_KEY: NOT_A_KEY,
     looksLikeKey: looksLikeKey,
     callsTheAi: callsTheAi,

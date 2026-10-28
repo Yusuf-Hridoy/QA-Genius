@@ -9,6 +9,10 @@ QA-Genius is a free, open-source workspace for QA engineers. Paste a user story 
 
 ![QA-Genius home](docs/screenshots/01-home.png)
 
+> The screenshots in this README are from the look before the redesign. Retake
+> them with `python scripts/ui_screenshots.py` once the `redesign` branch is
+> merged.
+
 ---
 
 ## Why not just ask ChatGPT?
@@ -61,9 +65,27 @@ Browsers × devices × roles × languages is hundreds of combinations. QA-Genius
 
 ![Test matrix](docs/screenshots/07-test-matrix.png)
 
+### Several stories
+
+Work on more than one story and keep them all. **Save draft** gives a story an ID you
+choose (`CART-204`) or one we number for you (`S-001`), and a status — *Draft*, *Ready
+for review* or *Done*. The Overview switches between them with `‹ Story 2 of 5 ›`, and
+**My stories** lists every one with its criteria, tests, high risks with no test and the
+release decision it last got.
+
+Saved stories live in this browser until you delete them. **Export all (JSON)** writes
+them to one file you can keep or move to another computer, and **Import** brings them
+back. A loaded example is never saved over your work — press **Keep this as my story**
+if you want it.
+
 ### 4. Ship check — can we release?
 
-One decision from everything above, computed by code with **no AI**. Seven checks: **How clear the story is**, **Two-reader check**, **Criteria with a test**, **How well tested**, **Risks with a test**, **Automation** and **Test matrix**. A failed check can be accepted with a written reason. **Copy as Markdown** or **Print / save as PDF**.
+One decision from everything above, computed by code with **no AI**. Seven checks: **How clear the story is**, **Two-reader check**, **Criteria with a test**, **How well tested**, **Risks with a test**, **Automation** and **Test matrix**. A failed check can be accepted with a written reason, and optionally an **owner** and a
+**review by** date; once that date has gone by the acceptance stops counting and the
+check goes back to *check this*. Each report also gets a **grade** (A+ to F) worked out
+from the checks that ran — press the letter for the sums behind it. A release the rules
+call *Not ready* is never graded above D. **Copy as Markdown** or **Print / save as
+PDF**.
 
 ![Ship check](docs/screenshots/08-ship-check.png)
 
@@ -79,7 +101,8 @@ Every desk shows what it was built from — **Not built yet**, **Old — your wo
 
 - **Bring your own AI key.** The key drawer lists **Google Gemini (free)**, **Groq (free)**, **OpenAI (GPT)**, **xAI (Grok)**, **Mistral**, **Anthropic (Claude)** and **OpenRouter**. Add more than one — if one is busy or refused, the next one answers.
 - **Keys stay in your browser** (`localStorage`). They are sent only with requests that need the AI, and the server never stores or logs them.
-- **Your work stays in your browser** (`sessionStorage`). There is no database and no account.
+- **The story you are working on stays in this tab** (`sessionStorage`) and goes when the tab closes.
+- **Stories you save stay in this browser** (`localStorage`) **until you delete them**. There is no database and no account: `My stories` lists them, and **Delete all my stories** really deletes them.
 - **Load example** on every desk works with no key at all.
 
 ![Key drawer](docs/screenshots/11-keys.png)
@@ -100,7 +123,7 @@ pip install -r requirements.txt
 uvicorn main:app --reload
 ```
 
-Open **http://127.0.0.1:8000**, click **Add API key** (top right), and paste a key. A free Gemini key: [aistudio.google.com/app/apikey](https://aistudio.google.com/app/apikey).
+Open **http://127.0.0.1:8000**, click **Add AI key** (top right), and paste a key. A free Gemini key: [aistudio.google.com/app/apikey](https://aistudio.google.com/app/apikey).
 
 Check one key from the terminal (the key is never printed):
 

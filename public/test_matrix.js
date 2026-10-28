@@ -137,7 +137,21 @@
     if (!output) return;
     output.innerHTML = html;
     rememberMatrix();
+    paintPagePill();
     if (window.QAGRun) window.QAGRun.announceResult();
+  }
+
+  /* "9 runs · 35 of 35 pairs", read off the matrix that is on screen. */
+  function paintPagePill() {
+    if (!window.QAG || !window.QAG.setPagePill) return;
+    var data = readMatrixData();
+    if (!data || !data.runs) {
+      window.QAG.setPagePill("");
+      return;
+    }
+    window.QAG.setPagePill(
+      data.runs + " runs · " + data.covered_pairs + " of " + data.valid_pairs + " pairs"
+    );
   }
 
   function rebuild() {
@@ -165,6 +179,7 @@
     markRules();
     if (window.QAG && window.QAG.initFields) window.QAG.initFields(root);
     rememberMatrix();
+    paintPagePill();
   }
 
   /* The rule rows carry their parts as data so readRules never parses text. */
@@ -245,15 +260,18 @@
 
   /* ---------- what Ship check reads ---------- */
 
-  function rememberMatrix() {
+  function readMatrixData() {
     var holder = byId("matrix-data");
-    if (!holder) return;
-    var data;
+    if (!holder) return null;
     try {
-      data = JSON.parse(holder.textContent);
+      return JSON.parse(holder.textContent);
     } catch (e) {
-      return;
+      return null;
     }
+  }
+
+  function rememberMatrix() {
+    var data = readMatrixData();
     if (!data || !data.runs) return;
     var run = readRun();
     if (!run) return;
