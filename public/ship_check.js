@@ -158,6 +158,31 @@
   function show(html) {
     var output = byId("ship-output");
     if (output) output.innerHTML = html;
+    liftBanner();
+  }
+
+  /* The decision belongs directly under the page title, and the line that
+   * says how fresh it is belongs inside it. Both are moved rather than
+   * rendered twice, so there is still one of each on the page. */
+  function liftBanner() {
+    var slot = byId("ship-banner-slot");
+    var banner = document.querySelector("#ship-output .ship-banner");
+    var card = byId("source-card");
+    var home = byId("source-card-home");
+    if (!slot) return;
+    if (!banner) {
+      /* No decision on screen: everything goes back where it started. */
+      if (card && home && card.parentNode !== home) home.appendChild(card);
+      slot.textContent = "";
+      return;
+    }
+    slot.textContent = "";
+    slot.appendChild(banner);
+    var words = banner.querySelector(".ship-banner-words");
+    if (card && words && card.parentNode !== words) {
+      card.classList.add("source-in-banner");
+      words.appendChild(card);
+    }
   }
 
   function failed(message) {
@@ -348,6 +373,12 @@
   document.addEventListener("keydown", function (event) {
     if (event.key === "Escape") closeGradeWhy();
   });
+
+  /* source_card.js rewrites its card whenever the run changes, so the card
+   * is put back in the banner after it does. */
+  if (window.QAGRun) {
+    window.addEventListener(window.QAGRun.CHANGED_EVENT, liftBanner);
+  }
 
   document.addEventListener("click", function (event) {
     var target = event.target;

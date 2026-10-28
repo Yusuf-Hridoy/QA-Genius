@@ -159,7 +159,8 @@
       return card;
     }
     var row = el("div", "row empty-actions");
-    var start = el("a", "btn btn-primary", "Start with a story →");
+    /* The one yellow button on this page is New story in the toolbar. */
+    var start = el("a", "btn", "Start with a story →");
     start.href = "/requirements/story";
     row.appendChild(start);
     var example = el("a", "btn", "Load an example");

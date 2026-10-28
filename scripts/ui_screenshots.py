@@ -5,6 +5,7 @@ This script starts nothing. Run the app yourself first:
     uvicorn main:app --reload
     python scripts/ui_screenshots.py                  # 127.0.0.1:8000
     python scripts/ui_screenshots.py http://localhost:9000
+    python scripts/ui_screenshots.py http://localhost:9000 polish-before
 
 Playwright is a development dependency only, so it is not in
 requirements.txt and the deployed app never imports it:
@@ -12,7 +13,7 @@ requirements.txt and the deployed app never imports it:
     pip install playwright
     playwright install chromium
 
-The PNGs land in ui-screens/redesign-r1/, which git ignores. Nothing here
+The PNGs land in ui-screens/<folder>/, which git ignores. Nothing here
 needs an API key: every page is shot empty or with its own Load example
 button, so no request ever reaches a provider.
 
@@ -25,7 +26,8 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-OUT = ROOT / "ui-screens" / "redesign-r1"
+SHOTS_DIR = ROOT / "ui-screens"
+DEFAULT_FOLDER = "redesign-r1"
 
 DEFAULT_BASE = "http://127.0.0.1:8000"
 
@@ -88,7 +90,9 @@ def main(argv: list[str]) -> int:
         return 2
 
     base = (argv[1] if len(argv) > 1 else DEFAULT_BASE).rstrip("/")
-    OUT.mkdir(parents=True, exist_ok=True)
+    # A second argument names the folder, so a before/after pair is two runs.
+    out = SHOTS_DIR / (argv[2] if len(argv) > 2 else DEFAULT_FOLDER)
+    out.mkdir(parents=True, exist_ok=True)
     written: list[Path] = []
 
     with sync_playwright() as play:
@@ -117,7 +121,7 @@ def main(argv: list[str]) -> int:
                             else:
                                 target.first.click()
                                 _settle(page)
-                        shot = OUT / f"{name}-{theme}-{label}.png"
+                        shot = out / f"{name}-{theme}-{label}.png"
                         page.screenshot(path=str(shot), full_page=True)
                         written.append(shot)
                         print(f"wrote {shot.relative_to(ROOT)}")
@@ -125,7 +129,7 @@ def main(argv: list[str]) -> int:
         finally:
             browser.close()
 
-    print(f"\n{len(written)} PNGs in {OUT.relative_to(ROOT)}")
+    print(f"\n{len(written)} PNGs in {out.relative_to(ROOT)}")
     return 0
 
 

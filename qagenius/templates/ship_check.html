@@ -3,12 +3,19 @@
 {% block top_title %}Ship check{% endblock %}
 {% block content %}
 {# ship_check.js fills #ship-root with the story line or the empty state, then
-   posts the run to /ship/report and drops the server's HTML into #ship-output. #}
+   posts the run to /ship/report and drops the server's HTML into #ship-output.
+   The decision is the thing you came for, so once the report is here the
+   banner is moved up into #ship-banner-slot, above the story. #}
+<div id="ship-banner-slot"></div>
 {# The one component that says what this desk is built from and whether
-   that is still current. run_state.js + source_card.js fill it. #}
-<div id="source-card" class="source-card" data-desk="ship" role="status" aria-live="polite"></div>
+   that is still current. run_state.js + source_card.js fill it. With a
+   decision on screen it moves inside the banner as one small line. #}
+<div id="source-card-home">
+  <div id="source-card" class="source-card" data-desk="ship" role="status" aria-live="polite"></div>
+</div>
 <div id="ship-root"></div>
-<p class="muted small">Worked out from your own results by code. No AI, no key needed.</p>
+<p class="muted small" id="ship-how">Worked out from your own results by code.
+  No AI, no key needed.</p>
 <div id="ship-output"></div>
 {% endblock %}
 {% block scripts %}<script src="/ship_check.js" defer></script>{% endblock %}

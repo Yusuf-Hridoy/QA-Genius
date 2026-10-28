@@ -57,6 +57,11 @@ PAIRS = [
 
 AA = 4.5
 
+# AA is the floor the law asks for; it is not the floor a page reads well at.
+# These are what the ink on a card has to clear: main text, the second level,
+# and the quiet text that is left.
+ON_CARD = {"--text": 12.0, "--text-2": 9.0, "--muted": 6.0}
+
 
 def _rgb(value: str) -> tuple[int, int, int]:
     text = value.lstrip("#")
@@ -107,6 +112,32 @@ def test_every_text_pair_clears_aa_in_the_dark_theme() -> None:
     assert _check(DARK, "dark") == []
 
 
+def _reads_well(theme: dict[str, str], label: str) -> list[str]:
+    thin = []
+    for ink, want in ON_CARD.items():
+        ratio = contrast(theme[ink], theme["--card"])
+        if ratio < want:
+            thin.append(f"{label} {ink} on a card: {ratio:.2f}:1, wanted {want}:1")
+    return thin
+
+
+def test_the_ink_on_a_card_is_dark_enough_to_read_in_the_light_theme() -> None:
+    assert _reads_well(LIGHT, "light") == []
+
+
+def test_the_ink_on_a_card_is_dark_enough_to_read_in_the_dark_theme() -> None:
+    assert _reads_well(DARK, "dark") == []
+
+
+def test_the_three_inks_stay_in_order() -> None:
+    """Main text is always darker than the second, and that than the quiet one."""
+    for label, theme in (("light", LIGHT), ("dark", DARK)):
+        main = contrast(theme["--text"], theme["--card"])
+        second = contrast(theme["--text-2"], theme["--card"])
+        quiet = contrast(theme["--muted"], theme["--card"])
+        assert main > second > quiet, label
+
+
 def test_the_dark_theme_redeclares_every_colour_it_changes() -> None:
     """A token the dark block forgets keeps a light value on a dark card."""
     dark_only = _block(':root[data-theme="dark"]')
@@ -149,3 +180,43 @@ def test_the_one_main_button_colour_is_only_the_cta() -> None:
         assert name in DARK, name
     assert LIGHT["--cta"].upper() == "#FFD166"
     assert DARK["--cta"].upper() == "#FFD166"
+
+
+# ── how heavy the text is ────────────────────────────────────────────────────
+
+
+def test_body_text_carries_a_little_more_weight_than_regular() -> None:
+    """450 on the variable axis: the same shapes, enough ink to hold a line."""
+    assert "font-weight:450" in CSS
+    # Thinning every glyph on a Mac is exactly what this used to do.
+    assert "-webkit-font-smoothing:" not in CSS
+
+
+def test_the_sans_is_loaded_as_a_variable_font() -> None:
+    base = (ROOT / "qagenius" / "templates" / "base.html").read_text(encoding="utf-8")
+    assert "family=Noto+Sans:wght@400..700" in base
+
+
+def test_titles_and_big_numbers_are_medium_not_light() -> None:
+    for rule, weight in (
+        (".page-head h1,h1.page-title", "font-weight:500"),
+        (".card-title", "font-weight:500"),
+        (".stat .num,.stat-num", "font-weight:500"),
+    ):
+        start = CSS.index(rule + "{")
+        block = CSS[start : CSS.index("}", start)]
+        assert weight in block, rule
+
+
+def test_a_sentence_is_never_painted_in_the_quiet_ink() -> None:
+    """.muted is what the templates put on second-level sentences."""
+    start = CSS.index("\n.muted{")
+    assert "var(--text-2)" in CSS[start : CSS.index("}", start)]
+
+
+def test_the_senior_tester_chip_is_the_same_amber_everywhere() -> None:
+    """.pill.accent would otherwise win and paint it cobalt on one desk."""
+    assert ".pill.pq-label" in CSS
+    start = CSS.index(".pill.pq-label")
+    block = CSS[start : CSS.index("}", start)]
+    assert "var(--warn-bg)" in block and "var(--warn-fg)" in block

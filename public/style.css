@@ -28,11 +28,12 @@
   --border:#E6E9F4;
   --border-strong:#D3D8EA;
 
-  --text:#1B2140;
-  --text-2:#4A5272;
-  /* The brief's #6B7392 reads at 4.29:1 on the canvas; this clears 4.5:1
-   * on all three surfaces and looks the same. */
-  --muted:#676F8E;
+  /* Ink, darkest first. The old set read at 15:1 / 7.7:1 / 4.9:1 on a card,
+   * which was legal and still thin on a bright screen. These clear 18:1,
+   * 12:1 and 7.5:1, so a sentence holds its weight at 15px. */
+  --text:#0F1430;
+  --text-2:#2E3553;
+  --muted:#4B5373;
 
   --accent:#2E3F99;
   --accent-2:#4C5FD5;
@@ -94,9 +95,9 @@
   --border:#2A3466;
   --border-strong:#3A4680;
 
-  --text:#E9ECF8;
-  --text-2:#B8C0E0;
-  --muted:#8A93B8;
+  --text:#F2F4FC;
+  --text-2:#CDD3EE;
+  --muted:#A3ABCF;
 
   --accent:#9DAEFF;
   --accent-2:#B4C1FF;
@@ -138,13 +139,16 @@
 *{box-sizing:border-box}
 html,body{margin:0;padding:0}
 html{scroll-behavior:smooth}
+/* 450 is Noto Sans's variable axis a little above regular: the same shapes
+ * with enough ink to hold a line of 15px text. The old -webkit-font-smoothing
+ * was what thinned every sentence on a Mac, so it is gone. */
 body{background:var(--canvas);color:var(--text);
   font-family:var(--font-sans);
-  font-size:15px;line-height:1.55;-webkit-font-smoothing:antialiased;
+  font-size:15px;font-weight:450;line-height:1.55;
   text-rendering:optimizeLegibility}
 /* Titles and big numbers are serif; the weight stays light because the
  * shape, not the ink, is what makes a serif title read as a title. */
-h1,h2,h3,h4,.num,.display{font-family:var(--font-serif);
+h1,h2,h3,h4,.num,.display,.stat-num{font-family:var(--font-serif);
   font-weight:500;letter-spacing:-.008em}
 code,pre,.mono{font-family:var(--font-mono)}
 a{color:var(--accent);text-underline-offset:2px}
@@ -176,12 +180,12 @@ a{color:var(--accent);text-underline-offset:2px}
   box-shadow:0 2px 10px rgba(0,0,0,.25)}
 .logo-words{line-height:1.15}
 .logo-sub{display:block;font-family:var(--font-mono);font-size:10px;
-  font-weight:400;letter-spacing:.14em;text-transform:uppercase;
+  font-weight:500;letter-spacing:.14em;text-transform:uppercase;
   color:var(--rail-ink-2);margin-top:3px}
 
 .nav-group{padding:10px 12px 2px}
 .nav-label{padding:10px 12px 8px;font-family:var(--font-mono);font-size:10.5px;
-  font-weight:400;letter-spacing:.14em;text-transform:uppercase;
+  font-weight:500;letter-spacing:.14em;text-transform:uppercase;
   color:var(--rail-ink-2)}
 .nav{display:flex;flex-direction:column;gap:2px;padding:0}
 .nav a{display:flex;align-items:center;gap:12px;padding:10px 14px;
@@ -203,7 +207,7 @@ a{color:var(--accent);text-underline-offset:2px}
 
 .rail-foot{margin-top:auto;padding:16px;display:flex;flex-direction:column;
   gap:4px;border-top:1px solid rgba(255,255,255,.1)}
-.rail-foot-label{font-family:var(--font-mono);font-size:10.5px;
+.rail-foot-label{font-family:var(--font-mono);font-size:10.5px;font-weight:500;
   letter-spacing:.12em;text-transform:uppercase;color:var(--rail-ink)}
 .rail-foot-line{font-size:12.5px;color:var(--rail-ink-2)}
 .rail-foot strong{color:var(--rail-ink);font-weight:600}
@@ -255,13 +259,14 @@ a{color:var(--accent);text-underline-offset:2px}
   grid-template-columns:minmax(0,1fr) auto;gap:10px 18px;align-items:start}
 .page-head > :not(.page-pill){grid-column:1}
 .page-head h1,h1.page-title{margin:0;font-family:var(--font-serif);
-  font-size:40px;font-weight:400;line-height:1.1;letter-spacing:-.012em}
+  font-size:40px;font-weight:500;line-height:1.1;letter-spacing:-.012em}
 h1.page-title-hero{font-size:56px}
 .page-head .lede{margin:7px 0 0;color:var(--text-2);font-size:15px;max-width:68ch}
 .page-head .row{margin-top:14px}
 .page-pill{grid-column:2;grid-row:1 / span 3;justify-self:end;align-self:center;
-  font-family:var(--font-mono);font-size:11.5px;letter-spacing:.08em;
-  text-transform:uppercase;color:var(--text-2);background:var(--card);
+  font-family:var(--font-mono);font-size:11.5px;font-weight:500;
+  letter-spacing:.08em;text-transform:uppercase;color:var(--text-2);
+  background:var(--card);
   border:1px solid var(--border-strong);border-radius:999px;padding:5px 12px;
   white-space:nowrap}
 .eyebrow{display:inline-flex;align-items:center;gap:8px;
@@ -269,7 +274,7 @@ h1.page-title-hero{font-size:56px}
   letter-spacing:.14em;text-transform:uppercase;
   color:var(--accent);margin-bottom:9px}
 .card-title{margin:0 0 10px;font-family:var(--font-serif);font-size:22px;
-  font-weight:400;letter-spacing:-.008em;line-height:1.25}
+  font-weight:500;letter-spacing:-.008em;line-height:1.25}
 @media (max-width:760px){
   .page-head{grid-template-columns:minmax(0,1fr)}
   .page-pill{grid-column:1;grid-row:auto;justify-self:start}
@@ -283,7 +288,7 @@ h1.page-title-hero{font-size:56px}
   box-shadow:var(--shadow-1)}
 .card-raised{box-shadow:var(--shadow-2)}
 /* One size for a card title, one for a sub-section inside it. */
-.card h2{margin:0 0 10px;font-size:22px;font-weight:400;letter-spacing:-.008em}
+.card h2{margin:0 0 10px;font-size:22px;font-weight:500;letter-spacing:-.008em}
 .card h3{margin:18px 0 8px;font-family:var(--font-sans);font-size:14px;
   font-weight:600;letter-spacing:-.008em}
 .card > h3:first-child{margin-top:0}
@@ -356,10 +361,10 @@ h1.page-title-hero{font-size:56px}
   transition:transform .16s var(--ease),box-shadow .16s var(--ease)}
 .stat:hover{transform:translateY(-1px);box-shadow:var(--shadow-2)}
 .stat .num,.stat-num{font-family:var(--font-serif);font-size:30px;
-  font-weight:400;line-height:1.1;letter-spacing:-.01em;display:block}
+  font-weight:500;line-height:1.1;letter-spacing:-.01em;display:block}
 .stat .num .unit{font-size:16px;font-weight:600;color:var(--text-2);
   letter-spacing:0;margin-left:1px}
-.stat .lbl,.stat-label{font-size:13px;color:var(--muted);margin-top:4px;
+.stat .lbl,.stat-label{font-size:13px;color:var(--text-2);margin-top:4px;
   font-weight:500}
 .stat-accent .num{color:var(--accent)}
 .stat.stat-bad{background:var(--bad-bg);border-color:color-mix(in srgb,var(--bad-line) 34%,transparent)}
@@ -416,8 +421,8 @@ h1.page-title-hero{font-size:56px}
 .chip-warn{background:var(--warn-bg);color:var(--warn-fg)}
 .chip-bad{background:var(--bad-bg);color:var(--bad-fg)}
 .chip-info{background:var(--info-bg);color:var(--info-fg)}
-.chip-id{font-family:var(--font-mono);font-size:11.5px;letter-spacing:.02em;
-  background:var(--accent-soft);color:var(--accent-ink)}
+.chip-id{font-family:var(--font-mono);font-size:11.5px;font-weight:500;
+  letter-spacing:.02em;background:var(--accent-soft);color:var(--accent-ink)}
 /* An id is a label, not a state, so it never carries the pill's dot. */
 .pill.chip-id{font-family:var(--font-mono);font-size:11.5px}
 .pill.chip-id::before{display:none}
@@ -592,7 +597,7 @@ input[type=checkbox],input[type=radio]{width:16px;height:16px;
  * line and its counter. _form_fields.html is the only place that writes it. */
 .field{margin-bottom:18px}
 .field > label,.field > legend.label{display:block;font-size:14px;
-  font-weight:600;margin-bottom:3px;color:var(--text)}
+  font-weight:500;margin-bottom:3px;color:var(--text)}
 /* "(optional)" reads the same wherever it sits - beside a field label or in
  * a collapsible section's summary. */
 .opt{font-weight:400;color:var(--muted)}
@@ -613,9 +618,12 @@ input[type=checkbox],input[type=radio]{width:16px;height:16px;
  * words, same size, on every desk. The blocks around it stay quiet so the
  * AI's own answer is still the thing you read first.
  */
-.pq-label{flex:none;letter-spacing:.01em;background:var(--warn-bg);
-  color:var(--warn-fg)}
-.pq-label::before{display:none}
+/* One chip for the senior tester, the same amber on every desk. It is written
+ * as .pill.pq-label because .pill.accent would otherwise win on specificity
+ * and paint it cobalt on the test-cases card. */
+.pill.pq-label,.chip.pq-label,.pq-label{flex:none;letter-spacing:.01em;
+  font-weight:500;background:var(--warn-bg);color:var(--warn-fg)}
+.pill.pq-label::before,.pq-label::before{display:none}
 .pq-epic{border-color:color-mix(in srgb,var(--warn-line) 40%,transparent);
   background:linear-gradient(160deg,var(--warn-bg),var(--card));
   margin-bottom:16px}
@@ -668,7 +676,7 @@ input[type=checkbox],input[type=radio]{width:16px;height:16px;
 .form-body{max-width:var(--form-w)}
 .form-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap;
   border-top:1px solid var(--border);padding-top:16px;margin-top:6px}
-.form-note{font-size:12px;color:var(--muted);margin:8px 0 0}
+.form-note{font-size:12px;color:var(--text-2);margin:8px 0 0}
 .form-note:empty{display:none}
 .field-link{margin:6px 0 0;font-size:12.5px}
 /* The key is hidden; Show sits beside it rather than under it. */
@@ -754,7 +762,7 @@ table.grid,table.table{width:100%;border-collapse:separate;border-spacing:0;
 table.grid th,table.grid td,table.table th,table.table td{text-align:left;
   padding:11px 14px;border-bottom:1px solid var(--border);vertical-align:top}
 table.grid th,table.table th{font-family:var(--font-mono);font-size:12px;
-  color:var(--muted);font-weight:500;letter-spacing:.06em;
+  color:var(--text-2);font-weight:500;letter-spacing:.06em;
   text-transform:uppercase;background:var(--card-2)}
 table.grid tbody tr:last-child td,table.table tbody tr:last-child td{
   border-bottom:none}
@@ -797,7 +805,10 @@ mark{background:var(--warn-bg);color:var(--warn-fg);border-radius:3px;
 .htmx-request.htmx-indicator{display:inline-flex}
 /* A busy button keeps its label - app.js swaps the word and adds the
  * spinner. Hiding the label here left an empty button mid-request. */
-.muted{color:var(--muted)}
+/* .muted is what the templates put on a second-level sentence, so it takes
+ * the second ink, not the quietest one. --muted itself is kept for text that
+ * really is minor: a timestamp, a hint under a field, a placeholder. */
+.muted{color:var(--text-2)}
 .small{font-size:13px}
 .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
 .key-panel{border:1px solid var(--accent)}
@@ -960,7 +971,7 @@ mark{background:var(--warn-bg);color:var(--warn-fg);border-radius:3px;
 @media (max-width:1000px){.overview-grid{grid-template-columns:1fr}}
 
 #overview-steps .step-state{margin-left:auto;font-size:11.5px;
-  color:var(--muted);white-space:nowrap}
+  color:var(--text-2);white-space:nowrap}
 #overview-steps li.done .step-state{color:var(--ok-fg)}
 
 /* The workbench is the one cobalt block on the page: your story, how clear
@@ -972,8 +983,8 @@ mark{background:var(--warn-bg);color:var(--warn-fg);border-radius:3px;
   background:radial-gradient(420px 220px at 100% 0%,rgba(255,255,255,.1),transparent 70%)}
 .bench > *{position:relative;z-index:1}
 .bench-top{display:flex;align-items:center;gap:12px}
-.bench-label{font-family:var(--font-mono);font-size:11px;letter-spacing:.14em;
-  text-transform:uppercase;color:var(--rail-ink-2)}
+.bench-label{font-family:var(--font-mono);font-size:11px;font-weight:500;
+  letter-spacing:.14em;text-transform:uppercase;color:var(--rail-ink-2)}
 .bench-slot{margin-left:auto;display:flex;align-items:center;gap:8px;
   flex-wrap:wrap;justify-content:flex-end}
 .bench-count{font-size:12.5px;color:var(--rail-ink-2);white-space:nowrap}
@@ -1123,7 +1134,8 @@ tr.diff-row td:first-child{box-shadow:inset 3px 0 0 var(--warn-line)}
   gap:12px;align-items:center;padding:9px 14px;
   background:var(--card-2);border:1px solid var(--border);
   border-radius:var(--r);font-family:var(--font-mono);font-size:12px;
-  letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+  font-weight:500;letter-spacing:.06em;text-transform:uppercase;
+  color:var(--text-2)}
 .tc-row-card{padding:0;margin:0;overflow:hidden}
 .tc-row{display:grid;grid-template-columns:28px 1fr;align-items:center;
   padding:0 0 0 14px;gap:0}
@@ -1277,7 +1289,7 @@ tr.diff-row td:first-child{box-shadow:inset 3px 0 0 var(--warn-line)}
 .check-tile.tile-bad .check-mark{color:var(--bad-fg)}
 .check-tile.tile-info .check-mark{color:var(--info-fg)}
 .check-title{margin:0;font-weight:600;font-size:13.5px}
-.check-line{margin:3px 0 0;font-size:13px;opacity:.95}
+.check-line{margin:3px 0 0;font-size:13px;opacity:1}
 .check-more summary{font-size:12.5px;padding:6px 0 0}
 .check-more .grid{margin-top:6px;font-size:13px}
 .file-code-head{margin-bottom:8px}
@@ -1305,14 +1317,14 @@ tr.diff-row td:first-child{box-shadow:inset 3px 0 0 var(--warn-line)}
 .shot-thumb{width:64px;height:64px;object-fit:cover;border-radius:var(--r-sm);
   border:1px solid var(--border);flex:0 0 64px}
 .shot-shown{margin-bottom:10px}
-.shot-shown figcaption{color:var(--muted);font-size:13px;margin-top:4px}
+.shot-shown figcaption{color:var(--text-2);font-size:13px;margin-top:4px}
 .check-rows{list-style:none;margin:12px 0 0;padding:0;font-size:14px}
 .check-rows li{margin:7px 0;display:flex;gap:8px;align-items:baseline;
   flex-wrap:wrap}
 .checklist{list-style:none;margin:8px 0;padding:0;font-size:14px}
 .checklist li{margin:4px 0}
 .two-cols{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-top:8px}
-.two-cols h3{margin:0 0 4px;font-size:12px;color:var(--muted);
+.two-cols h3{margin:0 0 4px;font-size:12px;color:var(--text-2);
   letter-spacing:.07em;text-transform:uppercase;font-weight:700}
 @media (max-width:768px){.two-cols{grid-template-columns:1fr}}
 
@@ -1322,12 +1334,12 @@ tr.diff-row td:first-child{box-shadow:inset 3px 0 0 var(--warn-line)}
 /* The risk list is the wide column now; the map sits under both. */
 .risk-split-2{grid-template-columns:minmax(0,60fr) minmax(0,40fr)}
 @media (max-width:1100px){.risk-split-2{grid-template-columns:1fr}}
-.risk-heat h3{margin:16px 0 6px;font-size:11.5px;color:var(--muted);
+.risk-heat h3{margin:16px 0 6px;font-size:11.5px;color:var(--text-2);
   letter-spacing:.07em;text-transform:uppercase;font-weight:700}
 .risk-heat h3:first-child{margin-top:0}
 
 table.heat{border-collapse:separate;border-spacing:3px;width:100%}
-.heat-axis{font-size:10.5px;color:var(--muted);font-weight:700;
+.heat-axis{font-size:10.5px;color:var(--text-2);font-weight:700;
   text-align:center;padding:2px;white-space:nowrap;letter-spacing:.04em}
 /* The axis says "Bad 5" and "Likely 3" in words. Under 420px the row has no
  * space for them, so it keeps "B5" and "L3" and the words stay in aria-label. */
@@ -1409,7 +1421,7 @@ table.heat{border-collapse:separate;border-spacing:3px;width:100%}
 .coverage.warn{color:var(--warn-fg)}
 .coverage.bad{color:var(--bad-fg)}
 .score-row{margin-top:10px}
-.score-field{font-size:12px;color:var(--muted);display:inline-flex;gap:6px;
+.score-field{font-size:12px;color:var(--text-2);display:inline-flex;gap:6px;
   align-items:center}
 /* Three scores side by side: the control system's 140px would push the last
  * one onto its own line, so they keep a number's width. */
@@ -1504,7 +1516,7 @@ body[data-card-primary="automation"] #automation-generate.btn-primary:hover{
 .next-chip:hover{border-color:var(--border-strong);box-shadow:var(--shadow-2);
   text-decoration:none}
 .next-name{font-size:13.5px;font-weight:600}
-.next-state{font-size:11.5px;color:var(--muted)}
+.next-state{font-size:11.5px;color:var(--text-2)}
 .next-chip[data-state="stale"]{border-color:color-mix(in srgb,var(--warn-line) 45%,transparent)}
 .next-chip[data-state="stale"] .next-state{color:var(--warn-fg)}
 .next-chip[data-state="fresh"] .next-state{color:var(--ok-fg)}
@@ -1628,7 +1640,18 @@ svg.next-mark{color:var(--ok-line)}
   border:1px solid var(--border);background:var(--card);
   box-shadow:var(--shadow-1)}
 .ship-banner-words{flex:1 1 320px;min-width:0}
-.ship-banner-label{font-family:var(--font-mono);font-size:11px;
+/* Inside the banner the freshness card is one line, not a card: no box, no
+ * background, no shadow -- it belongs to the banner it sits in. */
+.source-card.source-in-banner{background:transparent;border:none;
+  box-shadow:none;padding:0;margin:10px 0 0;font-size:13px;
+  align-items:center;gap:8px}
+.source-card.source-in-banner .source-title{font-size:13px}
+.source-card.source-in-banner .source-mark{width:16px;height:16px;flex:0 0 16px;
+  margin-top:0}
+.source-card.source-in-banner .source-detail,
+.source-card.source-in-banner .source-extra{font-size:12.5px}
+.source-card.source-in-banner .source-body{flex:1 1 220px}
+.ship-banner-label{font-family:var(--font-mono);font-size:11px;font-weight:500;
   letter-spacing:.14em;text-transform:uppercase;color:var(--text-2)}
 .ship-banner .ship-verdict-label{margin:6px 0 6px;font-size:32px;
   font-family:var(--font-serif);font-weight:400;letter-spacing:-.01em}

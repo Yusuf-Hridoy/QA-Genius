@@ -50,9 +50,10 @@
     var count = byId("nav-stories-count");
     var store = stories();
     if (!link || !store) return;
-    var many = store.count();
-    link.hidden = many === 0;
-    if (count) count.textContent = String(many);
+    /* Always on the rail, even at nought: "My stories · 0" is how a reader
+     * finds out the page exists. */
+    link.hidden = false;
+    if (count) count.textContent = String(store.count());
   }
 
   /* ---------- the id and status beside the page title ---------- */
