@@ -118,10 +118,16 @@
           No test for this yet
           {% endif %}
         </p>
-        <p class="risk-why-head"><strong>Why these scores</strong></p>
+        {# Once somebody has moved a score, these are their scores and the
+           card stops calling them typical ones. #}
+        <p class="risk-why-head"><strong>{{ "Your scores" if yours else "Why these scores" }}</strong></p>
         {% if item.risk.source == "principal-qa" %}
         <p class="small"><strong>How bad {{ item.risk.severity }} · how likely {{ item.risk.likelihood }} · how hard to notice {{ item.risk.detectability }}</strong>
-          — {{ item.risk.severity_reason or "Typical scores for this kind of problem." }}</p>
+          {# The senior-tester rules write "Typical scores for this kind of
+             problem" into the reason itself. Once a reader has typed their
+             own numbers, that sentence is about somebody else's. A reason
+             somebody actually wrote is left alone. #}
+          — {% if yours and item.risk.severity_reason in ["", pack_score_reason] %}Your scores.{% else %}{{ item.risk.severity_reason or "Typical scores for this kind of problem." }}{% endif %}</p>
         {% else %}
         <p class="small"><strong>How bad {{ item.risk.severity }}</strong> — {{ item.risk.severity_reason or "no reason given" }}</p>
         <p class="small"><strong>How likely {{ item.risk.likelihood }}</strong> — {{ item.risk.likelihood_reason or "no reason given" }}</p>
@@ -140,7 +146,9 @@
             {% endfor %}
           </div>
         </div>
-        {% if item.risk.source == "principal-qa" %}
+        {% if yours %}
+        <p class="muted small">Your scores. Change any of them again whenever you like.</p>
+        {% elif item.risk.source == "principal-qa" %}
         <p class="muted small">These scores come from QA-Genius's testing rules. Change any of them to your own.</p>
         {% else %}
         <p class="muted small">These scores are the AI's guess. Change any of them to your own.</p>
@@ -175,7 +183,7 @@
               {% endcall %}
             </div>
             <div class="form-actions">
-              <button type="button" class="btn btn-sm risk-accept-save" data-risk-id="{{ item.risk.id }}">Save</button>
+              <button type="button" class="btn btn-sm btn-pop-save risk-accept-save" data-risk-id="{{ item.risk.id }}">Save</button>
               <button type="button" class="btn btn-sm risk-accept-cancel" data-risk-id="{{ item.risk.id }}">Cancel</button>
               <span class="muted small risk-accept-status" aria-live="polite"></span>
             </div>

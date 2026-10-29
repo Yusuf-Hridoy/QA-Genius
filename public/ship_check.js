@@ -54,6 +54,10 @@
     /* The context carries limits the criteria do not, so Ship check reads
      * it the same way the test-cases desk does. */
     var payload = { story: run.story || "", context: run.context || "" };
+    /* The story's own id and status travel with it, so the report and the
+     * Markdown behind it both say which story they are about. */
+    if (run.story_label) payload.story_label = run.story_label;
+    if (run.story_status) payload.story_status = run.story_status;
     if (run.story_analysis) payload.story_analysis = run.story_analysis;
     if (run.duel_summary) payload.duel_summary = run.duel_summary;
     if (run.test_cases && run.test_cases.result) {
@@ -353,21 +357,30 @@
 
   /* ---------- wiring ---------- */
 
+  /* Two ways in, one panel: the circle itself, and the line of words under
+   * it that says what the letter is for. */
+  function gradeButtons() {
+    return [byId("grade-circle"), byId("grade-open")].filter(Boolean);
+  }
+
   function toggleGradeWhy() {
-    var button = byId("grade-circle");
     var panel = byId("grade-why");
-    if (!button || !panel) return;
-    var open = button.getAttribute("aria-expanded") === "true";
-    button.setAttribute("aria-expanded", open ? "false" : "true");
+    var buttons = gradeButtons();
+    if (!panel || !buttons.length) return;
+    var open = !panel.hidden;
     panel.hidden = open;
+    buttons.forEach(function (button) {
+      button.setAttribute("aria-expanded", open ? "false" : "true");
+    });
   }
 
   function closeGradeWhy() {
-    var button = byId("grade-circle");
     var panel = byId("grade-why");
-    if (!button || !panel || panel.hidden) return;
-    button.setAttribute("aria-expanded", "false");
+    if (!panel || panel.hidden) return;
     panel.hidden = true;
+    gradeButtons().forEach(function (button) {
+      button.setAttribute("aria-expanded", "false");
+    });
   }
 
   document.addEventListener("keydown", function (event) {
@@ -396,8 +409,9 @@
       printReport();
       return;
     }
-    /* The grade circle opens the sums behind the letter, and closes again. */
-    if (target.closest("#grade-circle")) {
+    /* The grade circle, and the line under it, both open the sums behind
+     * the letter and both close them again. */
+    if (target.closest("#grade-circle") || target.closest("#grade-open")) {
       toggleGradeWhy();
       return;
     }

@@ -24,7 +24,11 @@ from qagenius import (
     risk_register_exports,
     ship_report_exports,
 )
-from qagenius.automation_checks import CheckReport, check_project
+from qagenius.automation_checks import (
+    CheckReport,
+    check_project,
+    is_python_framework,
+)
 from qagenius.automation_exports import build_zip, run_steps, useful_notes
 from qagenius.bug_report import BugInput, environment_text, reproducibility_text
 from qagenius.bug_report_checks import Check, check_report, quality_score
@@ -78,6 +82,7 @@ from qagenius.providers import PROVIDERS, get_provider, pick_default
 from qagenius.report_parsers import ReportError, RunReport, parse_report
 from qagenius.shadow_qa.review import (
     CODING_RULES,
+    PACK_SCORE_REASON,
     PRINCIPAL_PREFIX,
     PRINCIPAL_SOURCE,
     CaseReview,
@@ -104,6 +109,7 @@ from qagenius.acceptance import (
 )
 from qagenius.ship_grade import grade_for
 from qagenius.ship_check import (
+    ACCEPTABLE,
     CHECK_IDS,
     MAX_DETAILS,
     MatrixRun,
@@ -245,6 +251,24 @@ async def report_key_results(request: Request, call_next):
 # Every template that shows model text uses this to take the confidence
 # tag off the end of a line and show it as a pill instead.
 templates.env.filters["confidence"] = split_confidence
+
+
+def plain_name(text: str) -> str:
+    """A field name as a person would say it: coupon_processing_speed ->
+    "Coupon processing speed".
+
+    The two readers name the things they read in the spelling a developer
+    gave them. A tester reading the comparison should not have to translate
+    snake_case back into English to see what the two disagreed about.
+    """
+    words = " ".join(str(text or "").replace("_", " ").replace("-", " ").split())
+    if not words:
+        return ""
+    # Only the first word: the rest may be a product name that owns its case.
+    return words[0].upper() + words[1:]
+
+
+templates.env.filters["plain_name"] = plain_name
 # Plain words for values the code compares: the data keeps its spelling, the
 # screen gets the words. Globals, so every template that shows a card has them.
 templates.env.globals["category_words"] = CATEGORY_WORDS
@@ -254,6 +278,14 @@ templates.env.globals["syntax_words"] = SYNTAX_WORDS
 @app.get("/health")
 def health() -> str:
     return "ok"
+
+
+# What a story id may be made of. The same sentence is in public/story_store.js
+# and public/requirements_flow.js; a reader who types a bad one is told the
+# rule rather than having it silently changed for them.
+LABEL_RULE = "Use letters, numbers, - or _ (max 24)."
+LABEL_MAX = 24
+LABEL_SHAPE = re.compile(r"^[A-Za-z0-9_-]{1,24}$")
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -271,7 +303,9 @@ def stories_page(request: Request) -> HTMLResponse:
 @app.get("/requirements/story", response_class=HTMLResponse)
 def story_page(request: Request) -> HTMLResponse:
     return templates.TemplateResponse(
-        request, "story.html", {"active": "requirements"}
+        request,
+        "story.html",
+        {"active": "requirements", "label_rule": LABEL_RULE},
     )
 
 
@@ -1044,12 +1078,22 @@ def _coverage_pill(percent: int) -> str:
     return "bad"
 
 
-def _nothing_to_add_line(review: CaseReview) -> str:
+def _nothing_to_add_line(review: CaseReview, thin: int = 0, total: int = 0) -> str:
     """What the box says when the AI left the senior tester nothing to do.
 
     The box used to disappear in that case, which reads as "the rules did
     not run" rather than "the rules ran and found nothing".
+
+    "Nothing to add" is about this reviewer's own list of extra cases. It
+    was read as "this suite is finished", on a page that was at the same
+    time saying four of five criteria still needed more tests. When that is
+    true the line says so instead, and says where to look.
     """
+    if thin and total:
+        return (
+            f"No extra tests to add — but {thin} of {_criteria_word(total)} "
+            "still need more tests (see below)."
+        )
     checked = len(review.covered)
     if not checked:
         return (
@@ -1063,10 +1107,14 @@ def _nothing_to_add_line(review: CaseReview) -> str:
     )
 
 
-def _review_line(review: CaseReview) -> str:
+def _criteria_word(total: int) -> str:
+    return "1 criterion" if total == 1 else f"{total} criteria"
+
+
+def _review_line(review: CaseReview, thin: int = 0, total: int = 0) -> str:
     """The one line on the Principal QA review card, before it is opened."""
     if not review.added and not review.conflicts:
-        return _nothing_to_add_line(review)
+        return _nothing_to_add_line(review, thin, total)
     parts = []
     # A test that argues with a criterion is the most valuable thing here,
     # so it is said before anything that was added.
@@ -1127,7 +1175,11 @@ def _test_cases_result_context(
         "notes": notes,
         "provider_name": provider_name,
         "review": review,
-        "review_line": _review_line(review) if review else "",
+        "review_line": (
+            _review_line(review, len(depth.thin_ids), len(depth.rows))
+            if review
+            else ""
+        ),
         "is_principal": is_principal,
         "pq_reason": reason_for,
     }
@@ -1681,6 +1733,13 @@ def _automation_trace(report: CheckReport, cases: list[TestCase]) -> list[dict]:
     return rows
 
 
+def _syntax_label(script: AutomationScript, errors: list) -> str:
+    """The two or three words above "Code check"."""
+    if errors:
+        return f"{len(errors)} error" + ("s" if len(errors) != 1 else "")
+    return "parsed" if is_python_framework(script) else "brackets match"
+
+
 def _automation_result_context(
     script: AutomationScript,
     report: CheckReport,
@@ -1705,8 +1764,15 @@ def _automation_result_context(
         "warnings": warnings,
         "errors": errors,
         "principal_findings": principal,
-        "syntax_label": "all fine" if not errors else f"{len(errors)} error"
-        + ("s" if len(errors) != 1 else ""),
+        # "all fine" is a claim a bracket count cannot make. Only Python is
+        # read by a parser here; for TypeScript and JavaScript the check is
+        # that brackets and quotes match, and the words say exactly that.
+        "syntax_label": _syntax_label(script, errors),
+        "syntax_note": (
+            "Python is read by a real parser."
+            if is_python_framework(script)
+            else "Quick check: brackets and quotes match (not a full compile)."
+        ),
         "notes": notes,
         "provider_name": provider_name,
         "is_example": is_example,
@@ -2313,6 +2379,7 @@ def _risk_result_context(
     provider_name: str,
     is_example: bool = False,
     answered_line: str = "",
+    yours: bool = False,
 ) -> dict:
     """Every number here is computed from the analysis, never read back from it."""
     report = score_risks(analysis, cases)
@@ -2341,6 +2408,10 @@ def _risk_result_context(
         "notes": notes,
         "provider_name": provider_name,
         "answered_line": answered_line,
+        # Somebody moved a score by hand, so the card stops calling them
+        # typical scores or the AI's guess: they are this reader's own now.
+        "yours": yours,
+        "pack_score_reason": PACK_SCORE_REASON,
         "principal_source": PRINCIPAL_SOURCE,
         # The accept form on this desk writes the same shape Ship check reads.
         "min_reason": MIN_REASON,
@@ -2461,6 +2532,7 @@ def risks_rescore(
         notes=[],
         provider_name="code" if automatic else "your adjusted scores",
         answered_line=RECHECKED_BY_CODE if automatic else ADJUSTED_SCORES,
+        yours=not automatic,
     )
 
 
@@ -2691,12 +2763,33 @@ def _ship_story(raw: dict) -> str:
     return story.strip() if isinstance(story, str) else ""
 
 
+# The three words a story's status can be, as the browser saves them.
+SHIP_STORY_STATUS = {"draft": "Draft", "review": "Ready for review", "done": "Done"}
+
+
+def _ship_named(raw: dict) -> tuple[str, str]:
+    """The story's own id and status, for the top of the report.
+
+    A ship report pasted into a release thread without them is a report
+    nobody can match to a ticket.
+    """
+    label = raw.get("story_label")
+    label = label.strip()[:LABEL_MAX] if isinstance(label, str) else ""
+    if not LABEL_SHAPE.match(label or ""):
+        label = ""
+    status = raw.get("story_status")
+    status = status if isinstance(status, str) else ""
+    return label, SHIP_STORY_STATUS.get(status, "")
+
+
 def _ship_result(
     request: Request,
     report: ShipReport,
     story: str,
     ignored: list[str],
     is_example: bool = False,
+    label: str = "",
+    status_word: str = "",
 ) -> HTMLResponse:
     return templates.TemplateResponse(
         request,
@@ -2705,6 +2798,8 @@ def _ship_result(
             "report": report,
             "is_example": is_example,
             "story": story,
+            "story_label": label,
+            "story_status_word": status_word,
             "story_short": story[:STORY_IN_BANNER],
             "total_checks": len(report.items),
             "verdict_label": VERDICT_LABELS[report.verdict],
@@ -2712,9 +2807,12 @@ def _ship_result(
             "status_tones": SHIP_STATUS_TONES,
             "status_labels": SHIP_STATUS_LABELS,
             "tools": TOOLS,
+            "acceptable": ACCEPTABLE,
             "ignored": ignored,
             # Copy as Markdown reads this; the browser never builds it.
-            "markdown": ship_report_exports.to_markdown(report, story),
+            "markdown": ship_report_exports.to_markdown(
+                report, story, label, status_word
+            ),
             "min_reason": MIN_REASON,
             "max_reason": MAX_REASON,
             "max_owner": MAX_OWNER,
@@ -2844,7 +2942,15 @@ async def ship_report_route(request: Request) -> HTMLResponse:
         return _error_card(request, SHIP_BAD_BODY)
 
     inputs, ignored = _ship_inputs(raw)
-    return _ship_result(request, compute_ship_report(inputs), _ship_story(raw), ignored)
+    label, status_word = _ship_named(raw)
+    return _ship_result(
+        request,
+        compute_ship_report(inputs),
+        _ship_story(raw),
+        ignored,
+        label=label,
+        status_word=status_word,
+    )
 
 
 @app.post("/ship/example", response_class=HTMLResponse)
@@ -2853,12 +2959,15 @@ def ship_example(request: Request) -> HTMLResponse:
     with open(SAMPLES_DIR / "ship_check.json", encoding="utf-8") as f:
         sample = json.load(f)
     inputs, ignored = _ship_inputs(sample)
+    label, status_word = _ship_named(sample)
     return _ship_result(
         request,
         compute_ship_report(inputs),
         _ship_story(sample),
         ignored,
         is_example=True,
+        label=label,
+        status_word=status_word,
     )
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -2870,6 +2979,9 @@ MATRIX_NO_KEY_NOTE = (
     "pick them from your own story."
 )
 MAX_PINNED = 20
+# A factor name and the one line saying why it is worth varying. Both are
+# trimmed rather than refused: a reason too long is still a reason.
+MAX_NAME, MAX_REASON_TEXT = 80, 300
 MATRIX_BAD_INPUT = "Some of that run did not reach the server. Reload the page and try again."
 
 
@@ -2894,9 +3006,21 @@ class MatrixBody(BaseModel):
     factors: list[MatrixFactorBody] = []
     rules: list[MatrixRuleBody] = []
     pinned: list[dict[str, str]] = []
+    # Why each factor is worth varying, by lower-case factor name. The page
+    # showed these once and then lost them on the next edit or reload, so a
+    # reader who came back could not see why anything was there.
+    reasons: dict[str, str] = {}
     # Whether a model proposed these factors, so the footer stays honest
     # when the page is reopened from what the browser saved.
     from_ai: bool = False
+
+    @field_validator("reasons")
+    @classmethod
+    def _short_reasons(cls, value: dict[str, str]) -> dict[str, str]:
+        kept = {}
+        for name, reason in list(value.items())[:MAX_FACTORS]:
+            kept[str(name)[:MAX_NAME]] = str(reason)[:MAX_REASON_TEXT]
+        return kept
 
     @field_validator("factors")
     @classmethod
@@ -2937,7 +3061,9 @@ class MatrixBody(BaseModel):
         return factors, rules
 
 
-def _saved_matrix(raw: str) -> tuple[list[Factor], list[Rule], bool] | None:
+def _saved_matrix(
+    raw: str,
+) -> tuple[list[Factor], list[Rule], bool, dict[str, str]] | None:
     """The factors the browser already has, or None to suggest fresh ones."""
     if not (raw or '').strip():
         return None
@@ -2948,7 +3074,7 @@ def _saved_matrix(raw: str) -> tuple[list[Factor], list[Rule], bool] | None:
     factors, rules = body.as_engine()
     if validate(factors, rules):
         return None
-    return factors, rules, body.from_ai
+    return factors, rules, body.from_ai, dict(body.reasons)
 
 
 def _matrix_context(
@@ -2996,6 +3122,9 @@ def _matrix_context(
                 dict(zip([factor.name for factor in matrix.factors], row))
                 for row in matrix.rows[: matrix.pinned_rows]
             ],
+            # Kept with the rest so a reload, an edit and Ship check all
+            # read the same reasons the suggestion gave.
+            "reasons": dict(reasons or {}),
             "runs": len(matrix.rows),
             "valid_pairs": matrix.valid_pairs,
             "covered_pairs": matrix.covered_pairs,
@@ -3045,12 +3174,14 @@ def matrix_suggest(
     # factors they edited by hand.
     saved = _saved_matrix(saved_json)
     if saved is not None:
-        factors, rules, from_ai = saved
+        factors, rules, from_ai, saved_reasons = saved
         matrix = build_matrix(factors, rules)
         return templates.TemplateResponse(
             request,
             "_test_matrix_editor.html",
-            _matrix_context(factors, rules, matrix, [], from_ai=from_ai),
+            _matrix_context(
+                factors, rules, matrix, [], saved_reasons, from_ai=from_ai
+            ),
         )
 
     keys = _request_keys(request)
@@ -3108,7 +3239,7 @@ def matrix_build(request: Request, payload: MatrixBody) -> HTMLResponse:
     return templates.TemplateResponse(
         request,
         "_test_matrix_result.html",
-        _matrix_context(factors, rules, matrix, []),
+        _matrix_context(factors, rules, matrix, [], dict(payload.reasons)),
     )
 
 

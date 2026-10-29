@@ -39,11 +39,23 @@ def _summary(item) -> str:
     return item.summary
 
 
-def to_markdown(report: ShipReport, story: str) -> str:
+def to_markdown(
+    report: ShipReport,
+    story: str,
+    label: str = "",
+    status: str = "",
+) -> str:
     """The whole verdict as one Markdown block. Nothing here is AI text."""
     total = len(report.items)
-    lines = [
-        f"# Ship check — {VERDICT_LABELS[report.verdict]}",
+    lines = [f"# Ship check — {VERDICT_LABELS[report.verdict]}"]
+    # Which story this is, before anything about it. A report pasted into a
+    # release thread with no id was a report nobody could place.
+    if label:
+        named = f"**Story ID:** {_cell(label)}"
+        if status:
+            named += f" · {_cell(status)}"
+        lines.append(named)
+    lines += [
         report.verdict_reason,
         "",
         f"**Story:** {_cell(story)[:STORY_IN_HEADER]}",

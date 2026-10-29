@@ -260,10 +260,14 @@ def test_the_senior_tester_box_shows_even_when_nothing_was_added(monkeypatch) ->
         "/requirements/test-cases/run", data=NAVBAR_FORM, headers=KEYS_HEADER
     ).text
     assert 'id="pq-review"' in body
+    # The rules found nothing of their own to add, and the page says only
+    # that: five criteria on the same screen still need more tests, so
+    # "Nothing to add" on its own would read as "this suite is finished".
     assert (
-        "The AI already covered all 6 things a senior tester checks for this "
-        "story. Nothing to add." in body
+        "No extra tests to add — but 5 of 5 criteria still need more tests "
+        "(see below)." in body
     )
+    assert "Nothing to add." not in body
     assert not [one for one in _shown_cases(body) if "principal-qa" in one["tags"]]
     # Nothing was added, so the label does not claim anything was.
     assert "Checked by senior tester" in body

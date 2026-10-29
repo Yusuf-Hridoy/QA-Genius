@@ -89,6 +89,9 @@ def test_the_yellow_is_only_ever_the_main_button() -> None:
     users = re.findall(r"([^{}]*)\{[^{}]*var\(--cta\)[^{}]*\}", css)
     allowed = (
         ".btn-primary",
+        # Save inside an open pop-up. The pop-up is its own screen state:
+        # while it is shut this button is not on the screen at all.
+        ".btn.btn-pop-save",
         ".logo-mark",
         ".nav a.active::before",
         ".steps li.now .step-n",

@@ -2,7 +2,11 @@
  * `node --test tests/js`. A reader who came back from the test-cases desk
  * found an empty box and had to spend a key again to see the same answer.
  * public/requirements_flow.js is a browser IIFE, so it runs here against a
- * fake document small enough to read. */
+ * fake document small enough to read.
+ *
+ * The saved cards travel with the story now rather than with the tab, so
+ * run_state.js and story_store.js are loaded beside it: "Start a new story"
+ * has to really make one, and the old story has to keep every word. */
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -11,10 +15,11 @@ import { fileURLToPath } from "node:url";
 import vm from "node:vm";
 
 const here = dirname(fileURLToPath(import.meta.url));
-const source = readFileSync(
-  join(here, "..", "..", "public", "requirements_flow.js"),
-  "utf8",
-);
+const read = (name) =>
+  readFileSync(join(here, "..", "..", "public", name), "utf8");
+const source = read("requirements_flow.js");
+const runState = read("run_state.js");
+const storyStore = read("story_store.js");
 
 /** A box the page writes HTML into. */
 const box = (html = "") => ({ innerHTML: html, focus() {} });
@@ -23,9 +28,10 @@ const box = (html = "") => ({ innerHTML: html, focus() {} });
 const input = (value = "") => ({ value, focus() {} });
 
 function load(run, view, extras = {}) {
-  const store = {};
-  if (run !== undefined) store["qag.run"] = JSON.stringify(run);
-  if (view !== undefined) store["qag.story_view"] = JSON.stringify(view);
+  const session = {};
+  const local = {};
+  const saved = view === undefined ? run : { ...run, story_view: view };
+  if (saved !== undefined) session["qag.run"] = JSON.stringify(saved);
 
   const fields = {
     user_story: input(),
@@ -57,20 +63,40 @@ function load(run, view, extras = {}) {
         tagName: tag,
         className: "",
         textContent: "",
+        classList: { add() {}, remove() {}, toggle() {} },
         addEventListener() {},
         setAttribute() {},
         appendChild() {},
       }),
+      body: { appendChild() {} },
     },
     sessionStorage: {
-      getItem: (key) => (key in store ? store[key] : null),
+      getItem: (key) => (key in session ? session[key] : null),
       setItem: (key, value) => {
-        store[key] = String(value);
+        session[key] = String(value);
       },
       removeItem: (key) => {
-        delete store[key];
+        delete session[key];
       },
     },
+    localStorage: {
+      getItem: (key) => (key in local ? local[key] : null),
+      setItem: (key, value) => {
+        local[key] = String(value);
+      },
+      removeItem: (key) => {
+        delete local[key];
+      },
+    },
+    dispatchEvent: () => true,
+    addEventListener: () => {},
+    CustomEvent: class {
+      constructor(type) {
+        this.type = type;
+      }
+    },
+    setTimeout: () => 1,
+    clearTimeout: () => {},
     JSON,
     Object,
     Array,
@@ -82,8 +108,18 @@ function load(run, view, extras = {}) {
   };
   sandbox.window = sandbox;
   vm.createContext(sandbox);
+  vm.runInContext(runState, sandbox);
+  vm.runInContext(storyStore, sandbox);
   vm.runInContext(source, sandbox);
-  return { flow: sandbox.QAGFlow, fields, nodes, actions, store };
+  return {
+    flow: sandbox.QAGFlow,
+    stories: sandbox.QAGStories,
+    run: () => JSON.parse(session["qag.run"] || "{}"),
+    fields,
+    nodes,
+    actions,
+    session,
+  };
 }
 
 const STORY = "As a shopper, I want to sign in so that I can buy.";
@@ -126,22 +162,37 @@ test("a remembered story offers Start a new story", () => {
   assert.equal(actions.children[0].textContent, "Start a new story");
 });
 
-test("Start a new story clears the fields, the cards and the run", () => {
+test("Start a new story makes a second story and leaves the first alone", () => {
   const view = { story: STORY, result: "<p>the card</p>" };
-  const { flow, fields, nodes, store } = load(
+  const { flow, stories, fields, nodes, run } = load(
     { ...RUN, story_analysis: { ambiguity_score: 20 }, criteria: [{ id: "AC-1" }] },
     view,
   );
+  // The run on screen becomes this tab's first saved story.
+  const first = stories.create({ run: run() }).story;
+  stories.open(first.id);
   flow.restoreStoryPage();
+
   flow.startFreshStory();
+
+  // The page in front of the reader is empty and ready.
   assert.equal(fields.user_story.value, "");
   assert.equal(fields.context.value, "");
   assert.equal(fields.story_type.value, "User story");
   assert.equal(nodes["story-output"].innerHTML, "");
-  assert.equal(store["qag.story_view"], undefined);
-  const run = JSON.parse(store["qag.run"]);
-  assert.equal(run.story, undefined);
-  assert.equal(run.story_analysis, undefined);
-  // The work the other desks did is theirs to keep or rebuild.
-  assert.deepEqual(run.criteria, [{ id: "AC-1" }]);
+
+  // The new story is this tab's, and it is empty.
+  assert.equal(stories.count(), 2);
+  const now = stories.active();
+  assert.notEqual(now.id, first.id);
+  assert.equal(now.run.story, undefined);
+  assert.equal(run().story, undefined);
+  assert.equal(run()._story_id, now.id);
+
+  // Every word of the old one is still there, under its own id.
+  const old = stories.get(first.id);
+  assert.equal(old.run.story, STORY);
+  assert.equal(old.run.context, "Login page");
+  assert.deepEqual(old.run.criteria, [{ id: "AC-1" }]);
+  assert.equal(old.run.story_view.result, "<p>the card</p>");
 });

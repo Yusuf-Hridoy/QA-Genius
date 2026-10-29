@@ -88,5 +88,20 @@ def test_the_run_still_lives_in_the_tab_and_the_stories_in_the_browser() -> None
     store = (ROOT / "public" / "story_store.js").read_text(encoding="utf-8")
     assert "sessionStorage.getItem" in run_state
     assert "localStorage" not in run_state
+    # The stories themselves are the browser's and outlive the tab.
     assert "localStorage.getItem" in store
-    assert "sessionStorage.getItem" not in store
+    assert 'var KEY = "qag.stories.v1"' in store
+
+
+def test_which_story_a_tab_is_on_lives_in_that_tab() -> None:
+    """One shared active_id let one tab's auto-save land on another's story."""
+    store = (ROOT / "public" / "story_store.js").read_text(encoding="utf-8")
+    assert 'var TAB_KEY = "qag.tab_story"' in store
+    assert "sessionStorage.setItem(TAB_KEY" in store
+    # Nothing about "which story" is read out of localStorage when saving:
+    # the id is the one the caller named, and nothing else.
+    body = store.split("function saveStory(storyId, run) {")[1]
+    body = body.split(chr(10) + "  function ")[0]
+    assert "active_id" not in body
+    assert "last_opened_id" not in body
+    assert "tabStory()" not in body

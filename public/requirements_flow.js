@@ -155,9 +155,43 @@
   /* ---------- the story's own id and status ---------- */
 
   var LABEL_OK = /^[A-Za-z0-9_-]{1,24}$/;
+  var LABEL_RULE = "Use letters, numbers, - or _ (max 24).";
 
   function labelBox() {
     return document.getElementById("story-label");
+  }
+
+  function store() {
+    return window.QAGStories || null;
+  }
+
+  function openStory() {
+    var kept = store();
+    return kept ? kept.active() : null;
+  }
+
+  /* The line under the Story ID field. It says the rule when the id is not
+   * one, and names the story already using it when it is taken. An id that
+   * is wrong is never quietly fixed or quietly dropped: it is not saved at
+   * all until it is right. */
+  function sayAboutLabel(words) {
+    var line = document.getElementById("story-label-help");
+    if (!line) return;
+    /* With nothing wrong the line goes back to saying the rule, so the rule
+     * is beside the field before anyone gets it wrong, not only after. */
+    line.textContent = words || LABEL_RULE;
+    line.classList.toggle("field-error", Boolean(words));
+  }
+
+  /* "" when the id may be saved, or why it may not. */
+  function labelProblem(wanted) {
+    if (!wanted) return "";
+    if (!LABEL_OK.test(wanted)) return LABEL_RULE;
+    var kept = store();
+    if (!kept) return "";
+    var open = kept.tabStory();
+    if (kept.labelTaken(kept.list(), wanted, open)) return kept.takenMessage(wanted);
+    return "";
   }
 
   /* The id in the form, written into the run so every desk can quote it. */
@@ -165,12 +199,14 @@
     var box = labelBox();
     if (!box) return;
     var wanted = box.value.trim();
-    var run = readRun() || {};
-    if (wanted && !LABEL_OK.test(wanted)) {
+    var wrong = labelProblem(wanted);
+    sayAboutLabel(wrong);
+    if (wrong) {
       box.setAttribute("aria-invalid", "true");
       return;
     }
     box.removeAttribute("aria-invalid");
+    var run = readRun() || {};
     if (wanted) run.story_label = wanted;
     else delete run.story_label;
     writeRun(run);
@@ -181,12 +217,48 @@
     var box = labelBox();
     if (!box) return;
     var run = readRun() || {};
-    var saved =
-      run.story_label ||
-      (window.QAGStories && window.QAGStories.active()
-        ? window.QAGStories.active().label
-        : "");
+    var open = openStory();
+    var saved = run.story_label || (open ? open.label : "");
     if (saved && !box.value) box.value = saved;
+  }
+
+  /* ---------- nothing typed is lost ---------- */
+
+  /* The story, its type, the context and the id are saved into this tab's
+   * story while you type, long before Check story is pressed. A reader who
+   * typed a story, walked to another desk and came back used to find an
+   * empty box. */
+  var TYPE_DELAY = 600;
+  var typeTimer = null;
+
+  function saveTyping() {
+    var form = document.getElementById("story-form");
+    if (!form) return;
+    var run = readRun() || {};
+    var typed = fieldValue("user_story");
+    var type = fieldValue("story_type") || "User story";
+    var context = fieldValue("context");
+    if (
+      String(run.story || "") === typed &&
+      String(run.story_type || "") === type &&
+      String(run.context || "") === context
+    ) {
+      return;
+    }
+    run.story = typed;
+    run.story_type = type;
+    run.context = context;
+    /* Typing your own words over a sample makes it yours, not a sample. */
+    if (typed.trim()) delete run.story_is_example;
+    writeRun(run);
+  }
+
+  function saveTypingSoon() {
+    if (typeTimer) window.clearTimeout(typeTimer);
+    typeTimer = window.setTimeout(function () {
+      typeTimer = null;
+      saveTyping();
+    }, TYPE_DELAY);
   }
 
   function draftPop(open) {
@@ -211,8 +283,15 @@
     var wanted = label ? label.value.trim() : "";
     if (wanted && !LABEL_OK.test(wanted)) {
       if (line) {
-        line.textContent = "Use letters, numbers, - and _ only.";
+        line.textContent = LABEL_RULE;
       }
+      if (label) label.setAttribute("aria-invalid", "true");
+      return;
+    }
+    /* An id another story already answers to would make two CHK-101s. */
+    var kept = store();
+    if (kept && wanted && kept.labelTaken(kept.list(), wanted, kept.tabStory())) {
+      if (line) line.textContent = kept.takenMessage(wanted);
       if (label) label.setAttribute("aria-invalid", "true");
       return;
     }
@@ -231,27 +310,30 @@
     delete run.story_is_example;
     writeRun(run);
 
-    var store = window.QAGStories;
     var problem = "";
-    if (store) {
-      if (!store.active()) {
-        var made = store.create({ run: run, label: wanted || "" });
+    var open = kept ? kept.active() : null;
+    if (kept) {
+      if (!open) {
+        var made = kept.create({ run: run, label: wanted || "" });
         problem = made.error;
+        if (!problem && made.story) writeRun(kept.bound(made.story));
       } else {
-        problem = store.saveActive(run);
+        /* Saved into the story this tab is on, named by its own id. */
+        problem = kept.saveStory(open.id, run);
+        if (problem === "same") problem = "";
       }
     }
     var box = labelBox();
     if (box && wanted) box.value = wanted;
-    var shown =
-      (store && store.active() ? store.active().label : wanted) || wanted;
+    var nowOpen = kept ? kept.active() : null;
+    var shown = (nowOpen ? nowOpen.label : wanted) || wanted;
     var word =
       window.QAGStoriesUI && status
         ? window.QAGStoriesUI.statusWord(status.value)
         : "Draft";
     if (line) {
       line.textContent = problem
-        ? "Couldn't save — browser storage is full."
+        ? DRAFT_TROUBLE[problem] || "Couldn't save — browser storage is full."
         : "Saved as " + shown + " · " + word;
     }
     if (!problem) {
@@ -260,6 +342,12 @@
       toast("Saved as " + shown + " · " + word);
     }
   }
+
+  var DRAFT_TROUBLE = {
+    deleted: "This story was deleted. Start a new story or open another.",
+    stale: "This story changed in another tab. Reload before saving.",
+    "full-count": "You already have 25 stories. Delete one first."
+  };
 
   /* One line that says what just happened, and then goes away. */
   function toast(words) {
@@ -334,24 +422,30 @@
    * The story, its type, the context and the two result cards are put back
    * from what the browser already holds. Nothing here calls the AI. */
 
-  var VIEW_KEY = "qag.story_view";
+  /* The cards as the server drew them travel with the story now, not with
+   * the tab. They used to live in sessionStorage, so a reload, a switch to
+   * another story and back, or a second tab all lost the result and the
+   * reader had to spend a key again to read what they had just read.
+   *
+   * A card above this size is not kept: a story is worth saving, a very
+   * large piece of HTML is not worth filling the browser's storage with. */
+  var VIEW_MAX = 200000;
 
   function readView() {
-    try {
-      var raw = sessionStorage.getItem(VIEW_KEY);
-      return raw ? JSON.parse(raw) : null;
-    } catch (e) {
-      return null;
-    }
+    var run = readRun() || {};
+    var view = run.story_view;
+    return view && typeof view === "object" ? view : null;
   }
 
   function writeView(view) {
-    try {
-      if (view) sessionStorage.setItem(VIEW_KEY, JSON.stringify(view));
-      else sessionStorage.removeItem(VIEW_KEY);
-    } catch (e) {
-      /* storage blocked: the page still works, it just forgets */
-    }
+    var run = readRun() || {};
+    if (view) run.story_view = view;
+    else delete run.story_view;
+    writeRun(run);
+  }
+
+  function keepable(html) {
+    return Boolean(html) && html.length <= VIEW_MAX;
   }
 
   /* The cards as the server drew them, kept against the story they describe
@@ -363,9 +457,29 @@
     if (view.story !== story) view = { story: story };
     var result = document.getElementById("story-output");
     var duel = document.getElementById("duel-output");
-    if (result && result.innerHTML.trim()) view.result = result.innerHTML;
-    if (duel && duel.innerHTML.trim()) view.duel = duel.innerHTML;
+    if (result && keepable(result.innerHTML.trim())) view.result = result.innerHTML;
+    if (duel && keepable(duel.innerHTML.trim())) view.duel = duel.innerHTML;
     writeView(view);
+  }
+
+  /* The generated project, the files and the checks beside them. Saved the
+   * same way and for the same reason: reading it again must not cost a
+   * second AI call. */
+  function rememberAutomationView() {
+    var output = document.getElementById("automation-output");
+    if (!output) return;
+    var html = output.innerHTML.trim();
+    var run = readRun() || {};
+    if (keepable(html)) run.automation_view = html;
+    else delete run.automation_view;
+    writeRun(run);
+  }
+
+  function restoreAutomationView() {
+    var run = readRun() || {};
+    if (!run.automation_view) return;
+    putBack("automation-output", run.automation_view);
+    showManualNote();
   }
 
   function putBack(id, html) {
@@ -391,6 +505,9 @@
       putBack("duel-output", view.duel);
     }
     showStartFresh(Boolean(story));
+    /* app.js counted the characters before these boxes had any in them, so
+     * a restored story read "0 / 3000". Count them again now. */
+    fieldsReady(form);
   }
 
   /* One link, and only when there is something to clear. */
@@ -401,32 +518,63 @@
       return;
     }
     if (existing) return;
-    var actions = document.querySelector("#story-form .form-actions");
-    if (!actions) return;
-    var link = el("button", "btn btn-small", "Start a new story");
+    /* It belongs with Load example, under More: a page with one main
+     * button does not grow a fifth one in the same row. */
+    var holder =
+      document.getElementById("story-more-list") ||
+      document.querySelector("#story-form .form-actions");
+    if (!holder) return;
+    var link = el("button", "btn btn-ghost", "Start a new story");
     link.type = "button";
     link.id = "story-start-fresh";
     link.addEventListener("click", startFreshStory);
-    actions.appendChild(link);
+    holder.appendChild(link);
   }
 
+  function toggleMore(open) {
+    var button = document.getElementById("story-more");
+    var list = document.getElementById("story-more-list");
+    if (!button || !list) return;
+    var wanted = open === undefined ? list.hidden : open;
+    list.hidden = !wanted;
+    button.setAttribute("aria-expanded", wanted ? "true" : "false");
+  }
+
+  /* "Start a new story" makes one. It used to empty the boxes and leave the
+   * reader on the same saved story, so the words they had just written were
+   * gone from the only place they existed. The story on screen is saved
+   * into its own id, a second story is created beside it, and this tab
+   * moves to that. Nothing the old story held is touched. */
   function startFreshStory() {
-    var run = readRun() || {};
-    delete run.story;
-    delete run.story_type;
-    delete run.context;
-    delete run.story_analysis;
-    delete run.duel_summary;
-    writeRun(run);
-    writeView(null);
+    var kept = store();
+    if (!kept) return;
+    /* The box may hold words the 600ms timer has not written yet. */
+    saveTyping();
+    kept.saveLive();
+    var made = kept.create({ run: {} });
+    if (made.error) {
+      toast(
+        made.error === "full-count"
+          ? "You already have 25 stories. Delete one first."
+          : "Couldn't save — browser storage is full."
+      );
+      return;
+    }
+    writeRun(kept.bound(made.story));
     setField("user_story", "");
     setField("story_type", "User story");
     setField("context", "");
+    var idBox = labelBox();
+    if (idBox) idBox.value = "";
+    sayAboutLabel("");
     ["story-output", "duel-output"].forEach(function (id) {
       var box = document.getElementById(id);
       if (box) box.innerHTML = "";
     });
     showStartFresh(false);
+    if (window.QAGStoriesUI) window.QAGStoriesUI.paint();
+    fieldsReady(document);
+    toast("Started " + made.story.label + ". Your other story is safe.");
     var box = document.getElementById("story-user-story");
     if (box) box.focus();
   }
@@ -641,6 +789,8 @@
   /* ---------- what a criterion is linked to ---------- */
 
   var AC_ID = /\bAC-\d+\b/gi;
+  /* How many test ids a trace row names before it starts counting. */
+  var TRACE_IDS = 3;
 
   function caseList(run) {
     if (run && run.test_cases && run.test_cases.result) {
@@ -733,14 +883,38 @@
     return tile;
   }
 
-  /* "Scenario: …" is the line a reader recognises; without one, the first
-   * eight words do the same job. */
-  function headline(text) {
-    var first = squashed(text).split(/(?=Given\b|When\b|Then\b)/)[0];
-    var line = squashed(first) || squashed(text);
-    if (/^Scenario:/i.test(line)) return line;
-    var words = squashed(text).split(" ");
-    return words.slice(0, 8).join(" ") + (words.length > 8 ? "…" : "");
+  /* Given / When / Then, one to a line.
+   *
+   * The card squashed every criterion into one paragraph, so three steps
+   * read as one sentence, and above it printed the first eight of those
+   * same words as a title. The steps keep their own lines here, and the
+   * title is a name or an id rather than the words again. */
+  function stepLines(text) {
+    var whole = squashed(text);
+    if (!whole) return [];
+    return whole
+      .split(/(?=\b(?:Given|When|Then|And|But)\b)/)
+      .map(squashed)
+      .filter(Boolean);
+  }
+
+  /* "Scenario: …" is a name somebody wrote for this criterion. Anything
+   * else is only its first words, and printing those above the same words
+   * again is the card saying everything twice. The id goes there instead,
+   * which is what a reader quotes anyway. */
+  function scenarioLine(text) {
+    var first = stepLines(text)[0] || "";
+    return /^Scenario:/i.test(first) ? first : "";
+  }
+
+  function cardTitle(criterion) {
+    return scenarioLine(criterion.text) || criterion.id;
+  }
+
+  function bodyText(text) {
+    var lines = stepLines(text);
+    if (scenarioLine(text)) lines = lines.slice(1);
+    return lines.join("\n");
   }
 
   function arrowMark() {
@@ -749,9 +923,14 @@
     return mark;
   }
 
-  /* R4 gives a story its own id; until then every trace starts at STORY. */
+  /* A trace starts at the story's own id, from the run or from the saved
+   * story behind it. "STORY" is only for a story that has no id at all. */
   function storyLabel(run) {
     var label = run && run.story_label ? String(run.story_label).trim() : "";
+    if (!label) {
+      var open = openStory();
+      label = open ? String(open.label || "").trim() : "";
+    }
     return label || "STORY";
   }
 
@@ -763,7 +942,17 @@
     var cases = casesFor(run, criterion.id);
     if (cases.length) {
       row.appendChild(arrowMark());
-      row.appendChild(el("span", "chip chip-id", cases.join(", ")));
+      /* Nineteen ids in one chip is a single unbreakable word 692px wide,
+       * which on a phone pushed the whole desk off the side of the screen.
+       * Three, then a count: the list itself is on the test-cases desk. */
+      var shown = cases.slice(0, TRACE_IDS);
+      var words = shown.join(", ");
+      if (cases.length > shown.length) {
+        words += " +" + (cases.length - shown.length) + " more";
+      }
+      var chip = el("span", "chip chip-id", words);
+      chip.setAttribute("title", cases.join(", "));
+      row.appendChild(chip);
     } else {
       row.appendChild(el("span", "muted small", "no test yet"));
     }
@@ -868,9 +1057,9 @@
     row.appendChild(iconTile(look.icon, look.tile));
 
     var words = el("div", "ac-words");
-    words.appendChild(el("p", "ac-title", headline(criterion.text) || criterion.id));
+    words.appendChild(el("p", "ac-title", cardTitle(criterion)));
 
-    var shown = el("p", "ac-text", squashed(criterion.text));
+    var shown = el("p", "ac-text", bodyText(criterion.text));
     shown.setAttribute("tabindex", "0");
     shown.setAttribute("role", "button");
     shown.setAttribute("aria-label", "Edit " + criterion.id);
@@ -888,9 +1077,15 @@
       syncGenerate(run);
     });
     /* Leaving the box puts the words back, so the row reads as a sentence
-     * again rather than as a form that never closes. */
+     * again rather than as a form that never closes.
+     *
+     * This used to redraw every row. Clicking "Generate test cases" after
+     * typing fired blur first, the button the mouse was over was thrown
+     * away and rebuilt, and the click landed on nothing: the first press
+     * did nothing and the second one worked. Only this row is redrawn now,
+     * so every button outside it survives the blur and one click is enough. */
     box.addEventListener("blur", function () {
-      renderCriteria();
+      closeEditor(run, criterion, index, row, shown, box);
     });
 
     function openEditor() {
@@ -945,6 +1140,30 @@
     side.appendChild(buttons);
     row.appendChild(side);
     return row;
+  }
+
+  /* Put one row back into its reading state, in place. Everything it can
+   * say about itself - the headline, the words, the status chip - comes
+   * from the run, so this is the same answer a full redraw would give. */
+  function closeEditor(run, criterion, index, row, shown, box) {
+    if (box.hidden) return;
+    box.hidden = true;
+    shown.hidden = false;
+    var latest = readRun() || run;
+    var text = ((latest.criteria || [])[index] || criterion).text || "";
+    criterion.text = text;
+    shown.textContent = bodyText(text);
+    var title = row.querySelector(".ac-title");
+    if (title) title.textContent = cardTitle(criterion);
+    var state = statusOfCriterion(latest, criterion, index);
+    var look = STATUS[state];
+    row.setAttribute("data-state", state);
+    var chip = row.querySelector(".ac-side > .chip");
+    if (chip) {
+      chip.className = "chip " + look.chip;
+      chip.textContent = look.words;
+    }
+    syncGenerate(latest);
   }
 
   function moveButton(run, index, step, label, aria) {
@@ -1281,7 +1500,10 @@
       empty.appendChild(actions);
       root.appendChild(empty);
       if (window.htmx) window.htmx.process(root);
-    if (window.QAG && window.QAG.initInputCards) window.QAG.initInputCards(root);
+      if (window.QAG && window.QAG.initInputCards) window.QAG.initInputCards(root);
+      /* The selection may be gone while the project it produced is not.
+       * Reading it again must not cost a second AI call either way. */
+      restoreAutomationView();
       return;
     }
 
@@ -1327,6 +1549,7 @@
     if (window.htmx) window.htmx.process(root);
     if (window.QAG && window.QAG.initInputCards) window.QAG.initInputCards(root);
     toggleBrowsers(form);
+    restoreAutomationView();
 
     /* Always send what sessionStorage holds right now. */
     form.addEventListener("htmx:configRequest", function (event) {
@@ -1368,6 +1591,17 @@
       return;
     }
     done("Could not copy");
+  }
+
+  /* Long lines across, or long lines wrapped. The switch says which it is
+   * doing, so nobody has to guess from the shape of the code. */
+  function toggleWrap() {
+    var box = document.querySelector(".file-code");
+    var button = document.getElementById("wrap-code");
+    if (!box || !button) return;
+    var wrapped = box.classList.toggle("wrap");
+    button.setAttribute("aria-pressed", wrapped ? "true" : "false");
+    button.textContent = wrapped ? "Don't wrap" : "Wrap lines";
   }
 
   function visibleCode() {
@@ -1759,6 +1993,10 @@
       copyText(visibleCode(), "copy-status");
       return;
     }
+    if (closest(event.target, "#wrap-code")) {
+      toggleWrap();
+      return;
+    }
     if (closest(event.target, "#copy-command")) {
       var command = document.getElementById("run-command");
       copyText(command ? command.textContent : "", "command-status");
@@ -1812,6 +2050,11 @@
       toggleRow(row);
       return;
     }
+    if (closest(event.target, "#story-more")) {
+      toggleMore();
+      return;
+    }
+    if (!closest(event.target, ".more-menu")) toggleMore(false);
     if (closest(event.target, "#save-draft")) {
       draftPop(true);
       return;
@@ -1826,8 +2069,26 @@
   });
 
   document.addEventListener("input", function (event) {
-    if (closest(event.target, "#story-label")) saveStoryLabel();
+    if (closest(event.target, "#story-label")) {
+      saveStoryLabel();
+      return;
+    }
+    /* The story, its type and the context save themselves 600ms after the
+     * last keystroke, so nothing typed is lost by walking to another desk
+     * before pressing Check story. */
+    if (closest(event.target, "#story-form")) saveTypingSoon();
   });
+
+  document.addEventListener("change", function (event) {
+    if (closest(event.target, "#story-form")) saveTyping();
+  });
+
+  /* A tab closed or a page left mid-sentence still keeps the sentence. */
+  if (window.addEventListener) {
+    window.addEventListener("beforeunload", function () {
+      if (document.getElementById("story-form")) saveTyping();
+    });
+  }
 
   function toggleRow(row) {
     var card = closest(row, ".tc-card");
@@ -1908,6 +2169,7 @@
     if (path.indexOf("/requirements/automation/") !== -1) {
       saveAutomationToRun();
       showManualNote();
+      rememberAutomationView();
     }
     if (path.indexOf("/requirements/test-cases/run") !== -1) {
       rememberDisplayed(true);
@@ -1942,6 +2204,8 @@
       startFreshStory: startFreshStory,
       canGenerate: canGenerate,
       syncGenerate: syncGenerate,
+      cardTitle: cardTitle,
+      bodyText: bodyText,
     };
   }
 })();

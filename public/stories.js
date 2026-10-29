@@ -33,7 +33,18 @@
       });
       return out;
     }
-    /* Last edited first: the story you were just in is at the top. */
+    /* "Last opened" and "Last edited" are two different questions and the
+     * page now asks whichever one the reader picked. Opening a story moves
+     * opened_at and leaves updated_at where it was. */
+    if (how === "opened") {
+      out.sort(function (a, b) {
+        var first = String(a.opened_at || a.updated_at || "");
+        var second = String(b.opened_at || b.updated_at || "");
+        return second.localeCompare(first);
+      });
+      return out;
+    }
+    /* Last edited first: the story you last changed is at the top. */
     out.sort(function (a, b) {
       return String(b.updated_at || "").localeCompare(String(a.updated_at || ""));
     });
@@ -50,7 +61,21 @@
     );
   }
 
-  /* What a saved run has in it, without opening it. */
+  /* The same rule qagenius/risk_radar.py uses, so a card and the desk it
+   * stands for never disagree about what counts as high. */
+  var HIGH_RPN = 40;
+
+  function isHigh(one) {
+    var severity = one.severity || 0;
+    var rpn = severity * (one.likelihood || 0) * (one.detectability || 0);
+    return rpn >= HIGH_RPN || (severity === 5 && (one.likelihood || 0) >= 3);
+  }
+
+  /* What a saved run has in it, without opening it.
+   *
+   * A risk with a test, and a risk somebody wrote down a reason for, are
+   * both decided. Counting either of them as "no test" on the card made a
+   * finished story look unfinished every time it was listed. */
   function facts(run) {
     var criteria = ((run && run.criteria) || []).filter(function (one) {
       var text = typeof one === "string" ? one : (one && one.text) || "";
@@ -65,11 +90,11 @@
       run && run.risk_analysis && run.risk_analysis.analysis
         ? run.risk_analysis.analysis.failure_modes || []
         : [];
+    var accepted = (run && run.risk_acceptances) || {};
     modes.forEach(function (one) {
-      var score =
-        (one.severity || 0) * (one.likelihood || 0) * (one.detectability || 0);
       var covered = (one.covered_by || []).length > 0;
-      if (score >= 48 && !covered) risks += 1;
+      if (!isHigh(one) || covered || accepted[one.id]) return;
+      risks += 1;
     });
     return { criteria: criteria, cases: cases, risks: risks };
   }
@@ -86,10 +111,17 @@
     return parts.join(" · ");
   }
 
-  /* "2 hours ago", from whatever run_state.js already knows about time. */
-  function edited(story) {
-    if (global.QAGRun) return global.QAGRun.timeAgo(story.updated_at);
-    return "";
+  /* "2 hours ago", from whatever run_state.js already knows about time. The
+   * word in front of it says which of the two times it is, because "2 h ago"
+   * on its own was read as "edited" when the story had only been opened. */
+  function edited(story, how) {
+    if (!global.QAGRun) return "";
+    if (how === "opened") {
+      var opened = global.QAGRun.timeAgo(story.opened_at || story.updated_at);
+      return opened ? "Opened " + opened : "";
+    }
+    var when = global.QAGRun.timeAgo(story.updated_at);
+    return when ? "Edited " + when : "";
   }
 
   var api = {
@@ -175,18 +207,20 @@
     if (!list || !store()) return;
     list.textContent = "";
     var all = store().list();
-    var rows = shown(all, readOptions());
+    var options = readOptions();
+    var rows = shown(all, options);
     if (!rows.length) {
       list.appendChild(emptyCard(all.length > 0));
       return;
     }
+    /* "Open now" is this tab's story, not whichever one another tab has. */
     var open = store().active();
     rows.forEach(function (story) {
-      list.appendChild(card(story, open && open.id === story.id));
+      list.appendChild(card(story, open && open.id === story.id, options.sort));
     });
   }
 
-  function card(story, isOpen) {
+  function card(story, isOpen, how) {
     var card = el("div", "card story-card" + (isOpen ? " story-open" : ""));
     card.setAttribute("data-story-id", story.id);
 
@@ -197,7 +231,7 @@
     if (decision) head.appendChild(decision);
     if (isOpen) head.appendChild(el("span", "chip chip-info", "Open now"));
     head.appendChild(el("span", "spacer"));
-    head.appendChild(el("span", "muted small", edited(story)));
+    head.appendChild(el("span", "muted small", edited(story, how)));
     card.appendChild(head);
 
     var title = el("p", "story-title", story.title || "No story written yet");
@@ -208,7 +242,9 @@
     /* The one yellow button on this page is "New story". Opening a story is
      * the row's own action, not the page's. */
     actions.appendChild(button("Open", function () {
-      store().saveActive(global.QAGRun ? global.QAGRun.read() : {});
+      /* The story this tab has open is saved into its own id first, then
+       * this one is opened and the page is drawn again from it. */
+      store().saveLive();
       store().open(story.id);
       global.location.href = "/requirements/story";
     }));
@@ -247,7 +283,11 @@
       button("Save", function () {
         var problem = store().rename(story.id, input.value);
         if (problem === "bad-label") {
-          say.textContent = "Use letters, numbers, - and _ only.";
+          say.textContent = store().LABEL_RULE;
+          return;
+        }
+        if (problem === "duplicate-label") {
+          say.textContent = store().takenMessage(input.value);
           return;
         }
         render();
@@ -282,9 +322,13 @@
     box.appendChild(el("span", "small", "Delete " + story.label + "?"));
     box.appendChild(
       button("Yes, delete it", function () {
+        /* remove() clears the tab's story and its run when the deleted one
+         * was this tab's, so nothing here can draw the old content again. */
+        var wasOpen = store().tabStory() === story.id;
         store().remove(story.id);
         render();
         paintRail();
+        if (wasOpen) global.location.href = "/requirements/story";
       }, "btn btn-sm btn-danger")
     );
     box.appendChild(button("No", render));
@@ -348,7 +392,9 @@
     var fresh = byId("stories-new");
     if (fresh) {
       fresh.addEventListener("click", function () {
-        store().saveActive(global.QAGRun ? global.QAGRun.read() : {});
+        /* Save the story this tab has open into its own id, then make a
+         * new one. The old story keeps everything it had. */
+        store().saveLive();
         var made = store().create({ run: {} });
         if (made.error) {
           say(
@@ -358,7 +404,7 @@
           );
           return;
         }
-        if (global.QAGRun) global.QAGRun.write({});
+        if (global.QAGRun) global.QAGRun.write(store().bound(made.story));
         global.location.href = "/requirements/story";
       });
     }

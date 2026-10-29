@@ -16,11 +16,14 @@
      itself away: "Check again" is right where you left it. #}
   <div class="card card-form req-main" id="story-card">
     <h2 class="card-title">Your story</h2>
-    <form id="story-form" hx-post="/requirements/story/run" hx-target="#story-output" hx-swap="innerHTML" hx-indicator="#check-btn">
+    {# autocomplete="off" because a reload of this same URL - which is what
+       starting a new story is - made Chrome put the old story's words back
+       into the box after the page had emptied it. #}
+    <form id="story-form" autocomplete="off" hx-post="/requirements/story/run" hx-target="#story-output" hx-swap="innerHTML" hx-indicator="#check-btn">
       <div class="form-body">
         {# Optional: a reader who has a tracker id types it, and everything
            that quotes this story quotes that id. Left empty we number it. #}
-        {% call field("story-label", "Story ID", optional=true, hint="e.g. CART-204 — leave empty and we'll number it") %}
+        {% call field("story-label", "Story ID", optional=true, hint="e.g. CART-204 — leave empty and we'll number it", help=label_rule) %}
         <input type="text" id="story-label" class="mono" maxlength="24"
                pattern="[A-Za-z0-9_-]+" placeholder="CART-204">
         {% endcall %}
@@ -40,11 +43,19 @@
         {% call field("story-context", "Anything else we should know", optional=true, hint="The page, who uses it, anything the story leaves out.", counter_max=1000) %}
         <textarea id="story-context" name="context" class="short" maxlength="1000" placeholder="Login page, shoppers sign in with email and password…"></textarea>
         {% endcall %}
+        {# One main button, two the reader reaches for next, and the rest
+           behind More. Five buttons in a row wrapped onto a second line on
+           a 1440px screen and the main one stopped looking main. #}
         <div class="form-actions">
           <button id="check-btn" type="submit" class="btn btn-primary" data-busy-label="Checking…"><span class="btn-label">Check story</span></button>
-          <button id="save-draft" type="button" class="btn">Save draft</button>
-          <button id="load-example" type="button" class="btn" hx-post="/requirements/story/example" hx-target="#story-output" hx-swap="innerHTML">Load example</button>
           <button id="duel-btn" type="button" class="btn" data-busy-label="Reading…" hx-post="/requirements/story/duel" hx-target="#duel-output" hx-swap="innerHTML" hx-include="#story-form" hx-indicator="#duel-progress"><span class="btn-label">Run the two-reader check</span></button>
+          <button id="save-draft" type="button" class="btn">Save draft</button>
+          <div class="more-menu">
+            <button id="story-more" type="button" class="btn btn-ghost" aria-expanded="false" aria-controls="story-more-list">More &#9662;</button>
+            <div class="more-list" id="story-more-list" hidden>
+              <button id="load-example" type="button" class="btn btn-ghost" hx-post="/requirements/story/example" hx-target="#story-output" hx-swap="innerHTML">Load example</button>
+            </div>
+          </div>
         </div>
         {# The popover Save draft opens: the id people will quote, and how
            far along the story is. Both are saved in this browser only. #}
@@ -61,7 +72,7 @@
           </select>
           {% endcall %}
           <div class="form-actions">
-            <button type="button" class="btn btn-sm" id="draft-save">Save</button>
+            <button type="button" class="btn btn-sm btn-pop-save" id="draft-save">Save</button>
             <button type="button" class="btn btn-sm" id="draft-cancel">Cancel</button>
             <span class="muted small" id="draft-status-line" aria-live="polite"></span>
           </div>

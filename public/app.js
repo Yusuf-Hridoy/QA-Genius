@@ -317,22 +317,33 @@
       main.appendChild(statusPill(entry));
       li.appendChild(main);
 
-      var actions = el("div", "row");
-      var buttons = [["test", "Test"]];
-      if (idx > 0) {
-        buttons.push(["first", "Make first"]);
-      }
-      buttons.push(["model", "Change model"]);
-      buttons.push(["edit", "Edit"]);
-      buttons.push(["delete", "Delete"]);
-      buttons.forEach(function (pair) {
-        var danger = pair[0] === "delete";
-        var btn = el("button", danger ? "btn btn-small btn-danger" : "btn btn-small", pair[1]);
+      /* Five small buttons in a 430px drawer wrapped onto three lines and
+       * the row stopped reading as a row. Test and Delete stay out; the
+       * three that are used once in a key's life go under More. */
+      var actions = el("div", "row key-actions");
+      function keyButton(action, words, className) {
+        var btn = el("button", className || "btn btn-small", words);
         btn.type = "button";
-        btn.dataset.action = pair[0];
+        btn.dataset.action = action;
         btn.dataset.id = entry.id;
-        actions.appendChild(btn);
-      });
+        return btn;
+      }
+      actions.appendChild(keyButton("test", "Test"));
+      var menu = el("div", "more-menu");
+      var more = el("button", "btn btn-small", "More ▾");
+      more.type = "button";
+      more.dataset.action = "more";
+      more.dataset.id = entry.id;
+      more.setAttribute("aria-expanded", "false");
+      menu.appendChild(more);
+      var list = el("div", "more-list");
+      list.hidden = true;
+      if (idx > 0) list.appendChild(keyButton("first", "Make first", "btn btn-ghost"));
+      list.appendChild(keyButton("model", "Change model", "btn btn-ghost"));
+      list.appendChild(keyButton("edit", "Edit", "btn btn-ghost"));
+      menu.appendChild(list);
+      actions.appendChild(menu);
+      actions.appendChild(keyButton("delete", "Delete", "btn btn-small btn-danger"));
       li.appendChild(actions);
       listNode.appendChild(li);
     });
@@ -755,6 +766,14 @@
       }
       var action = btn.dataset.action;
       var li = btn.closest("li");
+      if (action === "more") {
+        var menu = btn.parentNode.querySelector(".more-list");
+        if (menu) {
+          menu.hidden = !menu.hidden;
+          btn.setAttribute("aria-expanded", menu.hidden ? "false" : "true");
+        }
+        return;
+      }
       if (action === "test") {
         btn.disabled = true;
         runTest(keys[pos].id).then(function () {
@@ -800,8 +819,15 @@
       var provider = select.value;
       var key = keyInput.value.trim();
       showKeyError("");
-      if (!provider || !key) {
+      if (!key) {
+        /* The box was empty and Save did nothing at all, which reads as a
+         * broken button rather than as a missing key. */
+        showKeyError("Paste your key first.");
         keyInput.focus();
+        return;
+      }
+      if (!provider) {
+        select.focus();
         return;
       }
       /* A browser that filled the box anyway, or a hurried paste from a
@@ -1002,6 +1028,24 @@
     "automation-output",
   ];
 
+  /* The top bar is fixed, so the thing being scrolled to has to stop below
+   * it rather than under it. */
+  var ANSWER_OFFSET = 78;
+
+  /* The line that names the answer. Scrolling to the card is not the same
+   * as scrolling to its title: a card that starts with a banner or a row of
+   * stats put the sentence a reader wants three screens down. */
+  function answerTitle(node) {
+    return (
+      node.querySelector("h1, h2, h3, .ship-verdict-label, .card-title") || node
+    );
+  }
+
+  function easeOrNot() {
+    var ask = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)");
+    return ask && ask.matches ? "auto" : "smooth";
+  }
+
   function initScrollToAnswer() {
     document.body.addEventListener("htmx:afterSwap", function (event) {
       var node = event.target;
@@ -1015,8 +1059,23 @@
       if (!node.querySelector(".error-card")) {
         foldInputCards();
       }
-      var top = node.getBoundingClientRect().top + window.scrollY - 78;
-      window.scrollTo({ top: top > 0 ? top : 0, behavior: "smooth" });
+      /* Folding the form above changes where everything below it sits, so
+       * the position is read on the next frame, after the browser has laid
+       * the page out again. Measuring before that is what sent the page
+       * past the answer and down to the bottom. */
+      var goTo = answerTitle(node);
+      window.requestAnimationFrame(function () {
+        var top = goTo.getBoundingClientRect().top + window.scrollY - ANSWER_OFFSET;
+        window.scrollTo({ top: top > 0 ? top : 0, behavior: easeOrNot() });
+        /* And the keyboard goes with the eye: the next Tab carries on from
+         * the answer rather than from the form the reader has left. */
+        if (!goTo.hasAttribute("tabindex")) goTo.setAttribute("tabindex", "-1");
+        try {
+          goTo.focus({ preventScroll: true });
+        } catch (e) {
+          goTo.focus();
+        }
+      });
     });
   }
 
@@ -1295,11 +1354,30 @@
 
   function initHomeKeyButton() {
     var btn = document.getElementById("home-add-key");
-    if (btn) {
-      btn.addEventListener("click", function () {
-        openDrawer(true);
-      });
+    if (!btn) {
+      return;
     }
+    /* "Add an API key" beside a browser that already holds two of them is
+     * the page telling the reader something it can see is untrue. */
+    if (loadKeys().length) btn.textContent = "Your API keys";
+    btn.addEventListener("click", function () {
+      openDrawer(true);
+    });
+  }
+
+  /* A key added, edited or deleted in another tab is still this browser's
+   * key, so the chip up here says so without waiting for a reload. */
+  function watchKeysElsewhere() {
+    if (!window.addEventListener) {
+      return;
+    }
+    window.addEventListener("storage", function (event) {
+      if (event && event.key && event.key !== STORE_KEY) {
+        return;
+      }
+      updateChip();
+      renderDrawer();
+    });
   }
 
   document.addEventListener("DOMContentLoaded", function () {
@@ -1312,6 +1390,7 @@
     initInputCards();
     initScrollToAnswer();
     initHomeKeyButton();
+    watchKeysElsewhere();
     initExampleLink();
     initShowAll();
     initFields();

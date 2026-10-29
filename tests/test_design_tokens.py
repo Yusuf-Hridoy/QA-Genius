@@ -53,6 +53,18 @@ PAIRS = [
     ("--warn-fg", "--warn-bg"),
     ("--bad-fg", "--bad-bg"),
     ("--info-fg", "--info-bg"),
+    # The count beside "My stories" on the rail. It used to be painted on
+    # rgba(255,255,255,.14), which no test could read and no reader could
+    # either: about 3:1 in both themes.
+    ("--count-fg", "--count-bg"),
+    # The "Open now" chip on a story card: .chip-info ink on .chip-info
+    # paper, and the card behind it either way.
+    ("--info-fg", "--card"),
+    # A big filled strip is read, not pressed, so its ink is checked too.
+    ("--on-strip", "--strip"),
+    # What a reader types into, and what they typed.
+    ("--text", "--field"),
+    ("--muted", "--field"),
 ]
 
 AA = 4.5
@@ -141,8 +153,40 @@ def test_the_three_inks_stay_in_order() -> None:
 def test_the_dark_theme_redeclares_every_colour_it_changes() -> None:
     """A token the dark block forgets keeps a light value on a dark card."""
     dark_only = _block(':root[data-theme="dark"]')
-    for name in ("--canvas", "--card", "--text", "--muted", "--accent", "--border"):
+    for name in (
+        "--canvas",
+        "--card",
+        "--text",
+        "--muted",
+        "--accent",
+        "--border",
+        "--field",
+        "--strip",
+    ):
         assert name in dark_only, name
+
+
+def test_a_field_is_darker_than_the_card_it_sits_on_in_the_dark() -> None:
+    """A box the same colour as the card behind it has no shape of its own."""
+    assert DARK["--field"].upper() == "#0F1636"
+    assert _luminance(DARK["--field"]) < _luminance(DARK["--card"])
+    # And it keeps a border a reader can see.
+    assert "background:var(--field)" in CSS
+
+
+def test_the_big_strip_is_a_softer_yellow_in_the_dark() -> None:
+    """A full-width block of --cta on a dark page is a lamp, not a strip."""
+    assert LIGHT["--strip"].upper() == "#FFD166"
+    assert DARK["--strip"].upper() == "#E8B84A"
+    # The buttons are unchanged: the one main button is still --cta.
+    assert DARK["--cta"].upper() == "#FFD166"
+
+
+def test_the_quiet_end_of_the_risk_ramp_is_visible_in_the_dark() -> None:
+    """A low cell used to be #2A1E26 on a #0E1430 canvas: invisible."""
+    assert contrast(DARK["--seq-1"], DARK["--canvas"]) >= 1.3
+    # And neighbouring squares are told apart by a border, not by luck.
+    assert ':root[data-theme="dark"] .heat-cell{border-color:var(--border)}' in CSS
 
 
 def test_the_three_families_are_tokens() -> None:

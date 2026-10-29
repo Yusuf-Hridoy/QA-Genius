@@ -10,7 +10,7 @@ from dataclasses import dataclass, field, replace
 from datetime import date
 
 from qagenius.acceptance import Acceptance, note as acceptance_note, read as read_acceptance
-from qagenius.automation_checks import check_project
+from qagenius.automation_checks import check_project, is_python_framework
 from qagenius.models import (
     AmbiguityAnalysis,
     AutomationScript,
@@ -43,7 +43,9 @@ TITLES = {
     "duel": "Two-reader check",
     "coverage": "Criteria with a test",
     "depth": "How well tested",
-    "risks": "Risks with a test",
+    # "Risks with a test" read as a count of the risks that are covered.
+    # It is the opposite: the row exists to name the ones that are not.
+    "risks": "High risks without a test",
     "automation": "Automation",
     "matrix": "Test matrix",
 }
@@ -57,6 +59,12 @@ LINKS = {
     "automation": "/requirements/automation",
     "matrix": "/requirements/matrix",
 }
+
+# Accepting a risk in writing is a decision somebody can really make about
+# these. For the other checks it is not: a criterion with no test and a story
+# nobody can read are fixed, not signed off, so those rows offer the way to
+# fix them instead.
+ACCEPTABLE = ("risks", "depth", "matrix")
 
 # The name a reader would use for the desk a check came from.
 TOOLS = {
@@ -503,7 +511,15 @@ def _automation(inputs: ShipInputs) -> ShipCheckItem:
         summary = ", ".join(parts)
     else:
         status = "pass"
-        summary = f"All {_plural(selected, 'selected case')} traced, no syntax errors"
+        # Only Python is read by a parser. For TypeScript and JavaScript the
+        # check is that brackets and quotes match, so "no syntax errors" was
+        # a claim this row had no way of making.
+        checked = (
+            "the code parses"
+            if is_python_framework(script)
+            else "brackets and quotes match"
+        )
+        summary = f"All {_plural(selected, 'selected case')} traced, {checked}"
 
     details = [
         f"{finding.file}:{finding.line} — {finding.message}" if finding.line

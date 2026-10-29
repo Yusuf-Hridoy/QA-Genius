@@ -192,14 +192,37 @@
 
   var STATE_WORDS = {
     none: "Not built yet",
+    unchecked: "Not checked yet",
     stale: "Old",
     fresh: "Matches your work",
-    example: "Example"
+    example: "Example",
+    /* Ship is the one step with a verdict rather than a freshness, and the
+     * three verdicts are three different answers. A green tick beside
+     * "Not ready" was the bar saying the opposite of the decision. */
+    ship_ready: "Ready to release",
+    ship_risks: "Release with known risks",
+    ship_not: "Not ready"
   };
+
+  var DECISION_STATES = {
+    ship: "ship_ready",
+    ship_with_risks: "ship_risks",
+    dont_ship: "ship_not"
+  };
+
+  /* Green tick only for Ready. Amber when there are known risks, red when
+   * the answer is no, and nothing at all before the check has run. */
+  function shipState(run, states) {
+    var decided = DECISION_STATES[run && run.ship_decision];
+    if (decided) return decided;
+    return states.risks === "fresh" || states.matrix === "fresh" ? "fresh" : "none";
+  }
 
   function storyState(run) {
     if (!run || !String(run.story || "").trim()) return "none";
-    if (!run.story_analysis) return "none";
+    /* Written but never checked is not the same as nothing at all, and the
+     * step bar beside a story the reader can see should say which. */
+    if (!run.story_analysis) return "unchecked";
     if (run.story_analysis_is_example) return "example";
     var built = (run.story_analysis_built_from || {}).story;
     var now = (run.fp || {}).story;
@@ -212,7 +235,7 @@
     ["risks", "matrix", "test_cases", "automation"].forEach(function (desk) {
       states[desk] = global.QAGRun ? global.QAGRun.statusOf(desk, run).state : "none";
     });
-    states.ship = states.risks === "fresh" || states.matrix === "fresh" ? "fresh" : "none";
+    states.ship = shipState(run, states);
     return states;
   }
 
@@ -230,8 +253,12 @@
       var state = forStep[desk] || "none";
       var where = item.querySelector(".step-state");
       if (where) where.textContent = STATE_WORDS[state] || STATE_WORDS.none;
-      item.classList.toggle("done", state === "fresh");
-      item.classList.toggle("now", state !== "fresh");
+      var settled = state === "fresh" || state === "ship_ready";
+      item.classList.toggle("done", settled);
+      item.classList.toggle("step-warn", state === "ship_risks");
+      item.classList.toggle("step-bad", state === "ship_not");
+      item.classList.toggle("now", !settled && state !== "ship_risks" &&
+        state !== "ship_not");
     });
     /* Only the first unfinished step is the one you are on. */
     var pending = list.querySelectorAll("li.now");
@@ -274,6 +301,19 @@
     }
     var shown = story.length > STORY_IN_CARD ? story.slice(0, STORY_IN_CARD) + "…" : story;
     body.appendChild(el("p", "bench-story", shown));
+
+    /* What this story already has, from the run the tab is actually on.
+     * The card used to say nothing about the criteria, so a story with
+     * eight of them read exactly like one with none. */
+    var latest = global.QAGRun ? global.QAGRun.describeLatest(run) : null;
+    if (latest) {
+      var facts = [
+        latest.criteriaCount +
+          (latest.criteriaCount === 1 ? " criterion" : " criteria"),
+        latest.caseCount + (latest.caseCount === 1 ? " test" : " tests")
+      ];
+      body.appendChild(el("p", "bench-facts", facts.join(" · ")));
+    }
 
     var clarity = clarityOf(run);
     if (clarity) {
@@ -396,19 +436,23 @@
     return button;
   }
 
-  /* Save what is open, then open the other one and redraw everything. */
+  /* Save the story this tab has open into its own id, bind the tab to the
+   * other one, copy its run in, then draw the page again from scratch so
+   * every card and every freshness line is the new story's. */
   function switchTo(id) {
     var store = stories();
     if (!store) return;
-    store.saveActive(readRun());
-    store.open(id);
+    store.saveLive();
+    if (!store.open(id)) return;
     global.location.reload();
   }
 
+  /* A new story is a new story: the one that was open keeps its text, its
+   * criteria and its results, and this tab moves to an empty one. */
   function newStory() {
     var store = stories();
     if (!store) return;
-    store.saveActive(readRun());
+    store.saveLive();
     var made = store.create({ run: {} });
     if (made.error === "full-count") {
       paintOthers("You already have " + store.MAX_STORIES + " stories. Delete one first.");
@@ -418,7 +462,7 @@
       paintOthers("Couldn't save — browser storage is full.");
       return;
     }
-    if (global.QAGRun) global.QAGRun.write({});
+    if (global.QAGRun) global.QAGRun.write(store.bound(made.story));
     global.location.href = "/requirements/story";
   }
 
@@ -476,6 +520,8 @@
 
   function shipBody(run) {
     var payload = { story: run.story || "", context: run.context || "" };
+    if (run.story_label) payload.story_label = run.story_label;
+    if (run.story_status) payload.story_status = run.story_status;
     if (run.story_analysis) payload.story_analysis = run.story_analysis;
     if (run.duel_summary) payload.duel_summary = run.duel_summary;
     if (run.test_cases && run.test_cases.result) {

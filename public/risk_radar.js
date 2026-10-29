@@ -527,16 +527,21 @@
       });
   }
 
-  /* Hand risks with no test to step 3, which writes the test cases.
-   * The button says which ones: the whole set, or the one card it sits on. */
-  function writeTests(button) {
-    var data = displayedData();
-    button = button || document.getElementById("risk-write-tests");
-    if (!data || !data.analysis || !button) return;
-    var ids = (button.getAttribute("data-risk-ids") || "")
-      .split(",")
-      .filter(Boolean);
-    var picked = (data.analysis.failure_modes || [])
+  /* ---------- Write a test ---------- */
+
+  /* It used to send the reader to the test-cases desk and leave them to work
+   * out whether anything had been written for the risk they pressed on. The
+   * call happens here now, and the answer lands at the top of that risk's
+   * own panel: the ids that were added, or why none were. */
+
+  var HISTORY_MAX = 5;
+
+  function riskIdsOn(button) {
+    return (button.getAttribute("data-risk-ids") || "").split(",").filter(Boolean);
+  }
+
+  function pickedRisks(data, ids) {
+    return (data.analysis.failure_modes || [])
       .filter(function (risk) {
         return ids.indexOf(risk.id) !== -1;
       })
@@ -548,11 +553,197 @@
           test_idea: risk.test_idea || ""
         };
       });
+  }
+
+  function savedCases(run) {
+    if (run && run.test_cases) return run.test_cases;
+    return { result: { test_cases: [], summary: "" }, criteria: [] };
+  }
+
+  function caseIds(payload) {
+    var cases = payload && payload.result ? payload.result.test_cases || [] : [];
+    return cases.map(function (one) {
+      return one && one.id;
+    });
+  }
+
+  /* The ids in the proposal that the saved list does not already have. */
+  function addedIds(before, after) {
+    var had = caseIds(before);
+    return caseIds(after).filter(function (id) {
+      return id && had.indexOf(id) === -1;
+    });
+  }
+
+  /* The panel beside the list, for the risk the button belongs to. */
+  function panelFor(riskId) {
+    var panels = document.querySelectorAll("#risk-trace .risk-detail");
+    var found = null;
+    Array.prototype.forEach.call(panels, function (panel) {
+      if (panel.getAttribute("data-risk-id") === riskId) found = panel;
+    });
+    return found;
+  }
+
+  /* One line at the top of that panel, where the reader is already looking.
+   * It replaces whatever the last press left there. */
+  function sayOnRisk(riskId, words, tone, link) {
+    var panel = panelFor(riskId);
+    if (!panel) return;
+    var old = panel.querySelector(".risk-written");
+    if (old) panel.removeChild(old);
+    var note = el("p", "risk-written note note-" + tone, words);
+    note.setAttribute("role", "status");
+    if (link) {
+      note.appendChild(document.createTextNode(" "));
+      var go = el("a", "risk-written-link", "View on Test cases →");
+      go.setAttribute("href", "/requirements/test-cases");
+      note.appendChild(go);
+    }
+    panel.insertBefore(note, panel.firstChild);
+    pickRisk(riskId);
+  }
+
+  function busyOn(button, on) {
+    button.disabled = on;
+    button.setAttribute("aria-busy", on ? "true" : "false");
+    if (on) {
+      button.setAttribute("data-said", button.textContent);
+      button.textContent = "Writing…";
+    } else {
+      button.textContent = button.getAttribute("data-said") || "Write a test";
+    }
+  }
+
+  /* The proposal the refine route returns, read out of the HTML it sends. */
+  function proposalIn(html) {
+    try {
+      var holder = document.createElement("div");
+      holder.innerHTML = html;
+      var block = holder.querySelector("#tc-proposed");
+      return block ? JSON.parse(block.textContent) : null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  /* The plain words out of whatever card the route sent back instead. */
+  function reasonIn(html) {
+    try {
+      var holder = document.createElement("div");
+      holder.innerHTML = html;
+      var line = holder.querySelector("p");
+      return line ? line.textContent.trim() : "";
+    } catch (e) {
+      return "";
+    }
+  }
+
+  function keyHeader() {
+    var headers = { "X-QAG-Keys": "[]" };
+    if (window.QAG && window.QAG.headerKeys) {
+      headers["X-QAG-Keys"] = JSON.stringify(window.QAG.headerKeys());
+    }
+    return headers;
+  }
+
+  function nothingWritten(ids) {
+    return (
+      "The AI didn't return a test for " +
+      ids.join(", ") +
+      ". Try again, or write one yourself on the Test cases page."
+    );
+  }
+
+  function addedWords(added) {
+    return (
+      "Added " +
+      added.length +
+      " test" +
+      (added.length === 1 ? "" : "s") +
+      ": " +
+      added.join(", ") +
+      "."
+    );
+  }
+
+  function writeTests(button) {
+    var data = displayedData();
+    button = button || document.getElementById("risk-write-tests");
+    if (!data || !data.analysis || !button) return;
+    var ids = riskIdsOn(button);
+    var picked = pickedRisks(data, ids);
     if (!picked.length) return;
+    var first = ids[0];
     var run = readRun() || {};
-    run.pending_risks = picked;
+    var before = savedCases(run);
+
+    /* Nothing to refine yet: the desk that writes the first list is step 3,
+     * and that is where the reader is taken, with the risks in hand. */
+    if (!caseIds(before).length) {
+      run.pending_risks = picked;
+      writeRun(run);
+      window.location.href = "/requirements/test-cases";
+      return;
+    }
+
+    var body = new FormData();
+    body.append("mode", "risks");
+    body.append("risks_json", JSON.stringify(picked));
+    body.append("user_story", String(run.story || ""));
+    body.append("context", String(run.context || ""));
+    body.append(
+      "criteria_json",
+      JSON.stringify(before.criteria || criteriaTexts(run))
+    );
+    body.append("current_json", JSON.stringify(before.result || {}));
+
+    busyOn(button, true);
+    fetch("/requirements/test-cases/refine", {
+      method: "POST",
+      headers: keyHeader(),
+      body: body
+    })
+      .then(function (response) {
+        return response.text();
+      })
+      .then(function (html) {
+        var proposal = proposalIn(html);
+        if (!proposal) {
+          /* No key, or the model refused: the card the route sent says
+           * which, in its own words, and that is what is shown. */
+          sayOnRisk(first, reasonIn(html) || nothingWritten(ids), "warn", false);
+          return;
+        }
+        var added = addedIds(before, proposal);
+        if (!added.length) {
+          /* "+0 added" is not a success and is never dressed up as one. */
+          sayOnRisk(first, nothingWritten(ids), "warn", false);
+          return;
+        }
+        keepProposal(proposal);
+        sayOnRisk(first, addedWords(added), "ok", true);
+      })
+      .catch(function () {
+        sayOnRisk(first, nothingWritten(ids), "warn", false);
+      })
+      .then(function () {
+        busyOn(button, false);
+      });
+  }
+
+  /* The new list, with the old one on the undo stack the test-cases desk
+   * reads, so Undo there brings back exactly what was there before. */
+  function keepProposal(proposal) {
+    var run = readRun() || {};
+    var history = run.test_cases_history || [];
+    if (run.test_cases) {
+      history.push(run.test_cases);
+      while (history.length > HISTORY_MAX) history.shift();
+    }
+    run.test_cases_history = history;
+    run.test_cases = proposal;
     writeRun(run);
-    window.location.href = "/requirements/test-cases";
   }
 
   /* The counts beside the page title, read off what is on screen. */
@@ -815,5 +1006,17 @@
       if (writingOurOwn) return;
       autoRecheck();
     });
+  }
+
+  /* The pure parts of "Write a test", for the unit tests in tests/js. What
+   * counts as added, and the exact words said about it either way, are
+   * worth pinning down away from a browser. */
+  if (typeof window !== "undefined") {
+    window.QAGRisks = {
+      caseIds: caseIds,
+      addedIds: addedIds,
+      addedWords: addedWords,
+      nothingWritten: nothingWritten
+    };
   }
 })();

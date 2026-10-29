@@ -35,7 +35,7 @@ WORDS = {
 # Band floors, best first.
 BANDS = (("A", 90), ("B", 80), ("C", 70), ("D", 60))
 CAP_LETTER = "D"
-CAP_LINE = "Capped at D because the decision is Not ready."
+CAP_LINE = "Capped at D or below because the decision is Not ready."
 
 
 @dataclass(frozen=True)
@@ -46,6 +46,9 @@ class Grade:
     percent: int
     capped: bool         # True when lowered because the decision is "Not ready"
     lines: list[str]     # plain-words explanation, one line per check
+    # The one sentence that goes under the letter on the page. A letter with
+    # no arithmetic beside it is a letter nobody can argue with.
+    reason: str = ""
 
 
 def letter_for(percent: int) -> str:
@@ -83,6 +86,10 @@ def grade_for(report: ShipReport) -> Grade | None:
         capped = True
         lines.append(CAP_LINE)
 
+    reason = f"{letter} — {points} of {max_points} points."
+    if capped:
+        reason += f" {CAP_LINE}"
+
     return Grade(
         letter=letter,
         points=points,
@@ -90,4 +97,5 @@ def grade_for(report: ShipReport) -> Grade | None:
         percent=percent,
         capped=capped,
         lines=lines,
+        reason=reason,
     )
