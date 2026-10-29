@@ -80,6 +80,23 @@
     return factors;
   }
 
+  /* Why each factor is worth varying, read straight off the editor. It
+   * travels with every rebuild and every reopen, so the line under a factor
+   * is still there after an edit and after a reload. */
+  function readReasons() {
+    var reasons = {};
+    var blocks = document.querySelectorAll(".matrix-factor");
+    Array.prototype.forEach.call(blocks, function (block) {
+      var name = block.querySelector(".matrix-factor-name");
+      var why = block.querySelector(".matrix-reason");
+      if (!name || !why) return;
+      var key = String(name.value || "").trim().toLowerCase();
+      var words = String(why.textContent || "").trim();
+      if (key && words) reasons[key] = words;
+    });
+    return reasons;
+  }
+
   /* The chip holds its value plus a × button, so the button's text is cut. */
   function chipText(chip) {
     var text = "";
@@ -106,7 +123,12 @@
   }
 
   function editorBody() {
-    return { factors: readFactors(), rules: readRules(), pinned: pinned };
+    return {
+      factors: readFactors(),
+      rules: readRules(),
+      pinned: pinned,
+      reasons: readReasons()
+    };
   }
 
   /* ---------- talking to the server ---------- */

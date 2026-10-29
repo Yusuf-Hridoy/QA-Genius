@@ -20,7 +20,7 @@ def item(check_id, title, status, summary, details=None, note="") -> ShipCheckIt
     )
 
 
-def small_report(*items, verdict="dont_ship", reason="1 check failed: Risks with a test.") -> ShipReport:
+def small_report(*items, verdict="dont_ship", reason="1 check failed: High risks without a test.") -> ShipReport:
     items = list(items)
     return ShipReport(
         verdict=verdict,
@@ -50,7 +50,7 @@ def test_the_header_and_the_table():
     head, rest = text.split("\n## Why that grade", 1)
     assert head.rstrip("\n").split("\n") == [
         "# Ship check — Not ready",
-        "1 check failed: Risks with a test.",
+        "1 check failed: High risks without a test.",
         "",
         f"**Story:** {STORY}",
         f"**Checked:** 2 of 3 · {date.today().isoformat()}",

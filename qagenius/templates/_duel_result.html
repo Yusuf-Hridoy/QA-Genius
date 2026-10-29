@@ -24,7 +24,7 @@
       {% if result.reading_a.rules %}
       <ul>
         {% for r in result.reading_a.rules %}
-        <li><strong>{{ r.topic }}:</strong> {{ r.reading }}</li>
+        <li><strong>{{ r.topic | plain_name }}:</strong> {{ r.reading }}</li>
         {% endfor %}
       </ul>
       {% else %}
@@ -34,7 +34,7 @@
       {% if result.reading_a.numbers %}
       <ul>
         {% for n in result.reading_a.numbers %}
-        <li><strong>{{ n.name }}:</strong> {{ n.value }}</li>
+        <li><strong>{{ n.name | plain_name }}:</strong> {{ n.value }}</li>
         {% endfor %}
       </ul>
       {% else %}
@@ -47,7 +47,7 @@
       {% if result.reading_b.rules %}
       <ul>
         {% for r in result.reading_b.rules %}
-        <li><strong>{{ r.topic }}:</strong> {{ r.reading }}</li>
+        <li><strong>{{ r.topic | plain_name }}:</strong> {{ r.reading }}</li>
         {% endfor %}
       </ul>
       {% else %}
@@ -57,7 +57,7 @@
       {% if result.reading_b.numbers %}
       <ul>
         {% for n in result.reading_b.numbers %}
-        <li><strong>{{ n.name }}:</strong> {{ n.value }}</li>
+        <li><strong>{{ n.name | plain_name }}:</strong> {{ n.value }}</li>
         {% endfor %}
       </ul>
       {% else %}
@@ -71,7 +71,7 @@
     <tr><th>Value</th><th>Reader A</th><th>Reader B</th><th></th></tr>
     {% for m in result.number_matches %}
     <tr>
-      <td>{{ m.name }}</td>
+      <td>{{ m.name | plain_name }}</td>
       <td>{{ m.value_a or "—" }}</td>
       <td>{{ m.value_b or "—" }}</td>
       <td><span class="pill {{ match_pill(m.status) }}">{{ match_label(m.status) }}</span></td>
@@ -86,7 +86,7 @@
     <tr><th>About</th><th>How bad</th><th>A vs B</th><th>Better wording</th><th></th></tr>
     {% for fork in forks %}
     <tr>
-      <td>{{ fork.topic }}</td>
+      <td>{{ fork.topic | plain_name }}</td>
       <td>{% if loop.index0 in unclear_forks %}<span class="pill warn">check this</span><br><span class="muted small">Both readers wrote about this, so they may not really disagree.</span>{% else %}<span class="pill {{ severity_pill(fork.severity) }}">{{ fork.severity }}</span>{% endif %}</td>
       <td>A: {% if fork.reading_a in not_stated_values %}<em class="muted">{{ fork.reading_a }}</em>{% else %}{{ fork.reading_a }}{% endif %}<br>B: {% if fork.reading_b in not_stated_values %}<em class="muted">{{ fork.reading_b }}</em>{% else %}{{ fork.reading_b }}{% endif %}</td>
       <td>{{ fork.suggested_rewrite }}{% if loop.index0 in vague_rewrites %} <span class="pill warn">still unclear: {{ vague_rewrites[loop.index0] | join(", ") }}</span>{% endif %}</td>

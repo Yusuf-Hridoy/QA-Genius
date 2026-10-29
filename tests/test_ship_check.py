@@ -453,7 +453,7 @@ def test_two_warns_read_as_plural():
 def test_a_fail_beats_everything_else():
     result = report(**_everything_passes(risk_analysis=RiskAnalysis(failure_modes=[HIGH])))
     assert result.verdict == "dont_ship"
-    assert result.verdict_reason == "1 check failed: Risks with a test."
+    assert result.verdict_reason == "1 check failed: High risks without a test."
 
 
 def test_a_two_reader_problem_alone_never_blocks_a_release():
@@ -475,7 +475,7 @@ def test_every_failed_check_is_named():
     )
     assert result.verdict == "dont_ship"
     assert result.verdict_reason == (
-        "3 checks failed: Criteria with a test, How well tested, Risks with a test."
+        "3 checks failed: Criteria with a test, How well tested, High risks without a test."
     )
 
 

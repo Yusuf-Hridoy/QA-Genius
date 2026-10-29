@@ -47,6 +47,19 @@
   --cta-hover:#FFC53D;
   --on-cta:#1B2140;
 
+  /* A big filled strip is not a button. It is the same yellow here and a
+   * muted amber in the dark, where a full-width block of --cta glares. */
+  --strip:#FFD166;
+  --on-strip:#1B2140;
+
+  /* What a reader types into. A field the same colour as the card it sits
+   * on has no shape of its own; in the dark that was the whole problem. */
+  --field:#FFFFFF;
+
+  /* The count beside My stories, on the rail. */
+  --count-bg:#3D4EB5;
+  --count-fg:#FFFFFF;
+
   /* Warnings, counts that matter, high risk. */
   --alert:#FF6A4D;
   --alert-soft:#FFE8E2;
@@ -111,6 +124,17 @@
   --cta-hover:#FFC53D;
   --on-cta:#1B2140;
 
+  /* A whole strip of #FFD166 on a dark page is a lamp. The amber carries
+   * the same meaning at a size a reader can look at. */
+  --strip:#E8B84A;
+  --on-strip:#1B2140;
+
+  /* Darker than the card behind it, so a box has an edge of its own. */
+  --field:#0F1636;
+
+  --count-bg:#3D4EB5;
+  --count-fg:#FFFFFF;
+
   --alert:#FF8A70;
   --alert-soft:#4A2419;
 
@@ -119,8 +143,10 @@
   --bad-bg:#3C1A12;  --bad-fg:#FFA48C;  --bad-line:#E2553A;
   --info-bg:#1B2456; --info-fg:#A9B8FF; --info-line:#4C5FD5;
 
-  --seq-1:#2A1E26; --seq-2:#4A2A24; --seq-3:#6E3A28;
-  --seq-4:#94492D; --seq-5:#BC5B39; --seq-6:#E0714A;
+  /* The old floor was #2A1E26, which on a #0E1430 canvas was a square
+     nobody could see at all. The ramp starts somewhere visible now. */
+  --seq-1:#3A2B33; --seq-2:#55342C; --seq-3:#75402D;
+  --seq-4:#99502F; --seq-5:#BC5B39; --seq-6:#E0714A;
 
   --shadow-1:0 1px 2px rgba(0,0,0,.4);
   --shadow-2:0 2px 6px rgba(0,0,0,.3), 0 12px 32px -12px rgba(0,0,0,.6);
@@ -156,6 +182,10 @@ a{color:var(--accent);text-underline-offset:2px}
 
 /* One ring on every focusable thing: cobalt on light, yellow on dark. */
 :focus-visible{outline:none;box-shadow:var(--ring);border-radius:4px}
+/* …except the title of a result, which the page moves the keyboard to
+   after an AI run. Tab cannot reach it, so a ring round it is only a
+   box drawn round a heading nobody pressed. */
+[tabindex="-1"]:focus,[tabindex="-1"]:focus-visible{outline:none;box-shadow:none}
 
 /* ---------------------------------------------------------------- shell */
 .layout{min-height:100vh}
@@ -428,7 +458,10 @@ h1.page-title-hero{font-size:56px}
 .pill.chip-id::before{display:none}
 
 /* A trace reads left to right: story, then criterion, then test. */
-.trace{display:inline-flex;align-items:center;gap:6px;flex-wrap:wrap}
+.trace{display:flex;align-items:center;gap:6px;flex-wrap:wrap;max-width:100%}
+/* A chip is normally one unbreakable word. A trace chip may hold a list, so
+   it is allowed to break rather than to widen the page it sits on. */
+.trace .chip{max-width:100%;white-space:normal;overflow-wrap:anywhere}
 .trace .arrow{color:var(--alert);font-weight:700;font-size:13px;
   line-height:1;user-select:none}
 
@@ -441,6 +474,8 @@ h1.page-title-hero{font-size:56px}
   background:var(--warn-bg);color:var(--warn-fg)}
 .note.note-bad,.note-box.note-bad{border-left-color:var(--bad-line);
   background:var(--bad-bg);color:var(--bad-fg)}
+.note.note-ok,.note-box.note-ok{border-left-color:var(--ok-line);
+  background:var(--ok-bg);color:var(--ok-fg)}
 .note a,.note-box a{color:inherit;font-weight:600}
 .note > :first-child,.note-box > :first-child{margin-top:0}
 .note > :last-child,.note-box > :last-child{margin-bottom:0}
@@ -489,6 +524,16 @@ h1.page-title-hero{font-size:56px}
 .btn-primary:hover{background:var(--cta-hover);border-color:var(--cta-hover);
   filter:none;box-shadow:0 4px 14px -4px rgba(224,168,0,.6)}
 .btn-primary:active{background:var(--cta-hover);box-shadow:none}
+/* Save inside an open pop-up. A pop-up is its own screen state: while it is
+   open it is the thing the page wants you to press, and while it is closed
+   it is not on the screen at all. That is why it is yellow without being a
+   second .btn-primary in the markup behind it. */
+.btn.btn-pop-save{background:var(--cta);border-color:var(--cta);
+  color:var(--on-cta);font-weight:600;
+  box-shadow:0 1px 2px rgba(27,33,64,.12)}
+.btn.btn-pop-save:hover{background:var(--cta-hover);border-color:var(--cta-hover);
+  filter:none;box-shadow:0 4px 14px -4px rgba(224,168,0,.6)}
+.btn.btn-pop-save:active{background:var(--cta-hover);box-shadow:none}
 .btn-ghost{background:transparent;border-color:transparent;box-shadow:none;
   color:var(--text-2)}
 .btn-ghost:hover{background:var(--card-2);border-color:var(--border);
@@ -553,7 +598,7 @@ h1.page-title-hero{font-size:56px}
 .field select,.field textarea{
   height:var(--ctl-h);padding:0 12px;font:inherit;font-size:14px;
   border:1px solid var(--border-strong);border-radius:var(--r);
-  background:var(--card);color:var(--text);width:100%;
+  background:var(--field);color:var(--text);width:100%;
   transition:border-color .14s var(--ease),box-shadow .14s var(--ease)}
 .field textarea,textarea.ctl{height:auto;min-height:132px;padding:10px 12px;
   line-height:1.6;resize:vertical}
@@ -662,7 +707,7 @@ input[type=checkbox],input[type=radio]{width:16px;height:16px;
 .pq-review li{margin:3px 0}
 
 
-@media (max-width:640px){.field-grid{grid-template-columns:1fr}}
+@media (max-width:640px){.field-grid{grid-template-columns:minmax(0,1fr)}}
 /* No control is narrower than its content on a phone. */
 @media (max-width:480px){
   .field-pair{grid-template-columns:repeat(2,minmax(0,1fr))}
@@ -909,7 +954,12 @@ mark{background:var(--warn-bg);color:var(--warn-fg);border-radius:3px;
 .key-list{list-style:none;margin:0;padding:0;display:flex;
   flex-direction:column;gap:10px}
 .key-row{background:var(--card-2);border:1px solid var(--border);
-  border-radius:var(--r);padding:12px 14px}
+  border-radius:var(--r);padding:12px 16px 14px}
+/* Five buttons wrapped onto three lines in a 430px drawer. Two stay out,
+   the three used once in a key's life sit under More, and the row holds. */
+.key-actions{flex-wrap:nowrap;gap:6px;align-items:center}
+.key-actions .more-menu{margin-left:auto}
+.key-actions .btn{white-space:nowrap}
 .key-main{display:flex;gap:8px;align-items:center;flex-wrap:wrap;
   margin-bottom:10px}
 .key-main code{font-size:12px;color:var(--text-2)}
@@ -918,7 +968,7 @@ mark{background:var(--warn-bg);color:var(--warn-fg);border-radius:3px;
 .key-edit-form{display:flex;flex-direction:column;gap:8px;margin-top:8px}
 .key-edit-form select,.key-edit-form input{padding:8px 10px;
   border:1px solid var(--border-strong);border-radius:var(--r);
-  background:var(--card);color:var(--text);font:inherit}
+  background:var(--field);color:var(--text);font:inherit}
 
 /* ------------------------------------------- requirements desks (R2) */
 /* Two columns on a desk, one under 1100px: what you fill in on the left,
@@ -928,7 +978,9 @@ mark{background:var(--warn-bg);color:var(--warn-fg);border-radius:3px;
 .req-split > .card{margin-bottom:0}
 .req-main{max-width:none}
 .req-side:empty{display:none}
-@media (max-width:1100px){.req-split{grid-template-columns:1fr}}
+/* `1fr` keeps an automatic min-content floor, so one wide descendant
+   stretched the whole desk past the phone it was being read on. */
+@media (max-width:1100px){.req-split{grid-template-columns:minmax(0,1fr)}}
 
 /* The card title and whatever sits on its right, on one line. */
 .card-head{margin:0 0 12px;align-items:center}
@@ -968,11 +1020,25 @@ mark{background:var(--warn-bg);color:var(--warn-fg);border-radius:3px;
    browser; nothing is invented to fill a box. */
 .overview-grid{display:grid;grid-template-columns:minmax(0,1.45fr) minmax(0,1fr);
   gap:16px;margin-bottom:16px;align-items:stretch}
-@media (max-width:1000px){.overview-grid{grid-template-columns:1fr}}
+@media (max-width:1000px){.overview-grid{grid-template-columns:minmax(0,1fr)}}
 
 #overview-steps .step-state{margin-left:auto;font-size:11.5px;
   color:var(--text-2);white-space:nowrap}
 #overview-steps li.done .step-state{color:var(--ok-fg)}
+/* Ship carries its decision, not its freshness: a green tick beside
+   "Not ready" told the reader the opposite of the verdict. */
+#overview-steps li.step-warn .step-state{color:var(--warn-fg)}
+#overview-steps li.step-bad .step-state{color:var(--bad-fg)}
+.steps li.step-warn a{color:var(--text)}
+.steps li.step-warn .step-n{background:var(--warn-bg);color:var(--warn-fg);
+  font-size:0}
+.steps li.step-warn .step-n::before{content:"!";font-family:var(--font-sans);
+  font-size:13px;font-weight:700}
+.steps li.step-bad a{color:var(--text)}
+.steps li.step-bad .step-n{background:var(--bad-bg);color:var(--bad-fg);
+  font-size:0}
+.steps li.step-bad .step-n::before{content:"¹5";font-family:var(--font-sans);
+  font-size:12px;font-weight:700}
 
 /* The workbench is the one cobalt block on the page: your story, how clear
    it is, and the single question still open. */
@@ -1006,6 +1072,8 @@ mark{background:var(--warn-bg);color:var(--warn-fg);border-radius:3px;
   display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;
   overflow:hidden}
 .bench-empty{color:var(--rail-ink-2)}
+/* What this story already has, under its words. */
+.bench-facts{margin:8px 0 0;color:var(--rail-ink-2);font-size:13px}
 .bench-sub{margin:0;color:var(--rail-ink-2);font-size:13.5px;max-width:46ch}
 .bench-actions{margin-top:2px}
 .bench-score{display:flex;align-items:baseline;gap:10px}
@@ -1020,9 +1088,9 @@ mark{background:var(--warn-bg);color:var(--warn-fg);border-radius:3px;
 /* The one open question, in the one colour that means "your turn". */
 .bench-strip{display:flex;align-items:center;gap:12px;flex-wrap:wrap;
   margin-top:auto;padding:12px 14px;border-radius:var(--r);
-  background:var(--cta);color:var(--on-cta);font-size:13.5px;font-weight:500}
+  background:var(--strip);color:var(--on-strip);font-size:13.5px;font-weight:500}
 .bench-strip-text{flex:1 1 220px;min-width:0}
-.bench-strip-link{margin-left:auto;color:var(--on-cta);font-weight:700;
+.bench-strip-link{margin-left:auto;color:var(--on-strip);font-weight:700;
   white-space:nowrap}
 
 /* What needs attention: at most three rows, worst first. */
@@ -1097,7 +1165,7 @@ mark{background:var(--warn-bg);color:var(--warn-fg);border-radius:3px;
   border-radius:var(--r);padding:14px 16px}
 .duel-col h3{margin-top:0}
 tr.diff-row td:first-child{box-shadow:inset 3px 0 0 var(--warn-line)}
-@media (max-width:768px){.duel-readers{grid-template-columns:1fr}}
+@media (max-width:768px){.duel-readers{grid-template-columns:minmax(0,1fr)}}
 
 /* -------------------------------------------- test cases: chips & cards */
 .filter-chips{margin:0 0 14px}
@@ -1200,7 +1268,11 @@ tr.diff-row td:first-child{box-shadow:inset 3px 0 0 var(--warn-line)}
 .ac-row[data-state="changed"]{border-color:color-mix(in srgb,var(--info-line) 40%,transparent)}
 .ac-words{flex:1;min-width:0}
 .ac-title{margin:0;font-weight:600;font-size:14px}
-.ac-text{margin:4px 0 0;color:var(--text-2);font-size:13px;cursor:text}
+/* Given, When and Then keep their own lines when the card is only
+   being read. Squashed into one paragraph, three steps read as one
+   sentence and nobody could see what the criterion actually asked. */
+.ac-text{margin:4px 0 0;color:var(--text-2);font-size:13px;cursor:text;
+  white-space:pre-line}
 .ac-text:hover{color:var(--text)}
 .ac-row textarea{width:100%;min-height:66px;resize:vertical;margin-top:4px}
 .ac-side{display:flex;flex-direction:column;align-items:flex-end;gap:8px;
@@ -1211,6 +1283,19 @@ tr.diff-row td:first-child{box-shadow:inset 3px 0 0 var(--warn-line)}
   .ac-row{flex-wrap:wrap}
   .ac-side{flex-direction:row;align-items:center;width:100%;
     justify-content:space-between}
+}
+/* At 390px the row's icon tile, words and four buttons added up to more
+   than the screen, so a criterion ran off the side and "+ Add criterion"
+   went with it. Nothing in here may be wider than its parent. */
+@media (max-width:460px){
+  .ac-row{padding:12px;gap:10px}
+  .ac-words{flex:1 1 100%}
+  .ac-text,.ac-title{overflow-wrap:anywhere}
+  .ac-side{align-items:stretch;gap:8px}
+  .ac-actions{flex-wrap:wrap;width:100%}
+  .ac-actions .btn{flex:0 0 auto}
+  .card-head .btn{flex:0 0 auto;white-space:nowrap}
+  .card-head{flex-wrap:wrap}
 }
 .tc-form fieldset{border:none;margin:14px 0;padding:0}
 .tc-form legend{padding:0}
@@ -1251,9 +1336,12 @@ tr.diff-row td:first-child{box-shadow:inset 3px 0 0 var(--warn-line)}
 .setup-steps li{margin:4px 0;font-family:var(--font-mono);
   font-size:12.5px}
 
-.file-view{display:grid;grid-template-columns:minmax(180px,236px) 1fr;gap:14px;
+/* The file list used to take a 236px column out of the card, which left
+   the code itself a narrow strip with every line scrolling sideways. The
+   tabs sit in a row above it now and the code box gets the whole card. */
+.file-view{display:grid;grid-template-columns:minmax(0,1fr);gap:12px;
   align-items:start}
-.file-list{display:flex;flex-direction:column;gap:5px}
+.file-list{display:flex;flex-wrap:wrap;gap:5px}
 .file-tab{text-align:left;padding:8px 10px;border-radius:var(--r-sm);
   cursor:pointer;border:1px solid var(--border);background:var(--card);
   color:var(--text-2);font-family:var(--font-mono);
@@ -1264,9 +1352,20 @@ tr.diff-row td:first-child{box-shadow:inset 3px 0 0 var(--warn-line)}
 /* A grid child is as wide as its widest line unless it is told otherwise,
  * so one long line of generated code pushed the whole page sideways at
  * 1150 px. The column may shrink; the code scrolls inside it. */
-.file-code{min-width:0}
+/* Generated code gets the wide column: the checks beside it are short
+   lines, and a 580px strip made every line of a real test scroll. */
+@media (min-width:1101px){
+  /* 688 of track, less the card's 24px of padding each side, leaves the
+     code itself the 640px a line of a real test needs. */
+  .req-split.code-split{grid-template-columns:minmax(688px,1fr) minmax(0,300px)}
+}
+.file-code{min-width:0;width:100%}
+/* Sideways scrolling belongs to this box and to nothing around it. */
 .file-code pre.code{margin-top:0;max-height:62vh;overflow-x:auto;max-width:100%}
-@media (max-width:768px){.file-view{grid-template-columns:1fr}}
+/* Wrap lines: the same code with no sideways scroll at all. */
+.file-code.wrap pre.code code{white-space:pre-wrap;overflow-wrap:anywhere}
+.file-code.wrap pre.code{overflow-x:hidden}
+.file-tab{max-width:100%}
 
 /* ── automation: the checks column ────────────────────────────────────── */
 .check-tiles{display:flex;flex-direction:column;gap:10px;margin:12px 0 16px}
@@ -1326,14 +1425,14 @@ tr.diff-row td:first-child{box-shadow:inset 3px 0 0 var(--warn-line)}
 .two-cols{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-top:8px}
 .two-cols h3{margin:0 0 4px;font-size:12px;color:var(--text-2);
   letter-spacing:.07em;text-transform:uppercase;font-weight:700}
-@media (max-width:768px){.two-cols{grid-template-columns:1fr}}
+@media (max-width:768px){.two-cols{grid-template-columns:minmax(0,1fr)}}
 
 /* ---------------------------------------------------------- risk radar */
 .risk-split{display:grid;grid-template-columns:330px 1fr;gap:18px;
   align-items:start}
 /* The risk list is the wide column now; the map sits under both. */
 .risk-split-2{grid-template-columns:minmax(0,60fr) minmax(0,40fr)}
-@media (max-width:1100px){.risk-split-2{grid-template-columns:1fr}}
+@media (max-width:1100px){.risk-split-2{grid-template-columns:minmax(0,1fr)}}
 .risk-heat h3{margin:16px 0 6px;font-size:11.5px;color:var(--text-2);
   letter-spacing:.07em;text-transform:uppercase;font-weight:700}
 .risk-heat h3:first-child{margin-top:0}
@@ -1360,6 +1459,9 @@ table.heat{border-collapse:separate;border-spacing:3px;width:100%}
 .heat-cell.s4{background:var(--seq-4)}
 .heat-cell.s5{background:var(--seq-5)}
 .heat-cell.s6{background:var(--seq-6)}
+/* In the dark two neighbouring squares of the ramp run together, so the map
+   reads as one block. A hairline between them is all it takes. */
+:root[data-theme="dark"] .heat-cell{border-color:var(--border)}
 .heat-cell.s5 .pill,.heat-cell.s6 .pill{background:rgba(255,255,255,.9);
   color:#7A2718}
 .heat-cell.has-risk{cursor:pointer}
@@ -1421,15 +1523,18 @@ table.heat{border-collapse:separate;border-spacing:3px;width:100%}
 .coverage.warn{color:var(--warn-fg)}
 .coverage.bad{color:var(--bad-fg)}
 .score-row{margin-top:10px}
+/* "How hard to notice" broke across two lines and the box ended up under
+   its own label. The three fields wrap as whole fields, never inside one. */
 .score-field{font-size:12px;color:var(--text-2);display:inline-flex;gap:6px;
-  align-items:center}
+  align-items:center;white-space:nowrap}
+.score-row{flex-wrap:wrap;gap:10px}
 /* Three scores side by side: the control system's 140px would push the last
  * one onto its own line, so they keep a number's width. */
 .field .score-field input,.score-field input{width:68px;padding:0 8px;
   height:var(--ctl-h-sm);border:1px solid var(--border-strong);
-  border-radius:var(--r-sm);background:var(--card);color:var(--text);
+  border-radius:var(--r-sm);background:var(--field);color:var(--text);
   font:inherit;font-size:13px;font-variant-numeric:tabular-nums}
-@media (max-width:980px){.risk-split{grid-template-columns:1fr}
+@media (max-width:980px){.risk-split{grid-template-columns:minmax(0,1fr)}
   .risk-heat{position:static}}
 
 /* ------------------------------------------------------------ source card */
@@ -1566,8 +1671,11 @@ svg.next-mark{color:var(--ok-line)}
   border-top:1px solid rgba(255,255,255,.1)}
 .nav-stories:hover{background:rgba(255,255,255,.07);color:#fff}
 .nav-stories.active{background:var(--rail-2);color:#fff}
+/* rgba(255,255,255,.14) over the rail gave the number about 3:1 against
+   the badge it sat in. A real token, and a real contrast. */
 .nav-count{margin-left:auto;font-family:var(--font-mono);font-size:11px;
-  padding:2px 7px;border-radius:999px;background:rgba(255,255,255,.14)}
+  font-weight:600;padding:2px 7px;border-radius:999px;
+  background:var(--count-bg);color:var(--count-fg)}
 .save-status{margin-left:14px;font-size:12.5px;color:var(--muted);
   white-space:nowrap}
 .save-status.save-status-bad{color:var(--bad-fg);font-weight:600}
@@ -1664,7 +1772,11 @@ svg.next-mark{color:var(--ok-line)}
   border-color:color-mix(in srgb,var(--bad-line) 35%,transparent)}
 
 /* The grade: a letter in a ring, and the sums behind it one press away. */
-.grade-holder{position:relative;flex:0 0 auto}
+.grade-holder{position:relative;flex:0 0 auto;display:flex;
+  flex-direction:column;align-items:center;gap:6px;text-align:center}
+/* The sums, in words, under the letter. */
+.grade-reason{margin:0;font-size:12.5px;line-height:1.45;max-width:24ch}
+.btn.grade-open{font-size:12px}
 .btn.grade-circle{width:78px;height:78px;padding:0;border-radius:50%;
   border:3px solid currentColor;background:transparent;
   display:grid;place-items:center;box-shadow:none}
@@ -1723,6 +1835,7 @@ svg.next-mark{color:var(--ok-line)}
   .ship-accept{display:none!important}
   /* The grade is part of the paper record; the popover is not. */
   .grade-why{display:none!important}
+  .btn.grade-open{display:none!important}
   .ship-banner{break-inside:avoid}
   .req-split{display:block}
   :root{--rail-w:0px}
@@ -1818,3 +1931,34 @@ svg.next-mark{color:var(--ok-line)}
   /* Near the right edge a left-anchored panel runs off the page. */
   .explain-panel{left:auto;right:0}
 }
+
+/* ── which story you are on, and what another tab did to it ────────────────
+   The id chip is the story's own, beside the page title on every desk. It is
+   a different element from .page-pill, which a desk fills with its own
+   counts: the two used to share one slot, so opening Risk radar replaced
+   "CART-204 · Draft" with "9 risks" and the reader lost the thread. */
+.page-head .story-chip{grid-column:1;justify-self:start;margin-bottom:6px}
+
+/* The bar that says another tab moved first. It sits above everything on
+   the page because it is about the page, not about one card on it. */
+.story-bar{display:flex;align-items:center;gap:14px;flex-wrap:wrap;
+  margin-bottom:18px;padding:12px 16px;
+  border-left:3px solid var(--warn-line)}
+.story-bar-words{flex:1 1 260px;min-width:0;font-weight:500}
+.story-bar-actions{display:flex;gap:8px;flex-wrap:wrap}
+
+/* ── More ▾ ─────────────────────────────────────────────────────────────────
+   A row of actions keeps one main button and two next to it; everything
+   else lives here, so nothing wraps onto a second line at 1440px. */
+.more-menu{position:relative;display:inline-flex}
+.more-list{position:absolute;z-index:45;top:calc(100% + 6px);right:0;
+  min-width:200px;display:flex;flex-direction:column;align-items:stretch;
+  gap:2px;padding:6px;background:var(--card);
+  border:1px solid var(--border-strong);border-radius:var(--r);
+  box-shadow:var(--shadow-2)}
+.more-list .btn{justify-content:flex-start;width:100%;white-space:nowrap}
+
+/* What "Write a test" did, at the top of that risk's own panel. It used to
+   be a trip to another page and a list the reader had to search. */
+.risk-written{margin:0 0 12px}
+.risk-written-link{white-space:nowrap;font-weight:600}

@@ -108,7 +108,7 @@ def test_not_ready_is_never_graded_above_d() -> None:
     assert grade.percent == 75
     assert grade.letter == "D"
     assert grade.capped is True
-    assert grade.lines[-1] == "Capped at D because the decision is Not ready."
+    assert grade.lines[-1] == "Capped at D or below because the decision is Not ready."
 
 
 def test_a_not_ready_report_already_under_d_is_left_alone() -> None:

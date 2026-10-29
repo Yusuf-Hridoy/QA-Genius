@@ -14,7 +14,9 @@
   </div>
 </div>
 
-<div class="req-split">
+{# The code column is the wide one here: a reader is reading code, and the
+   checks beside it are short lines. #}
+<div class="req-split code-split">
   <div class="req-main">
     <div class="card">
       <h2 class="card-title">The project</h2>
@@ -27,6 +29,10 @@
         <div class="file-code">
           <div class="row file-code-head">
             <button type="button" class="btn btn-sm" id="copy-code">Copy</button>
+            {# A long line can be read across or wrapped. Both are useful and
+               neither is right for everyone, so it is a switch. #}
+            <button type="button" class="btn btn-sm" id="wrap-code"
+                    aria-pressed="false">Wrap lines</button>
             <span class="muted small" id="copy-status" aria-live="polite"></span>
           </div>
           {% for file in report.files %}
@@ -103,9 +109,7 @@
           <span class="check-mark">{{ "✓" if not errors else "!" }}</span>
           <div>
             <p class="check-title">Code check ({{ syntax_label }})</p>
-            <p class="check-line">Python is read by a real parser. TypeScript and
-              JavaScript only get a quick check that brackets and quotes match.
-              That is not a compile.</p>
+            <p class="check-line">{{ syntax_note }}</p>
             <details class="check-more">
               <summary>File by file</summary>
               <table class="grid">

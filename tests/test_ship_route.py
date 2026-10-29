@@ -75,7 +75,7 @@ def test_an_empty_run_ships_with_risks_because_the_core_checks_are_missing():
     body = post({"story": "A story nobody has checked yet."}).text
     assert "Release with known risks" in body
     assert "Not enough to go on" in body
-    assert "Criteria with a test, Risks with a test not done yet." in body
+    assert "Criteria with a test, High risks without a test not done yet." in body
 
 
 def test_no_body_at_all_is_not_an_error():
@@ -89,7 +89,7 @@ def test_the_example_cannot_ship():
     response = client.post("/ship/example")
     assert response.status_code == 200
     assert "Not ready" in response.text
-    assert "1 check failed: Risks with a test." in response.text
+    assert "1 check failed: High risks without a test." in response.text
 
 
 def test_the_example_has_the_statuses_the_brief_asks_for():
@@ -195,7 +195,7 @@ def test_the_markdown_block_is_present_and_parses():
     assert match
     markdown = json.loads(match.group(1))
     assert markdown.startswith("# Ship check — Not ready")
-    assert "| Risks with a test | ❌ Fail |" in markdown
+    assert "| High risks without a test | ❌ Fail |" in markdown
 
 
 def test_the_rows_come_in_check_ids_order():

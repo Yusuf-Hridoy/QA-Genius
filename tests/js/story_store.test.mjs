@@ -41,6 +41,9 @@ function load(options = {}) {
       getItem: (key) => (key in session ? session[key] : null),
       setItem: (key, value) => {
         session[key] = String(value);
+      },
+      removeItem: (key) => {
+        delete session[key];
       }
     },
     dispatchEvent: (event) => {
@@ -144,42 +147,101 @@ test("opening a story that is not there changes nothing", () => {
 
 /* ── saving as you work ─────────────────────────────────────────────────── */
 
-test("saveActive writes the run back over the open story", () => {
+test("saveStory writes the run back over the story it names", () => {
   const { S } = load();
-  S.create({ run: RUN });
-  assert.equal(S.saveActive({ story: "an edited story" }), "");
-  assert.equal(S.active().run.story, "an edited story");
-  assert.equal(S.active().title, "an edited story");
+  const id = S.create({ run: RUN }).story.id;
+  assert.equal(S.saveStory(id, { story: "an edited story" }), "");
+  assert.equal(S.get(id).run.story, "an edited story");
+  assert.equal(S.get(id).title, "an edited story");
 });
 
-test("saveActive with nothing open says so", () => {
+test("a save with no story id goes nowhere", () => {
   const { S } = load();
-  assert.equal(S.saveActive(RUN), "no-active");
+  S.create({ run: RUN });
+  assert.equal(S.saveStory("", { story: "lost" }), "no-id");
+});
+
+test("a run that lost its id is saved into the story this tab is on", () => {
+  const { S } = load();
+  const id = S.create({ run: RUN }).story.id;
+  // A desk that built a fresh run object rather than copying the old one.
+  assert.equal(S.saveRun({ story: "pasted on another desk" }), "");
+  assert.equal(S.get(id).run.story, "pasted on another desk");
+});
+
+test("the first words on a tab with no story at all make one", () => {
+  const { S, QAGRun } = load();
+  QAGRun.write({ story: "typed before anything existed" });
+  assert.equal(S.saveRun(QAGRun.read()), "");
+  assert.equal(S.count(), 1);
+  assert.equal(S.active().run.story, "typed before anything existed");
+  assert.equal(QAGRun.read()._story_id, S.active().id);
+});
+
+test("but not on a tab whose story was just deleted", () => {
+  const { S, QAGRun } = load();
+  const id = S.create({ run: RUN }).story.id;
+  S.open(id);
+  S.remove(id);
+  assert.equal(S.storyWasDeleted(), true);
+  QAGRun.write({ story: "typed after the delete" });
+  assert.equal(S.saveRun(QAGRun.read()), "deleted");
+  assert.deepEqual(plain(S.list()), []);
+});
+
+test("a save into a story that is gone is refused", () => {
+  const { S } = load();
+  const id = S.create({ run: RUN }).story.id;
+  S.remove(id);
+  assert.equal(S.saveStory(id, { story: "too late" }), "deleted");
 });
 
 test("an example is never saved over your story", () => {
   const { S } = load();
-  S.create({ run: RUN });
-  assert.equal(S.saveActive({ story: "the sample", story_is_example: true }), "example");
-  assert.equal(S.active().run.story, RUN.story);
+  const id = S.create({ run: RUN }).story.id;
+  assert.equal(
+    S.saveStory(id, { story: "the sample", story_is_example: true }),
+    "example"
+  );
+  assert.equal(S.get(id).run.story, RUN.story);
 });
 
 test("the id and status in the run reach the saved story", () => {
   const { S } = load();
-  S.create({ run: RUN });
-  S.saveActive({ story: "x", story_label: "CART-9", story_status: "review" });
-  assert.equal(S.active().label, "CART-9");
-  assert.equal(S.active().status, "review");
+  const id = S.create({ run: RUN }).story.id;
+  S.saveStory(id, { story: "x", story_label: "CART-9", story_status: "review" });
+  assert.equal(S.get(id).label, "CART-9");
+  assert.equal(S.get(id).status, "review");
+});
+
+test("saving what is already there is not an edit", () => {
+  const { S } = load();
+  const made = S.create({ run: RUN }).story;
+  const before = S.get(made.id).updated_at;
+  assert.equal(S.saveStory(made.id, S.bound(made)), "same");
+  assert.equal(S.get(made.id).updated_at, before);
+  assert.equal(S.get(made.id).revision, made.revision);
+});
+
+test("an id another story already uses is refused", () => {
+  const { S } = load();
+  S.create({ run: RUN, label: "CHK-101" });
+  const second = S.create({ run: RUN, label: "CART-204" }).story;
+  const clash = S.create({ run: RUN, label: "CHK-101" });
+  assert.equal(clash.error, "duplicate-label");
+  assert.match(clash.message, /CHK-101 is already used by another story/);
+  assert.equal(S.rename(second.id, "CHK-101"), "duplicate-label");
+  assert.equal(S.get(second.id).label, "CART-204");
 });
 
 test("a write to the run saves the story one tick later", () => {
   const { S, QAGRun, tick } = load();
-  S.create({ run: RUN });
+  const id = S.create({ run: RUN }).story.id;
   S.listen();
-  QAGRun.write({ story: "typed just now" });
-  assert.equal(S.active().run.story, RUN.story, "not saved before the wait");
+  QAGRun.write({ story: "typed just now", _story_id: id });
+  assert.equal(S.get(id).run.story, RUN.story, "not saved before the wait");
   tick();
-  assert.equal(S.active().run.story, "typed just now");
+  assert.equal(S.get(id).run.story, "typed just now");
 });
 
 test("the wait is 600ms, so typing does not write on every key", () => {
@@ -226,13 +288,17 @@ test("remove takes one story and leaves the rest", () => {
   assert.equal(S.active().id, second.id);
 });
 
-test("removing the open story opens another one", () => {
-  const { S } = load();
+test("removing the open story leaves this tab with none", () => {
+  const { S, QAGRun } = load();
   const first = S.create({ run: { story: "first" } }).story;
   S.create({ run: { story: "second" } });
-  S.setActive(first.id);
+  S.open(first.id);
   S.remove(first.id);
-  assert.notEqual(S.active(), null);
+  // Nothing to show and nothing to save into: the page draws its empty
+  // start screen rather than the deleted story's words.
+  assert.equal(S.active(), null);
+  assert.equal(S.tabStory(), "");
+  assert.equal(QAGRun.read().story, undefined);
 });
 
 test("removeAll leaves nothing behind", () => {
@@ -256,10 +322,10 @@ test("twenty-five stories is the most", () => {
 
 test("a run too big to save is refused, not half written", () => {
   const { S } = load();
-  S.create({ run: RUN });
+  const id = S.create({ run: RUN }).story.id;
   const huge = { story: "x".repeat(5 * 1024 * 1024) };
-  assert.equal(S.saveActive(huge), "full");
-  assert.equal(S.active().run.story, RUN.story);
+  assert.equal(S.saveStory(id, huge), "full");
+  assert.equal(S.get(id).run.story, RUN.story);
 });
 
 test("storage that refuses every write never throws", () => {

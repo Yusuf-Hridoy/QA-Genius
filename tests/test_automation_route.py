@@ -256,7 +256,10 @@ def test_the_result_shows_traced_missing_and_syntax(monkeypatch) -> None:
     assert "1 of 2 test cases you picked have a test that names them" in response.text
     assert "No test mentions TC-003" in response.text
     assert "looks OK" in response.text
-    assert "That is not a compile" in response.text
+    # A bracket count is not a compiler, and the words never pretend it is.
+    assert "Quick check: brackets and quotes match (not a full compile)." in response.text
+    assert "no syntax errors" not in response.text
+    assert "all fine" not in response.text
 
 
 def test_a_syntax_error_is_shown(monkeypatch) -> None:
@@ -315,7 +318,9 @@ def test_there_is_one_button_per_file() -> None:
 def test_the_stat_row_counts_files_traces_syntax_and_warnings() -> None:
     body = client.post("/requirements/automation/example").text
     assert ">3 / 3<" in body
-    assert "all fine" in body
+    # TypeScript gets "brackets match", never a claim the code compiles.
+    assert "brackets match" in body
+    assert "all fine" not in body
     assert ">Tests linked<" in body
     assert ">Warnings<" in body
 

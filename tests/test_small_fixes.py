@@ -44,8 +44,19 @@ def test_the_samples_agree_about_the_numbers():
 
 
 def test_the_code_column_may_shrink_and_the_code_scrolls_inside_it():
-    assert ".file-code{min-width:0}" in CSS
+    assert ".file-code{min-width:0;width:100%}" in CSS
     assert "overflow-x:auto" in CSS.split(".file-code pre.code{", 1)[1][:120]
+
+
+def test_the_code_box_gets_the_whole_card_and_can_wrap():
+    """A 236px file column left the code a strip that scrolled every line."""
+    assert ".file-view{display:grid;grid-template-columns:minmax(0,1fr)" in CSS
+    # Wrapping is a switch, and sideways scroll stays inside the box.
+    assert ".file-code.wrap pre.code code{white-space:pre-wrap" in CSS
+    result = (ROOT / "qagenius" / "templates" / "_automation_result.html").read_text(
+        encoding="utf-8"
+    )
+    assert 'id="wrap-code"' in result
 
 
 # ── 21: the slow desks say how long they take ───────────────────────────────
