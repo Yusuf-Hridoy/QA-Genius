@@ -1,8 +1,10 @@
 """Save a PNG of every desk at desktop and phone width.
 
-This script starts nothing. Run the app yourself first:
+This script starts nothing. Run the app yourself first, with QAG_DEV=1:
+the rings are shot from /dev/rings, and the dev pages are only served
+behind that flag, so without it that one shot is a 404 page.
 
-    uvicorn main:app --reload
+    QAG_DEV=1 uvicorn main:app --reload
     python scripts/ui_screenshots.py                  # 127.0.0.1:8000
     python scripts/ui_screenshots.py http://localhost:9000
     python scripts/ui_screenshots.py http://localhost:9000 polish-before
@@ -52,7 +54,9 @@ SHOTS: list[tuple[str, str, str | None]] = [
     ("next-row", "/dev/next-row", None),
     ("ship-check-example", "/ship", EXAMPLE),
     ("story-empty", "/requirements/story", None),
-    ("story-example", "/requirements/story", "#load-example"),
+    # The example now sits on the button row itself ("New here? Load an
+    # example"); the copy behind More is still there but starts hidden.
+    ("story-example", "/requirements/story", "#load-example-link"),
     # Now the run holds a story, so the Overview has something to show.
     ("overview-with-run", "/", None),
     ("test-cases-example", "/requirements/test-cases", EXAMPLE),
@@ -115,9 +119,15 @@ def main(argv: list[str]) -> int:
                         _settle(page)
                         if click:
                             target = page.locator(click)
+                            # A button that is missing, or is there but
+                            # hidden behind something, is worth a PNG of the
+                            # page as it stands. Clicking it anyway spends
+                            # thirty seconds timing out and loses the rest
+                            # of the sweep.
                             if target.count() == 0:
-                                # Worth a PNG of the page as it stands anyway.
                                 print(f"note: no {click} on {path}, shooting as-is")
+                            elif not target.first.is_visible():
+                                print(f"note: {click} is hidden on {path}, shooting as-is")
                             else:
                                 target.first.click()
                                 _settle(page)

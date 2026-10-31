@@ -216,15 +216,11 @@
     card.className = "source-card stale";
     card.appendChild(icon(ICONS.stale, "source-mark"));
     var body = el("div", "source-body");
-    var title = el("p", "source-title");
-    title.appendChild(el("strong", null, "Old — your work changed."));
-    if (status.changes.length) {
-      title.appendChild(document.createTextNode(" " + status.changes[0] + "."));
-    }
-    body.appendChild(title);
-    status.changes.slice(1).forEach(function (line) {
-      body.appendChild(el("p", "source-extra", line + "."));
-    });
+    /* The same one line every desk uses: a dot and a sentence that names
+     * what changed. "Your criteria changed (3 → 4)", not three lines. */
+    body.appendChild(
+      statusLine("warn", status.changes.join(" · ") || "Your work changed.")
+    );
     body.appendChild(el("p", "source-detail", "Latest: " + latestLine(latest)));
     card.appendChild(body);
 
@@ -247,7 +243,7 @@
     card.className = "source-card fresh";
     card.appendChild(icon(ICONS.fresh, "source-mark"));
     var body = el("div", "source-body");
-    body.appendChild(el("p", "source-title", freshLine(desk, latest, status.built_at)));
+    body.appendChild(statusLine("ok", freshLine(desk, latest, status.built_at)));
     /* Either the recheck is still pending (auto) or it has just run and left
      * its record; both are worth saying, because neither cost a key. */
     var rechecked = run && run.risk_analysis_rechecked;
@@ -267,37 +263,45 @@
     card.appendChild(body);
   }
 
+  /* ---------- one status line, everywhere ---------- */
+
+  /* A dot, a sentence, and the desks worth opening. Nothing else.
+   *
+   * Ship check used to carry three lines that could disagree: a chip
+   * saying the inputs were older, this card saying everything came from
+   * the latest results, and a green tick in front of "Some of this is
+   * older…". One line cannot argue with itself. */
+  function statusLine(tone, words) {
+    var line = el("p", "status-line status-" + tone);
+    line.appendChild(el("span", "status-dot dot-" + tone));
+    line.appendChild(el("span", "status-words", words));
+    return line;
+  }
+
+  function addDeskLinks(line, desks) {
+    desks.forEach(function (desk, index) {
+      var link = el("a", "status-desk", DESK_NAMES[desk] || desk);
+      link.setAttribute("href", DESK_LINKS[desk] || "/");
+      line.appendChild(link);
+      if (index < desks.length - 1) {
+        line.appendChild(document.createTextNode(", "));
+      }
+    });
+    line.appendChild(document.createTextNode("."));
+  }
+
   function buildShip(card, run, status) {
-    card.className = "source-card fresh";
-    card.appendChild(icon(ICONS.fresh, "source-mark"));
-    var body = el("div", "source-body");
-    body.appendChild(
-      el("p", "source-title", "Worked out just now from your latest results.")
-    );
-    if (status.changes.length) {
-      var warn = el("div", "source-older");
-      warn.appendChild(
-        el("span", null, "Some of this is older than your latest work: ")
-      );
-      status.changes.forEach(function (desk, index) {
-        var reason = window.QAGRun.statusOf(desk, run).changes[0] || "";
-        var link = el("a", null, DESK_NAMES[desk] || desk);
-        link.setAttribute("href", DESK_LINKS[desk] || "/");
-        warn.appendChild(link);
-        // "Risk radar — your criteria changed just now (6 → 7)", with the
-        // only brackets being the ones the sentence itself needs.
-        if (reason) {
-          warn.appendChild(
-            el("span", "muted", " — " + reason.charAt(0).toLowerCase() + reason.slice(1))
-          );
-        }
-        warn.appendChild(
-          document.createTextNode(index === status.changes.length - 1 ? "." : "; ")
-        );
-      });
-      body.appendChild(warn);
+    card.className = "source-card status-only";
+    if (!status.changes.length) {
+      card.appendChild(statusLine("ok", "Up to date with your latest work."));
+      return;
     }
-    card.appendChild(body);
+    var line = statusLine(
+      "warn",
+      "Some results are older than your latest work — "
+    );
+    addDeskLinks(line, status.changes);
+    card.appendChild(line);
   }
 
   /* ---------- the sidebar ---------- */

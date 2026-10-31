@@ -569,9 +569,13 @@ def test_every_risk_detail_carries_its_level_worst_first():
         ),
         "risks",
     )
+    # The row is called "High risks without a test", so it lists those.
     assert item.details == [
         "High · R5 Uncaught exception in the navigation reducer — no test",
         "High · R1 Focus trap in the overlay — AI claim doesn't match its test",
+    ]
+    # The medium ones are their own "check this" line, not padding on this one.
+    assert item.secondary == [
         "Medium · R2 Slow first paint — no test",
         "Medium · R8 Unauthorized module access — AI claim doesn't match its test",
     ]
@@ -589,7 +593,8 @@ def test_a_weak_medium_risk_is_listed_even_though_the_rules_are_unchanged():
         "risks",
     )
     assert item.status == "pass"
-    assert item.details == [
+    assert item.details == []
+    assert item.secondary == [
         "Medium · R8 Unauthorized module access — AI claim doesn't match its test"
     ]
 

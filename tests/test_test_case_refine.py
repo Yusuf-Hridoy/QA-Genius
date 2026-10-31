@@ -225,7 +225,19 @@ def test_an_existing_case_is_left_alone() -> None:
 
 
 def test_a_risk_id_nobody_asked_for_is_not_tagged() -> None:
+    """R9 was invented, so it is not a tag. R1 was asked for, so it is.
+
+    Write a test on one risk means every case that comes back is for that
+    risk: the desk is told which, rather than guessing from the words.
+    """
     current = suite(case(case_id="TC-001"))
     proposed = suite(case(case_id="TC-001"), case(case_id="TC-002", title="About R9"))
     merged = add_risk_tags(current, proposed, ["R1"])
+    assert merged.test_cases[1].tags == ["login", "risk:R1"]
+
+
+def test_with_several_risks_asked_for_a_case_that_names_none_is_left_alone() -> None:
+    current = suite(case(case_id="TC-001"))
+    proposed = suite(case(case_id="TC-001"), case(case_id="TC-002", title="Something"))
+    merged = add_risk_tags(current, proposed, ["R1", "R6"])
     assert merged.test_cases[1].tags == ["login"]

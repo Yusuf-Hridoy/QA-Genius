@@ -5,7 +5,7 @@
 {% from "_form_fields.html" import group %}
 <div class="card card-form" data-input-card="Your report files">
   <h2>Your report files</h2>
-  <form id="insights-form" hx-post="/insights/analyze" hx-target="#insights-output" hx-swap="innerHTML"
+  <form id="insights-form" data-error-title="Could not read the test run" hx-post="/insights/analyze" hx-target="#insights-output" hx-swap="innerHTML"
         hx-encoding="multipart/form-data" hx-indicator="#insights-progress">
     <div class="form-body">
       {% call group("Report files", hint="Up to 5 files · 2 MB each · JUnit XML or Playwright JSON", id="insights-files-field") %}

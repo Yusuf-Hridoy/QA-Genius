@@ -129,8 +129,15 @@
   --strip:#E8B84A;
   --on-strip:#1B2140;
 
-  /* Darker than the card behind it, so a box has an edge of its own. */
-  --field:#0F1636;
+  /* Darker than the card behind it, so a box has an edge of its own.
+     #0F1636 was rgb 15,22,54 against a page of rgb 14,20,48: a difference
+     nobody could see. This one reads as a well in the card. */
+  --field:#0A1029;
+  /* The amber strip as a soft fill rather than a solid bar: a full-width
+     block of yellow on a dark page is a lamp. */
+  --strip-soft:rgba(232,184,74,.16);
+  --strip-soft-ink:#F2C96B;
+  --strip-soft-line:#E8B84A;
 
   --count-bg:#3D4EB5;
   --count-fg:#FFFFFF;
@@ -209,12 +216,12 @@ a{color:var(--accent);text-underline-offset:2px}
   font-size:17px;font-weight:700;line-height:1;
   box-shadow:0 2px 10px rgba(0,0,0,.25)}
 .logo-words{line-height:1.15}
-.logo-sub{display:block;font-family:var(--font-mono);font-size:10px;
+.logo-sub{display:block;font-family:var(--font-mono);font-size:13px;
   font-weight:500;letter-spacing:.14em;text-transform:uppercase;
   color:var(--rail-ink-2);margin-top:3px}
 
 .nav-group{padding:10px 12px 2px}
-.nav-label{padding:10px 12px 8px;font-family:var(--font-mono);font-size:10.5px;
+.nav-label{padding:10px 12px 8px;font-family:var(--font-mono);font-size:13px;
   font-weight:500;letter-spacing:.14em;text-transform:uppercase;
   color:var(--rail-ink-2)}
 .nav{display:flex;flex-direction:column;gap:2px;padding:0}
@@ -222,7 +229,7 @@ a{color:var(--accent);text-underline-offset:2px}
   border-radius:var(--r);color:var(--rail-ink-2);text-decoration:none;
   font-weight:500;font-size:14.5px;position:relative;
   transition:background .14s var(--ease),color .14s var(--ease)}
-.nav-n{font-family:var(--font-mono);font-size:11px;letter-spacing:.04em;
+.nav-n{font-family:var(--font-mono);font-size:13px;letter-spacing:.04em;
   color:var(--rail-ink-2);flex:0 0 16px;opacity:.85}
 .nav a:hover{background:rgba(255,255,255,.07);color:#fff}
 .nav a.active{background:var(--rail-2);color:#fff;font-weight:600}
@@ -231,15 +238,15 @@ a{color:var(--accent);text-underline-offset:2px}
 .nav a.active::before{content:"";position:absolute;left:0;top:50%;
   transform:translateY(-50%);width:3px;height:70%;border-radius:0 3px 3px 0;
   background:var(--cta)}
-.nav-tag{margin-left:auto;font-family:var(--font-mono);font-size:10px;
+.nav-tag{margin-left:auto;font-family:var(--font-mono);font-size:13px;
   letter-spacing:.06em;text-transform:uppercase;padding:2px 7px;
   border-radius:999px;background:rgba(255,255,255,.12);color:var(--rail-ink-2)}
 
 .rail-foot{margin-top:auto;padding:16px;display:flex;flex-direction:column;
   gap:4px;border-top:1px solid rgba(255,255,255,.1)}
-.rail-foot-label{font-family:var(--font-mono);font-size:10.5px;font-weight:500;
+.rail-foot-label{font-family:var(--font-mono);font-size:13px;font-weight:500;
   letter-spacing:.12em;text-transform:uppercase;color:var(--rail-ink)}
-.rail-foot-line{font-size:12.5px;color:var(--rail-ink-2)}
+.rail-foot-line{font-size:13px;color:var(--rail-ink-2)}
 .rail-foot strong{color:var(--rail-ink);font-weight:600}
 
 .main{margin-left:var(--rail-w);min-width:0;display:flex;flex-direction:column;
@@ -294,13 +301,13 @@ h1.page-title-hero{font-size:56px}
 .page-head .lede{margin:7px 0 0;color:var(--text-2);font-size:15px;max-width:68ch}
 .page-head .row{margin-top:14px}
 .page-pill{grid-column:2;grid-row:1 / span 3;justify-self:end;align-self:center;
-  font-family:var(--font-mono);font-size:11.5px;font-weight:500;
+  font-family:var(--font-mono);font-size:13px;font-weight:500;
   letter-spacing:.08em;text-transform:uppercase;color:var(--text-2);
   background:var(--card);
   border:1px solid var(--border-strong);border-radius:999px;padding:5px 12px;
   white-space:nowrap}
 .eyebrow{display:inline-flex;align-items:center;gap:8px;
-  font-family:var(--font-mono);font-size:12px;font-weight:500;
+  font-family:var(--font-mono);font-size:13px;font-weight:500;
   letter-spacing:.14em;text-transform:uppercase;
   color:var(--accent);margin-bottom:9px}
 .card-title{margin:0 0 10px;font-family:var(--font-serif);font-size:22px;
@@ -375,13 +382,36 @@ h1.page-title-hero{font-size:56px}
   display:inline-flex;align-items:baseline;justify-content:center;
   white-space:nowrap;max-width:calc(var(--ring-size) - 32px)}
 /* The unit is a footnote to the number, never half the room it takes. */
-.score-ring .score-num .pct{font-size:.55em;font-weight:600;margin-left:.04em}
-.score-ring .score-of{position:relative;font-size:11px;color:var(--muted);
+/* A footnote to the number, with a floor: at .55em of a 13px ring the
+   per-cent sign came out at 7px. */
+.score-ring .score-num .pct{font-size:max(12px,.55em);font-weight:600;
+  margin-left:.04em}
+.score-ring .score-of{position:relative;font-size:13px;color:var(--muted);
   margin-top:1px;letter-spacing:.04em}
 @media (max-width:620px){.score-ring{--ring-size:92px}}
 .verdict h2{margin:0 0 4px;font-size:21px;letter-spacing:-.022em}
 .verdict p{margin:0;color:var(--text-2);max-width:62ch}
 @media (max-width:620px){.verdict{grid-template-columns:1fr;text-align:left}}
+
+/* A faded sample of the answer, so the right half of the Story step is not
+   half a page of nothing before the first press. */
+.result-preview{opacity:.55;pointer-events:none;user-select:none}
+.result-preview .preview-head{margin:14px 0 4px;font-weight:600;font-size:14px}
+.result-preview .preview-sub{margin:0;font-size:13px;color:var(--text-2)}
+.result-preview .preview-score{display:flex;align-items:center;gap:14px;
+  margin-top:8px}
+.result-preview .preview-score .preview-head{margin:0}
+.preview-ring{width:64px;height:64px;flex:0 0 64px;border-radius:50%;
+  border:7px solid var(--border-strong)}
+.preview-chips{gap:6px;margin:0}
+.preview-lines{margin:4px 0 12px;padding-left:18px;color:var(--text-2);
+  font-size:13px}
+.preview-lines li{margin:3px 0}
+/* A button that reads as a link: it is an offer, not the next step. */
+.btn.link-button{background:transparent;border-color:transparent;
+  box-shadow:none;padding-left:4px;padding-right:4px;
+  color:var(--accent);text-decoration:underline;font-weight:600}
+.btn.link-button:hover{background:transparent;color:var(--accent-deep)}
 
 /* ------------------------------------------------------- numbers & tiles */
 .stat-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));
@@ -423,10 +453,16 @@ h1.page-title-hero{font-size:56px}
 .score-ring.stat-ring .score-num{font-size:13px;
   max-width:calc(var(--ring-size) - 18px)}
 .stat-row-4{grid-template-columns:repeat(auto-fit,minmax(190px,1fr))}
+/* One compact row: four numbers that belong together, at a height that
+   does not push the risks themselves below the fold. */
+.stat-row-tight{gap:10px;margin-bottom:14px}
+.stat-row-tight .stat{padding:10px 14px}
+.stat-row-tight .stat .num{font-size:24px}
+.stat-row-tight .stat .lbl{margin-top:2px}
 
 /* ---------------------------------------------------------------- pills */
 .pill{display:inline-flex;align-items:center;gap:5px;padding:3px 9px;
-  border-radius:999px;font-size:11.5px;font-weight:600;white-space:nowrap;
+  border-radius:999px;font-size:13px;font-weight:600;white-space:nowrap;
   letter-spacing:.005em;line-height:1.5}
 .pill::before{content:"";width:5px;height:5px;border-radius:50%;
   background:currentColor;opacity:.72;flex:0 0 5px}
@@ -436,7 +472,7 @@ h1.page-title-hero{font-size:56px}
 .pill.info{background:var(--info-bg);color:var(--info-fg)}
 .pill.accent{background:var(--accent-soft);color:var(--accent-ink)}
 .pill.neutral{background:var(--card-3);color:var(--text-2)}
-.pill.small{font-size:10.5px;padding:2px 7px}
+.pill.small{font-size:13px;padding:2px 7px}
 /* The mono pills (RPN, ids) read as labels, not states. */
 .pill.plain::before{display:none}
 
@@ -444,17 +480,17 @@ h1.page-title-hero{font-size:56px}
 /* Chips: a small round label. A chip is a state or an id, never a button -
  * the filter buttons keep .btn.chip and their own rule further down. */
 .chip{display:inline-flex;align-items:center;gap:5px;padding:3px 10px;
-  border-radius:999px;font-size:12px;font-weight:500;line-height:1.6;
+  border-radius:999px;font-size:13px;font-weight:600;line-height:1.6;
   white-space:nowrap;background:var(--card-3);color:var(--text-2);
   border:1px solid transparent}
 .chip-ok{background:var(--ok-bg);color:var(--ok-fg)}
 .chip-warn{background:var(--warn-bg);color:var(--warn-fg)}
 .chip-bad{background:var(--bad-bg);color:var(--bad-fg)}
 .chip-info{background:var(--info-bg);color:var(--info-fg)}
-.chip-id{font-family:var(--font-mono);font-size:11.5px;font-weight:500;
+.chip-id{font-family:var(--font-mono);font-size:13px;font-weight:500;
   letter-spacing:.02em;background:var(--accent-soft);color:var(--accent-ink)}
 /* An id is a label, not a state, so it never carries the pill's dot. */
-.pill.chip-id{font-family:var(--font-mono);font-size:11.5px}
+.pill.chip-id{font-family:var(--font-mono);font-size:13px}
 .pill.chip-id::before{display:none}
 
 /* A trace reads left to right: story, then criterion, then test. */
@@ -500,7 +536,7 @@ h1.page-title-hero{font-size:56px}
   /* White on this orange is 2.8:1. The dark ink is 5.5:1 and still reads
    * as the loud badge it is meant to be. */
   color:var(--on-cta);
-  font-size:12.5px;font-weight:700;line-height:1}
+  font-size:13px;font-weight:700;line-height:1}
 
 /* -------------------------------------------------------------- buttons */
 /* Three sizes, one height each, matching the controls. A secondary button no
@@ -578,15 +614,18 @@ h1.page-title-hero{font-size:56px}
 .btn.key-chip:hover{border-color:var(--border-strong);box-shadow:var(--shadow-2)}
 .btn.to-top{padding:0;border-radius:50%}
 .btn.chip{height:var(--ctl-h-sm);padding:0 12px;border-radius:999px;
-  font-size:12.5px;font-weight:500;color:var(--text-2);
+  font-size:13px;font-weight:500;color:var(--text-2);
   border-color:var(--border)}
 .btn.chip:hover{border-color:var(--border-strong)}
 .btn.chip.now{color:var(--accent-ink);font-weight:650}
 .btn.file-tab{height:auto;min-height:var(--ctl-h-sm);padding:8px 10px;
   justify-content:flex-start;text-align:left;font-weight:500;
-  font-size:12px;white-space:normal;border-color:var(--border);
+  font-size:13px;white-space:normal;border-color:var(--border);
   box-shadow:none}
 .btn.file-tab:hover{border-color:var(--border-strong);box-shadow:none}
+/* box-shadow:none took the focus ring with it: a tab you had tabbed to
+   looked exactly like one you had not. */
+.btn.file-tab:focus-visible{box-shadow:var(--ring)}
 .btn.file-tab.now{font-weight:650}
 
 /* ------------------------------------------------------------- controls */
@@ -604,8 +643,11 @@ h1.page-title-hero{font-size:56px}
   line-height:1.6;resize:vertical}
 /* An optional long-text field should not shout as loud as a required one. */
 .field textarea.short,textarea.ctl.short{min-height:84px}
+/* A hint, not an answer. Faded and italic everywhere, so nothing in a
+ * field ever reads like something that was typed into it. */
 .ctl::placeholder,.field input::placeholder,
-.field textarea::placeholder{color:var(--muted)}
+.field textarea::placeholder,input::placeholder,textarea::placeholder{
+  color:var(--muted);font-style:italic;opacity:1}
 
 /* Select: one chevron, same height as the inputs. The stroke is a literal
  * because a data URI cannot read a custom property; #858C84 is --muted in
@@ -646,9 +688,9 @@ input[type=checkbox],input[type=radio]{width:16px;height:16px;
 /* "(optional)" reads the same wherever it sits - beside a field label or in
  * a collapsible section's summary. */
 .opt{font-weight:400;color:var(--muted)}
-.field .hint{display:block;font-size:12.5px;color:var(--text-2);margin:0 0 7px}
+.field .hint{display:block;font-size:13px;color:var(--text-2);margin:0 0 7px}
 .field-under{display:flex;justify-content:space-between;gap:12px;
-  margin-top:6px;font-size:12px;color:var(--muted)}
+  margin-top:6px;font-size:13px;color:var(--muted)}
 .field-under .counter{font-variant-numeric:tabular-nums;white-space:nowrap}
 .field-under .counter.near{color:var(--warn-fg)}
 .field-under .counter.over{color:var(--bad-fg);font-weight:600}
@@ -656,7 +698,7 @@ input[type=checkbox],input[type=radio]{width:16px;height:16px;
   gap:12px;margin-bottom:18px}
 .field-grid .field{margin-bottom:0}
 .field-pair{display:grid;grid-template-columns:repeat(2,140px);gap:12px}
-.field-pair label{font-size:12.5px;font-weight:500;color:var(--text-2);
+.field-pair label{font-size:13px;font-weight:500;color:var(--text-2);
   margin-bottom:4px;display:block}
 /* ------------------------------------------------- principal QA (shadow QA)
  * Everything Shadow QA adds carries the same label: one accent pill, same
@@ -721,18 +763,23 @@ input[type=checkbox],input[type=radio]{width:16px;height:16px;
 .form-body{max-width:var(--form-w)}
 .form-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap;
   border-top:1px solid var(--border);padding-top:16px;margin-top:6px}
-.form-note{font-size:12px;color:var(--text-2);margin:8px 0 0}
+.form-note{font-size:13px;color:var(--text-2);margin:8px 0 0}
 .form-note:empty{display:none}
-.field-link{margin:6px 0 0;font-size:12.5px}
+.field-link{margin:6px 0 0;font-size:13px}
 /* The key is hidden; Show sits beside it rather than under it. */
 .secret-row{display:flex;gap:8px;align-items:center}
 .secret-row input{flex:1 1 auto;min-width:0}
 /* Show stands the same height as the field it sits against. */
 .secret-row .btn{flex:0 0 auto;height:var(--ctl-h);padding:0 14px;font-size:13px}
 /* A text box that reads like a password field, so browsers never offer to
-   fill it with a saved login. Show takes the class off. */
-.masked{-webkit-text-security:disc;text-security:disc}
-.field-error{margin:6px 0 0;font-size:12.5px;color:var(--bad-fg)}
+   fill it with a saved login. Show takes the class off.
+
+   -webkit-text-security is what Chrome, Safari and Firefox 118 and later
+   understand; `text-security` without the prefix is not a property any
+   browser has, so it is gone. A browser without it gets app.js's
+   fallback, which makes the box a password field after all. */
+.masked{-webkit-text-security:disc}
+.field-error{margin:6px 0 0;font-size:13px;color:var(--bad-fg)}
 .field-error[hidden]{display:none}
 /* An empty state is not a form, so its buttons get air instead of a rule. */
 .empty-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap;
@@ -775,7 +822,7 @@ details > summary:hover{color:var(--text)}
   text-decoration:none}
 .step-n{width:28px;height:28px;flex:0 0 28px;border-radius:50%;
   display:inline-grid;place-items:center;font-family:var(--font-mono);
-  font-size:11px;font-weight:500;letter-spacing:.02em;
+  font-size:13px;font-weight:600;letter-spacing:.02em;
   background:var(--card-3);color:var(--text-2);line-height:1;
   box-shadow:0 0 0 4px var(--card)}
 .steps li.done .step-n{background:var(--ok-bg);color:var(--ok-fg);
@@ -794,6 +841,9 @@ details > summary:hover{color:var(--text)}
   box-shadow:none;color:var(--text-2)}
 .steps li.locked .step-n{background:var(--card-3);color:var(--text-2)}
 .steps li.locked a:hover{color:var(--text-2);background:var(--card)}
+/* Locked or not, the keyboard can still land here, so it has to show where
+   it is: the rule above outranks the one ring every other control gets. */
+.steps li.locked a:focus-visible{box-shadow:var(--ring)}
 .step-text{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .step-lock{margin-left:auto;opacity:.7;flex:0 0 auto}
 .step-lock svg{width:13px;height:13px;display:block}
@@ -806,7 +856,7 @@ table.grid,table.table{width:100%;border-collapse:separate;border-spacing:0;
   overflow:hidden}
 table.grid th,table.grid td,table.table th,table.table td{text-align:left;
   padding:11px 14px;border-bottom:1px solid var(--border);vertical-align:top}
-table.grid th,table.table th{font-family:var(--font-mono);font-size:12px;
+table.grid th,table.table th{font-family:var(--font-mono);font-size:13px;
   color:var(--text-2);font-weight:500;letter-spacing:.06em;
   text-transform:uppercase;background:var(--card-2)}
 table.grid tbody tr:last-child td,table.table tbody tr:last-child td{
@@ -829,7 +879,7 @@ tr.row-open > td{cursor:pointer}
 
 pre.code{background:var(--card-2);border:1px solid var(--border);
   border-radius:var(--r);padding:14px 16px;overflow:auto;
-  font-size:12.5px;line-height:1.65;position:relative}
+  font-size:13px;line-height:1.65;position:relative}
 :root[data-theme="dark"] pre.code{background:var(--canvas-2)}
 /* Code reads as code: the same cobalt-navy block in both themes, with the
  * line numbers drawn by the counter rather than pasted into the text. */
@@ -837,8 +887,10 @@ pre.code-dark,:root[data-theme="dark"] pre.code-dark{background:#0E1430;
   border-color:#2A3466;color:#E9ECF8;font-size:13px;padding:14px 16px 14px 0}
 pre.code-dark{display:flex;gap:14px}
 pre.code-dark code{display:block;white-space:pre;min-width:0;flex:1}
-/* The numbers hold their place while the code scrolls past them. */
-.code-gutter{flex:0 0 auto;text-align:right;white-space:pre;color:#6B7392;
+/* The numbers hold their place while the code scrolls past them.
+   #6B7392 read at 3.9:1 on this block, which is under the 4.5:1 a line of
+   text has to clear. #7C84A6 clears it at 4.9:1. */
+.code-gutter{flex:0 0 auto;text-align:right;white-space:pre;color:#7C84A6;
   user-select:none;padding-left:16px;border-right:1px solid #2A3466;
   padding-right:12px;position:sticky;left:0;background:#0E1430;z-index:1}
 mark{background:var(--warn-bg);color:var(--warn-fg);border-radius:3px;
@@ -896,7 +948,7 @@ mark{background:var(--warn-bg);color:var(--warn-fg);border-radius:3px;
 
 .answered-by{display:flex;align-items:center;gap:7px;margin-top:16px;
   padding-top:13px;border-top:1px solid var(--border);
-  font-size:12.5px;color:var(--muted)}
+  font-size:13px;color:var(--muted)}
 
 /* Empty states: say what is missing and offer the way out.
  * Named -state so it never collides with .key-chip.empty in the topbar. */
@@ -962,9 +1014,9 @@ mark{background:var(--warn-bg);color:var(--warn-fg);border-radius:3px;
 .key-actions .btn{white-space:nowrap}
 .key-main{display:flex;gap:8px;align-items:center;flex-wrap:wrap;
   margin-bottom:10px}
-.key-main code{font-size:12px;color:var(--text-2)}
+.key-main code{font-size:13px;color:var(--text-2)}
 .key-test-result{margin-left:4px}
-.key-num{font-weight:700;color:var(--muted);font-size:12.5px}
+.key-num{font-weight:700;color:var(--muted);font-size:13px}
 .key-edit-form{display:flex;flex-direction:column;gap:8px;margin-top:8px}
 .key-edit-form select,.key-edit-form input{padding:8px 10px;
   border:1px solid var(--border-strong);border-radius:var(--r);
@@ -988,7 +1040,7 @@ mark{background:var(--warn-bg);color:var(--warn-fg);border-radius:3px;
 
 .story-box{font-family:var(--font-serif);font-size:16px;line-height:1.6}
 .story-box::placeholder{font-family:var(--font-serif);font-style:italic}
-.story-hint{display:block;margin:-10px 0 18px;font-size:12.5px;color:var(--text-2)}
+.story-hint{display:block;margin:-10px 0 18px;font-size:13px;color:var(--text-2)}
 
 /* How clear, with reasons. */
 .clarity-score{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
@@ -1010,7 +1062,7 @@ mark{background:var(--warn-bg);color:var(--warn-fg);border-radius:3px;
 .reason-title{margin:0;font-weight:600;font-size:13.5px}
 .reason-detail{margin:3px 0 0;color:var(--text-2);font-size:13px}
 .reason-say{margin:5px 0 0;font-size:13px}
-.reason-say-label{font-family:var(--font-mono);font-size:10.5px;
+.reason-say-label{font-family:var(--font-mono);font-size:13px;
   letter-spacing:.1em;text-transform:uppercase;color:var(--muted);
   margin-right:6px}
 
@@ -1022,7 +1074,7 @@ mark{background:var(--warn-bg);color:var(--warn-fg);border-radius:3px;
   gap:16px;margin-bottom:16px;align-items:stretch}
 @media (max-width:1000px){.overview-grid{grid-template-columns:minmax(0,1fr)}}
 
-#overview-steps .step-state{margin-left:auto;font-size:11.5px;
+#overview-steps .step-state{margin-left:auto;font-size:13px;
   color:var(--text-2);white-space:nowrap}
 #overview-steps li.done .step-state{color:var(--ok-fg)}
 /* Ship carries its decision, not its freshness: a green tick beside
@@ -1038,7 +1090,7 @@ mark{background:var(--warn-bg);color:var(--warn-fg);border-radius:3px;
 .steps li.step-bad .step-n{background:var(--bad-bg);color:var(--bad-fg);
   font-size:0}
 .steps li.step-bad .step-n::before{content:"¹5";font-family:var(--font-sans);
-  font-size:12px;font-weight:700}
+  font-size:13px;font-weight:700}
 
 /* The workbench is the one cobalt block on the page: your story, how clear
    it is, and the single question still open. */
@@ -1049,11 +1101,11 @@ mark{background:var(--warn-bg);color:var(--warn-fg);border-radius:3px;
   background:radial-gradient(420px 220px at 100% 0%,rgba(255,255,255,.1),transparent 70%)}
 .bench > *{position:relative;z-index:1}
 .bench-top{display:flex;align-items:center;gap:12px}
-.bench-label{font-family:var(--font-mono);font-size:11px;font-weight:500;
+.bench-label{font-family:var(--font-mono);font-size:13px;font-weight:500;
   letter-spacing:.14em;text-transform:uppercase;color:var(--rail-ink-2)}
 .bench-slot{margin-left:auto;display:flex;align-items:center;gap:8px;
   flex-wrap:wrap;justify-content:flex-end}
-.bench-count{font-size:12.5px;color:var(--rail-ink-2);white-space:nowrap}
+.bench-count{font-size:13px;color:var(--rail-ink-2);white-space:nowrap}
 .btn.bench-step{width:28px;height:28px;padding:0;flex:0 0 28px;
   border-radius:50%;background:rgba(255,255,255,.14);border-color:transparent;
   color:#fff;box-shadow:none}
@@ -1063,7 +1115,7 @@ mark{background:var(--warn-bg);color:var(--warn-fg);border-radius:3px;
   color:#fff;box-shadow:none}
 .btn.bench-new:hover{background:rgba(255,255,255,.26);border-color:transparent;
   box-shadow:none}
-.bench-others{margin:0;font-size:12.5px;color:var(--rail-ink-2)}
+.bench-others{margin:0;font-size:13px;color:var(--rail-ink-2)}
 .bench-body{display:flex;flex-direction:column;gap:12px}
 .bench-chips{display:flex;gap:6px;flex-wrap:wrap}
 .bench-chip{background:rgba(255,255,255,.15);color:#fff}
@@ -1088,10 +1140,15 @@ mark{background:var(--warn-bg);color:var(--warn-fg);border-radius:3px;
 /* The one open question, in the one colour that means "your turn". */
 .bench-strip{display:flex;align-items:center;gap:12px;flex-wrap:wrap;
   margin-top:auto;padding:12px 14px;border-radius:var(--r);
+  border:1px solid transparent;
   background:var(--strip);color:var(--on-strip);font-size:13.5px;font-weight:500}
 .bench-strip-text{flex:1 1 220px;min-width:0}
-.bench-strip-link{margin-left:auto;color:var(--on-strip);font-weight:700;
+.bench-strip-link{margin-left:auto;color:inherit;font-weight:700;
   white-space:nowrap}
+/* In the dark the same strip is a soft wash with an amber edge: solid
+   #E8B84A across a card read as a brown block with a light on it. */
+:root[data-theme="dark"] .bench-strip{background:var(--strip-soft);
+  color:var(--strip-soft-ink);border-color:var(--strip-soft-line)}
 
 /* What needs attention: at most three rows, worst first. */
 .attention{display:flex;flex-direction:column;margin-bottom:0}
@@ -1172,7 +1229,7 @@ tr.diff-row td:first-child{box-shadow:inset 3px 0 0 var(--warn-line)}
 /* The filter buttons. They carry .btn as well as .chip, and this rule is
  * scoped to that pair: a plain .chip is the label component above, and used
  * to end up wearing this button's border inside a table row. */
-.btn.chip{padding:5px 12px;border-radius:999px;font-size:12.5px;cursor:pointer;
+.btn.chip{padding:5px 12px;border-radius:999px;font-size:13px;cursor:pointer;
   border:1px solid var(--border);background:var(--card);color:var(--text-2);
   font-family:inherit;font-weight:500;box-shadow:var(--shadow-1);
   transition:border-color .14s var(--ease),color .14s var(--ease),
@@ -1184,7 +1241,7 @@ tr.diff-row td:first-child{box-shadow:inset 3px 0 0 var(--warn-line)}
 /* Each id is its own box, so a narrow column wraps between ids and never
  * splits TC- from the number that follows it. */
 .tc-ids{display:inline-flex;flex-wrap:wrap;gap:4px;vertical-align:-1px}
-.tc-id{white-space:nowrap;font-size:11.5px;background:var(--card-3);
+.tc-id{white-space:nowrap;font-size:13px;background:var(--card-3);
   color:var(--text-2);border-radius:var(--r-sm);padding:1px 5px}
 .tc-reasons{min-width:160px}
 
@@ -1201,7 +1258,7 @@ tr.diff-row td:first-child{box-shadow:inset 3px 0 0 var(--warn-line)}
     minmax(96px,.7fr) minmax(80px,.5fr) minmax(90px,.7fr) 16px;
   gap:12px;align-items:center;padding:9px 14px;
   background:var(--card-2);border:1px solid var(--border);
-  border-radius:var(--r);font-family:var(--font-mono);font-size:12px;
+  border-radius:var(--r);font-family:var(--font-mono);font-size:13px;
   font-weight:500;letter-spacing:.06em;text-transform:uppercase;
   color:var(--text-2)}
 .tc-row-card{padding:0;margin:0;overflow:hidden}
@@ -1215,6 +1272,9 @@ tr.diff-row td:first-child{box-shadow:inset 3px 0 0 var(--warn-line)}
   box-shadow:none;border-radius:0;font-weight:400;font-size:14px;
   white-space:normal}
 .btn.tc-row-main:hover{background:var(--card-2);border:none;box-shadow:none}
+/* The row sets box-shadow:none at the same weight as .btn:focus-visible and
+   later in the file, so the ring needs saying again here. */
+.btn.tc-row-main:focus-visible{box-shadow:var(--ring)}
 .tc-cell{min-width:0}
 .tc-col-title{font-weight:600;display:flex;flex-wrap:wrap;gap:6px;
   align-items:center}
@@ -1274,6 +1334,10 @@ tr.diff-row td:first-child{box-shadow:inset 3px 0 0 var(--warn-line)}
 .ac-text{margin:4px 0 0;color:var(--text-2);font-size:13px;cursor:text;
   white-space:pre-line}
 .ac-text:hover{color:var(--text)}
+/* A criterion with nothing in it yet is still three lines tall, so there
+   is something to press. It was 0 px high and could not be clicked. */
+.ac-text{min-height:calc(1.55em * 3)}
+.ac-text-empty{color:var(--muted);font-style:italic}
 .ac-row textarea{width:100%;min-height:66px;resize:vertical;margin-top:4px}
 .ac-side{display:flex;flex-direction:column;align-items:flex-end;gap:8px;
   flex:0 0 auto}
@@ -1328,13 +1392,13 @@ tr.diff-row td:first-child{box-shadow:inset 3px 0 0 var(--warn-line)}
 .findings li.warning{color:var(--warn-fg)}
 .picked-chips{display:flex;flex-wrap:wrap;gap:6px;margin:12px 0 8px}
 .picked-chip{max-width:100%;white-space:normal;text-align:left}
-.picked-id{font-family:var(--font-mono);font-size:11.5px;
+.picked-id{font-family:var(--font-mono);font-size:13px;
   color:var(--accent-ink)}
 .picked-cases{margin:8px 0;padding-left:20px;font-size:14px}
 .picked-cases li{margin:3px 0}
 .setup-steps{margin:8px 0 14px;padding-left:22px}
 .setup-steps li{margin:4px 0;font-family:var(--font-mono);
-  font-size:12.5px}
+  font-size:13px}
 
 /* The file list used to take a 236px column out of the card, which left
    the code itself a narrow strip with every line scrolling sideways. The
@@ -1345,7 +1409,7 @@ tr.diff-row td:first-child{box-shadow:inset 3px 0 0 var(--warn-line)}
 .file-tab{text-align:left;padding:8px 10px;border-radius:var(--r-sm);
   cursor:pointer;border:1px solid var(--border);background:var(--card);
   color:var(--text-2);font-family:var(--font-mono);
-  font-size:12px;word-break:break-all;transition:background .12s var(--ease)}
+  font-size:13px;word-break:break-all;transition:background .12s var(--ease)}
 .file-tab:hover{background:var(--card-2);color:var(--text)}
 .file-tab.now{background:var(--accent-soft);color:var(--accent-ink);
   border-color:color-mix(in srgb,var(--accent) 36%,transparent);font-weight:650}
@@ -1389,7 +1453,7 @@ tr.diff-row td:first-child{box-shadow:inset 3px 0 0 var(--warn-line)}
 .check-tile.tile-info .check-mark{color:var(--info-fg)}
 .check-title{margin:0;font-weight:600;font-size:13.5px}
 .check-line{margin:3px 0 0;font-size:13px;opacity:1}
-.check-more summary{font-size:12.5px;padding:6px 0 0}
+.check-more summary{font-size:13px;padding:6px 0 0}
 .check-more .grid{margin-top:6px;font-size:13px}
 .file-code-head{margin-bottom:8px}
 
@@ -1423,7 +1487,7 @@ tr.diff-row td:first-child{box-shadow:inset 3px 0 0 var(--warn-line)}
 .checklist{list-style:none;margin:8px 0;padding:0;font-size:14px}
 .checklist li{margin:4px 0}
 .two-cols{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-top:8px}
-.two-cols h3{margin:0 0 4px;font-size:12px;color:var(--text-2);
+.two-cols h3{margin:0 0 4px;font-size:13px;color:var(--text-2);
   letter-spacing:.07em;text-transform:uppercase;font-weight:700}
 @media (max-width:768px){.two-cols{grid-template-columns:minmax(0,1fr)}}
 
@@ -1433,12 +1497,12 @@ tr.diff-row td:first-child{box-shadow:inset 3px 0 0 var(--warn-line)}
 /* The risk list is the wide column now; the map sits under both. */
 .risk-split-2{grid-template-columns:minmax(0,60fr) minmax(0,40fr)}
 @media (max-width:1100px){.risk-split-2{grid-template-columns:minmax(0,1fr)}}
-.risk-heat h3{margin:16px 0 6px;font-size:11.5px;color:var(--text-2);
+.risk-heat h3{margin:16px 0 6px;font-size:13px;color:var(--text-2);
   letter-spacing:.07em;text-transform:uppercase;font-weight:700}
 .risk-heat h3:first-child{margin-top:0}
 
 table.heat{border-collapse:separate;border-spacing:3px;width:100%}
-.heat-axis{font-size:10.5px;color:var(--text-2);font-weight:700;
+.heat-axis{font-size:13px;color:var(--text-2);font-weight:700;
   text-align:center;padding:2px;white-space:nowrap;letter-spacing:.04em}
 /* The axis says "Bad 5" and "Likely 3" in words. Under 420px the row has no
  * space for them, so it keeps "B5" and "L3" and the words stay in aria-label. */
@@ -1471,17 +1535,36 @@ table.heat{border-collapse:separate;border-spacing:3px;width:100%}
 /* One row of ids, each its own pill, so two in a cell never read as "R1R6". */
 .heat-ids{display:flex;flex-wrap:wrap;gap:3px;justify-content:center;
   align-items:center}
-.heat-cell .pill{font-size:10.5px;padding:1px 6px;
+.heat-cell .pill{font-size:13px;padding:1px 6px;
   background:rgba(255,255,255,.76);color:#7A2718;font-weight:700}
 .heat-cell .pill::before{display:none}
 .heat-labels{display:flex;justify-content:space-between;margin:5px 0 0;
-  font-size:11px;color:var(--muted)}
+  font-size:13px;color:var(--muted)}
 /* Legend for the ramp: low -> high, with the words, not the hue alone. */
 .heat-key{display:flex;align-items:center;gap:7px;margin-top:12px;
-  font-size:11px;color:var(--muted)}
+  font-size:13px;color:var(--muted)}
 .heat-key .ramp{display:flex;flex:1;height:7px;border-radius:999px;
   overflow:hidden}
 .heat-key .ramp i{flex:1;display:block}
+
+/* The answer, before the evidence: which high risks have no test and the
+   one button that fixes all of them. */
+.todo-strip{display:flex;align-items:center;gap:16px;flex-wrap:wrap;
+  padding:16px 20px;margin-bottom:14px;border-radius:var(--r-card);
+  border:1px solid var(--border);box-shadow:var(--shadow-1)}
+.todo-strip-bad{background:var(--alert-soft);
+  border-color:color-mix(in srgb,var(--bad-line) 38%,transparent)}
+/* Fields on this strip and every other dark card keep an edge of their own. */
+:root[data-theme="dark"] .field :is(input,select,textarea),
+:root[data-theme="dark"] .ctl{border-color:var(--border-strong)}
+.todo-strip-ok{background:var(--ok-bg);padding:11px 20px;
+  border-color:color-mix(in srgb,var(--ok-line) 32%,transparent)}
+.todo-strip-words{flex:1 1 320px;min-width:0}
+.todo-strip-head{margin:0;font-family:var(--font-serif);font-size:20px;
+  font-weight:500;letter-spacing:-.01em}
+.todo-strip-bad .todo-strip-head{color:var(--bad-fg)}
+.todo-strip-ok .todo-strip-head{color:var(--ok-fg);font-size:16px}
+.todo-strip-names{margin:4px 0 0;font-size:13px;color:var(--text-2)}
 
 .risk-list{display:flex;flex-direction:column;gap:10px}
 /* One risk is one row: the score on the left, what it is in the middle, and
@@ -1498,19 +1581,28 @@ table.heat{border-collapse:separate;border-spacing:3px;width:100%}
 .risk-score-badge.risk-medium{background:var(--warn-bg);color:var(--warn-fg)}
 .risk-score-num{display:block;font-family:var(--font-serif);font-size:22px;
   line-height:1.1}
-.risk-score-of{display:block;font-size:10.5px;opacity:.85}
+.risk-score-of{display:block;font-size:12px;opacity:.85}
 .risk-words{flex:1;min-width:0}
-.risk-title{margin:0;font-weight:600;font-size:14.5px;line-height:1.4}
+h3.risk-title{margin:0;font-weight:600;font-size:15px;line-height:1.4}
 .risk-effect{margin:3px 0 0;color:var(--text-2);font-size:13px}
 .risk-chips{display:flex;flex-wrap:wrap;gap:5px;margin-top:8px}
 .risk-action{flex:0 0 auto}
 .risk-trace{position:sticky;top:74px}
-.risk-detail-title{margin:12px 0 2px;font-weight:600}
-.risk-why-head{margin:14px 0 4px}
-.risk-accept{margin-top:14px;padding-top:12px;
-  border-top:1px solid var(--border)}
+.risk-detail-title{margin:0 0 12px}
+/* The panel leads with what you can do about the risk. */
+.panel-actions{align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px}
+.risk-scores-line{margin:14px 0 0;font-size:13px;color:var(--text-2);
+  display:flex;flex-wrap:wrap;align-items:center;gap:6px}
+.risk-scores-line strong{color:var(--text);font-weight:600}
+.risk-scores-edit{margin-top:8px}
+.risk-why{margin-top:14px;padding-top:12px;border-top:1px solid var(--border)}
+.risk-why summary{cursor:pointer;font-size:13px;font-weight:600;
+  color:var(--text-2)}
+.risk-why > :not(summary){margin-top:8px}
+.risk-accept{margin-top:10px}
 .risk-accepted-line{margin:0 0 8px;font-size:13px;color:var(--text-2)}
-.risk-accept-form{margin-top:10px}
+.risk-accept-form{margin-top:10px;padding-top:10px;
+  border-top:1px solid var(--border)}
 @media (max-width:1100px){.risk-trace{position:static}}
 @media (max-width:560px){
   .risk-card{flex-wrap:wrap}
@@ -1525,7 +1617,7 @@ table.heat{border-collapse:separate;border-spacing:3px;width:100%}
 .score-row{margin-top:10px}
 /* "How hard to notice" broke across two lines and the box ended up under
    its own label. The three fields wrap as whole fields, never inside one. */
-.score-field{font-size:12px;color:var(--text-2);display:inline-flex;gap:6px;
+.score-field{font-size:13px;color:var(--text-2);display:inline-flex;gap:6px;
   align-items:center;white-space:nowrap}
 .score-row{flex-wrap:wrap;gap:10px}
 /* Three scores side by side: the control system's 140px would push the last
@@ -1596,6 +1688,10 @@ body[data-has-story="yes"] #risk-root [data-input-card="Your run"]{display:none}
  * button: one primary per screen, and it is the one the card is pointing at. */
 body[data-card-primary="risks"] #risk-find.btn-primary,
 body[data-card-primary="risks"] #risk-paste-find.btn-primary,
+/* The to-do strip's button is the desk's own main action too, so it steps
+   down for the same reason the Find risks button does. */
+body[data-card-primary="risks"] #risk-write-tests.btn-primary,
+body[data-card-primary="risks"] .risk-write-one.btn-primary,
 body[data-card-primary="test_cases"] #tc-generate.btn-primary,
 body[data-card-primary="matrix"] #matrix-suggest.btn-primary,
 body[data-card-primary="automation"] #automation-generate.btn-primary{
@@ -1603,6 +1699,8 @@ body[data-card-primary="automation"] #automation-generate.btn-primary{
   box-shadow:var(--shadow-1)}
 body[data-card-primary="risks"] #risk-find.btn-primary:hover,
 body[data-card-primary="risks"] #risk-paste-find.btn-primary:hover,
+body[data-card-primary="risks"] #risk-write-tests.btn-primary:hover,
+body[data-card-primary="risks"] .risk-write-one.btn-primary:hover,
 body[data-card-primary="test_cases"] #tc-generate.btn-primary:hover,
 body[data-card-primary="matrix"] #matrix-suggest.btn-primary:hover,
 body[data-card-primary="automation"] #automation-generate.btn-primary:hover{
@@ -1621,7 +1719,7 @@ body[data-card-primary="automation"] #automation-generate.btn-primary:hover{
 .next-chip:hover{border-color:var(--border-strong);box-shadow:var(--shadow-2);
   text-decoration:none}
 .next-name{font-size:13.5px;font-weight:600}
-.next-state{font-size:11.5px;color:var(--text-2)}
+.next-state{font-size:13px;color:var(--text-2)}
 .next-chip[data-state="stale"]{border-color:color-mix(in srgb,var(--warn-line) 45%,transparent)}
 .next-chip[data-state="stale"] .next-state{color:var(--warn-fg)}
 .next-chip[data-state="fresh"] .next-state{color:var(--ok-fg)}
@@ -1641,7 +1739,13 @@ svg.next-mark{color:var(--ok-line)}
 
 /* ── the "My stories" page ─────────────────────────────────────────────── */
 .stories-bar .field{margin-bottom:0;min-width:180px}
-.stories-bar .row{align-items:flex-end;gap:12px}
+/* The search field holds its own hint: "Search by ID or story text" wrapped
+   onto two lines in 180px. The two selects keep theirs. */
+.stories-bar .field:first-child{flex:1 1 300px;min-width:260px}
+/* Labels on one line with their fields: the three boxes used to sit at
+   three different heights because one hint wrapped and the others did not. */
+.stories-bar .row{align-items:flex-start;gap:12px}
+.stories-bar .field .hint{min-height:2.6em}
 .story-card{margin-bottom:10px}
 .story-card.story-open{border-color:var(--accent)}
 .story-head{gap:8px;margin-bottom:8px}
@@ -1673,10 +1777,10 @@ svg.next-mark{color:var(--ok-line)}
 .nav-stories.active{background:var(--rail-2);color:#fff}
 /* rgba(255,255,255,.14) over the rail gave the number about 3:1 against
    the badge it sat in. A real token, and a real contrast. */
-.nav-count{margin-left:auto;font-family:var(--font-mono);font-size:11px;
+.nav-count{margin-left:auto;font-family:var(--font-mono);font-size:13px;
   font-weight:600;padding:2px 7px;border-radius:999px;
   background:var(--count-bg);color:var(--count-fg)}
-.save-status{margin-left:14px;font-size:12.5px;color:var(--muted);
+.save-status{margin-left:14px;font-size:13px;color:var(--muted);
   white-space:nowrap}
 .save-status.save-status-bad{color:var(--bad-fg);font-weight:600}
 @media (max-width:640px){.save-status{display:none}}
@@ -1722,6 +1826,7 @@ svg.next-mark{color:var(--ok-line)}
   box-shadow:none;font-size:14px;line-height:1;color:var(--text-2)}
 .btn.btn-icon-tiny:hover{background:var(--bad-bg);color:var(--bad-fg);
   border-color:transparent;box-shadow:none}
+.btn.btn-icon-tiny:focus-visible{box-shadow:var(--ring)}
 .matrix-reason{margin:6px 0 0}
 .matrix-rule-list{list-style:none;margin:0;padding:0;display:flex;
   flex-direction:column;gap:8px}
@@ -1757,9 +1862,77 @@ svg.next-mark{color:var(--ok-line)}
 .source-card.source-in-banner .source-mark{width:16px;height:16px;flex:0 0 16px;
   margin-top:0}
 .source-card.source-in-banner .source-detail,
-.source-card.source-in-banner .source-extra{font-size:12.5px}
+.source-card.source-in-banner .source-extra{font-size:13px}
 .source-card.source-in-banner .source-body{flex:1 1 220px}
-.ship-banner-label{font-family:var(--font-mono);font-size:11px;font-weight:500;
+
+/* One status line, on every desk and inside the decision card: a dot, a
+   sentence, and the desks worth opening. Three lines that could disagree
+   with one another became this. */
+.status-line{display:flex;align-items:baseline;flex-wrap:wrap;gap:6px;
+  margin:0;font-size:13px;color:var(--text-2)}
+.status-dot{width:9px;height:9px;flex:0 0 9px;border-radius:50%;
+  align-self:center}
+.status-dot.dot-ok{background:var(--ok-line)}
+.status-dot.dot-warn{background:var(--warn-line)}
+.status-words{font-weight:500}
+.status-desk{color:inherit;font-weight:600;text-decoration:underline}
+.source-card.status-only{background:transparent;border:none;box-shadow:none;
+  padding:0;margin:8px 0 0}
+
+/* "Fix first:", and the one thing to fix. */
+.ship-fix-first{margin:8px 0 10px;font-size:15px;line-height:1.5}
+.ship-fix-label{font-family:var(--font-mono);font-size:13px;font-weight:600;
+  letter-spacing:.04em;text-transform:uppercase;margin-right:6px}
+.ship-banner-actions{margin-top:14px}
+.grade-points{margin:0;font-size:13px;font-weight:500}
+
+/* While the verdict is being worked out: the shape of it, not a blank. */
+.ship-banner.ship-working{background:var(--card-2)}
+.skeleton{background:linear-gradient(90deg,
+  color-mix(in srgb,var(--border) 70%,transparent) 25%,
+  color-mix(in srgb,var(--border-strong) 70%,transparent) 50%,
+  color-mix(in srgb,var(--border) 70%,transparent) 75%);
+  background-size:200% 100%;border-radius:6px;
+  animation:skeleton-sweep 1.3s ease-in-out infinite}
+.skeleton-title{height:30px;width:min(280px,70%);margin:8px 0 10px}
+.skeleton-line{height:13px;width:min(420px,90%);margin:0 0 8px}
+.skeleton-line.short{width:min(220px,55%)}
+.skeleton-circle{width:78px;height:78px;border-radius:50%;flex:0 0 78px}
+@keyframes skeleton-sweep{from{background-position:200% 0}to{background-position:-200% 0}}
+@media (prefers-reduced-motion:reduce){.skeleton{animation:none}}
+
+/* Path to Ready: one numbered step per thing to do, worst first. */
+.ship-path{margin-bottom:16px}
+.path-list{list-style:none;counter-reset:step;margin:12px 0 0;padding:0;
+  display:flex;flex-direction:column;gap:2px}
+.path-step{counter-increment:step;display:grid;
+  grid-template-columns:1fr auto;gap:12px;align-items:start;
+  padding:14px 0;border-top:1px solid var(--border)}
+.path-step:first-child{border-top:none}
+.path-words{min-width:0}
+.path-do{margin:0;font-weight:600;font-size:15px;line-height:1.45;
+  display:flex;gap:10px;align-items:baseline}
+.path-do::before{content:counter(step);font-family:var(--font-mono);
+  font-size:13px;font-weight:600;color:var(--text-2);flex:0 0 auto}
+.path-why{margin:4px 0 0 24px;font-size:13px}
+.path-side{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.path-step .ship-accept-form{grid-column:1 / -1;margin-left:24px}
+.path-step .checklist{margin:6px 0 0 24px}
+
+/* All checks: one row each, evidence on the left, status on the right. */
+.check-table{display:flex;flex-direction:column;margin-top:10px}
+.check-row{display:grid;grid-template-columns:1fr auto;gap:12px;
+  align-items:start;padding:12px 0;border-top:1px solid var(--border)}
+.check-row:first-child{border-top:none}
+.check-words{min-width:0}
+.check-name{margin:0;font-weight:600;font-size:14px}
+.check-evidence{margin:3px 0 0;font-size:13px}
+.check-status{align-self:start;white-space:nowrap}
+.ship-story-card .ship-story-text{margin:8px 0 0;color:var(--text-2);
+  max-width:80ch;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;
+  overflow:hidden}
+.ship-story-card{margin-bottom:16px}
+.ship-banner-label{font-family:var(--font-mono);font-size:13px;font-weight:500;
   letter-spacing:.14em;text-transform:uppercase;color:var(--text-2)}
 .ship-banner .ship-verdict-label{margin:6px 0 6px;font-size:32px;
   font-family:var(--font-serif);font-weight:400;letter-spacing:-.01em}
@@ -1774,13 +1947,12 @@ svg.next-mark{color:var(--ok-line)}
 /* The grade: a letter in a ring, and the sums behind it one press away. */
 .grade-holder{position:relative;flex:0 0 auto;display:flex;
   flex-direction:column;align-items:center;gap:6px;text-align:center}
-/* The sums, in words, under the letter. */
-.grade-reason{margin:0;font-size:12.5px;line-height:1.45;max-width:24ch}
-.btn.grade-open{font-size:12px}
+.btn.grade-open{font-size:13px}
 .btn.grade-circle{width:78px;height:78px;padding:0;border-radius:50%;
   border:3px solid currentColor;background:transparent;
   display:grid;place-items:center;box-shadow:none}
 .btn.grade-circle:hover{background:rgba(255,255,255,.4);box-shadow:none}
+.btn.grade-circle:focus-visible{box-shadow:var(--ring)}
 :root[data-theme="dark"] .btn.grade-circle:hover{background:rgba(255,255,255,.08)}
 .grade-letter{font-family:var(--font-serif);font-size:30px;font-weight:500;
   line-height:1}
@@ -1798,7 +1970,7 @@ svg.next-mark{color:var(--ok-line)}
   border:1px solid var(--border);border-radius:var(--r);background:var(--card-2)}
 .receipt-mark{font-size:13px;font-weight:700;line-height:1}
 .receipt-words{min-width:0}
-.receipt-title{margin:0;font-weight:600;font-size:13.5px}
+.receipt-title{margin:0;font-weight:600;font-size:14px}
 .receipt-line{margin:3px 0 0;font-size:13px;color:var(--text-2)}
 .todo-list{display:flex;flex-direction:column;gap:10px;margin-top:12px}
 .todo-row{margin:0}
@@ -1832,7 +2004,7 @@ svg.next-mark{color:var(--ok-line)}
 @media print{
   .sidebar,.topbar,.to-top,.scrim,#keys-drawer,.ship-actions,
   .ship-accept-row,.ship-accept-form,.ship-unaccept,.ship-row-link,
-  .ship-accept{display:none!important}
+  .ship-accept,.path-side,.ship-banner-actions{display:none!important}
   /* The grade is part of the paper record; the popover is not. */
   .grade-why{display:none!important}
   .btn.grade-open{display:none!important}
@@ -1923,7 +2095,7 @@ svg.next-mark{color:var(--ok-line)}
   width:max(240px,min(320px,78vw));white-space:normal;
   background:var(--card);color:var(--text);border:1px solid var(--border-strong);
   border-radius:10px;box-shadow:var(--shadow-2);
-  padding:10px 12px;font-size:12.5px;font-weight:400;line-height:1.5;
+  padding:10px 12px;font-size:13px;font-weight:400;line-height:1.5;
   text-transform:none;letter-spacing:normal}
 .explain-panel strong{display:block;margin-bottom:2px;color:var(--text)}
 

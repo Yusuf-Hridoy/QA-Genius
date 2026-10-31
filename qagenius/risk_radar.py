@@ -120,13 +120,34 @@ def match_score(risk: FailureMode, case: TestCase) -> tuple[float, list[str]]:
     return len(shared) / len(left | right), sorted(shared)[:MAX_MATCHED_WORDS]
 
 
+def risk_tags(case: TestCase) -> set[str]:
+    """The risks a case was written for, by id, upper case.
+
+    A case carries this tag because code put it there when the case was
+    written from a risk's own button -- never because the words matched.
+    """
+    found = set()
+    for tag in case.tags or []:
+        text = str(tag or "").strip()
+        if text.lower().startswith(RISK_TAG):
+            found.add(text[len(RISK_TAG) :].strip().upper())
+    return {one for one in found if one}
+
+
 def _tagged_for(risk_id: str, cases: list[TestCase]) -> list[TestCase]:
-    wanted = (RISK_TAG + str(risk_id or "")).strip().lower()
-    return [
-        case
-        for case in cases
-        if any(str(tag or "").strip().lower() == wanted for tag in case.tags or [])
-    ]
+    wanted = str(risk_id or "").strip().upper()
+    return [case for case in cases if wanted and wanted in risk_tags(case)]
+
+
+def _spoken_for(risk_id: str, case: TestCase) -> bool:
+    """True when this case was written for a different risk.
+
+    "Write a test" on R6 added TC-014 and the page then showed it under R1,
+    because R1's words happened to overlap. A test that says which risk it
+    is for is never handed to another one on a word match.
+    """
+    tags = risk_tags(case)
+    return bool(tags) and str(risk_id or "").strip().upper() not in tags
 
 
 def _case_words(case: TestCase) -> str:
@@ -157,6 +178,8 @@ def _by_words(risk: FailureMode, cases: list[TestCase]) -> list[TestCase]:
         return []
     found = []
     for case in cases:
+        if _spoken_for(risk.id, case):
+            continue
         text = _case_words(case)
         if any(mentions(text, word) for word in risk.covered_if):
             found.append(case)
@@ -165,7 +188,11 @@ def _by_words(risk: FailureMode, cases: list[TestCase]) -> list[TestCase]:
 
 def _claimed(risk: FailureMode, cases: list[TestCase]) -> list[TestCase]:
     """The cases the AI named, in the order it named them. Unknown ids drop out."""
-    by_id = {str(case.id or "").strip().lower(): case for case in cases}
+    by_id = {
+        str(case.id or "").strip().lower(): case
+        for case in cases
+        if not _spoken_for(risk.id, case)
+    }
     found, seen = [], set()
     for claim in risk.covered_by or []:
         key = str(claim or "").strip().lower()
@@ -335,6 +362,47 @@ def _known(wanted: list[str], known: set[str]) -> tuple[list[str], int]:
         seen.add(key)
         kept.append(canonical[key])
     return kept, dropped
+
+
+def risk_key(risk: FailureMode) -> str:
+    """What stays the same about a risk when the list is renumbered.
+
+    Risk ids are positions: R6 becomes R5 the moment a risk above it is
+    dropped. The title is the risk, so it is what a tag is followed by.
+    """
+    return _flat(str(risk.title or "")).lower()
+
+
+def renumbered(before: RiskAnalysis, after: RiskAnalysis) -> dict[str, str]:
+    """Old risk id -> new risk id, matched on what the risk is about."""
+    was = {risk_key(risk): str(risk.id or "") for risk in before.failure_modes}
+    moved = {}
+    for risk in after.failure_modes:
+        old = was.get(risk_key(risk), "")
+        new = str(risk.id or "")
+        if old and new and old != new:
+            moved[old.upper()] = new.upper()
+    return moved
+
+
+def retag(cases: list[TestCase], moved: dict[str, str]) -> list[TestCase]:
+    """Point every risk:Rn tag at the risk it was written for, after a renumber."""
+    if not moved:
+        return list(cases)
+    out = []
+    for case in cases:
+        tags = list(case.tags or [])
+        changed = False
+        for at, tag in enumerate(tags):
+            text = str(tag or "").strip()
+            if not text.lower().startswith(RISK_TAG):
+                continue
+            old = text[len(RISK_TAG) :].strip().upper()
+            if old in moved:
+                tags[at] = RISK_TAG + moved[old]
+                changed = True
+        out.append(case.model_copy(update={"tags": tags}) if changed else case)
+    return out
 
 
 def clean_analysis(

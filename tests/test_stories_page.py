@@ -68,7 +68,11 @@ def test_the_story_step_offers_an_id_and_a_draft() -> None:
     assert 'id="story-label"' in body
     assert 'id="save-draft"' in body
     assert 'id="draft-status"' in body
-    assert "leave empty and we&#39;ll number it" in body
+    assert "Leave it empty and we&#39;ll number it." in body
+    # The example is the faded hint inside the field, said once.
+    assert 'placeholder="e.g. CART-204"' in body
+    # Said once per field, as the faded hint inside it, and nowhere else.
+    assert body.count("CART-204") == body.count('placeholder="e.g. CART-204"')
 
 
 def test_the_store_keeps_its_promises_in_one_place() -> None:
@@ -104,4 +108,9 @@ def test_which_story_a_tab_is_on_lives_in_that_tab() -> None:
     body = body.split(chr(10) + "  function ")[0]
     assert "active_id" not in body
     assert "last_opened_id" not in body
-    assert "tabStory()" not in body
+    # The story written is the one the caller named. The tab's own id is
+    # read for one thing only: whether the revision this tab has seen
+    # applies to the story being saved.
+    assert "indexOf(data, id)" in body
+    assert body.count("tabStory()") == 1
+    assert "id === tabStory() ? tabRev() : null" in body

@@ -55,7 +55,7 @@ def suite(*cases: TestCase) -> TestCaseList:
 
 REAL_RUN_CRITERIA = [
     "The account locks after 5 consecutive incorrect password attempts",
-    "A locked account stays locked for 15 minutes",
+    "A locked account stays locked for 30 minutes",
     "The shopper is told why sign-in failed",
     "The counter resets after a successful sign-in",
     "Support can unlock an account early",
@@ -64,7 +64,7 @@ REAL_RUN_CRITERIA = [
 
 _REAL_RUN_CASES = (
     ("TC-001", "Functional", "AC-1", "Account locks after 5 incorrect password attempts"),
-    ("TC-002", "Functional", "AC-2", "Locked account stays locked for 15 minutes"),
+    ("TC-002", "Functional", "AC-2", "Locked account stays locked for 30 minutes"),
     ("TC-003", "Negative", "AC-3", "Sign-in failure message does not name the field"),
     ("TC-004", "Boundary", "AC-4", "Counter resets to zero on a successful sign-in"),
     ("TC-005", "Functional", "AC-5", "Support unlocks an account from the console"),
@@ -163,7 +163,7 @@ PROFILE_CRITERIA = [
     "Changing the password requires the current password",
     "Enabling 2FA shows a 6-digit verification code step and ten recovery codes",
     "The account locks when a user exceeds 5 failed verification attempts "
-    "within a 15-minute window",
+    "within a 30-minute window",
     "A locked account stays locked for 30 minutes",
     "Active sessions list each device and its last active time, and can be revoked",
     "Preference toggles auto-save and persist across devices",

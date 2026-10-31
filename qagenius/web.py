@@ -2,15 +2,23 @@ import base64
 import html
 import json
 import logging
+import os
 import re
 import secrets
 from dataclasses import replace
 from pathlib import Path
 
 from fastapi import FastAPI, Form, HTTPException, Query, Request
-from fastapi.responses import HTMLResponse, RedirectResponse, Response
+from fastapi.responses import (
+    HTMLResponse,
+    JSONResponse,
+    PlainTextResponse,
+    RedirectResponse,
+    Response,
+)
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from starlette.exceptions import HTTPException as StarletteHTTPException
 from pydantic import BaseModel, ValidationError, field_validator
 
 import openai
@@ -100,6 +108,7 @@ from qagenius.shadow_qa.story_rules import StoryNote, review_story
 from qagenius.story_text import (
     split_confidence,
     strip_confidence_deep,
+    strip_markers,
     without_criteria_lines,
 )
 from qagenius.acceptance import (
@@ -109,6 +118,7 @@ from qagenius.acceptance import (
 )
 from qagenius.ship_grade import grade_for
 from qagenius.ship_check import (
+    ACCEPT_WORDS,
     ACCEPTABLE,
     CHECK_IDS,
     MAX_DETAILS,
@@ -128,6 +138,8 @@ from qagenius.risk_radar import (
     case_lines,
     clean_analysis,
     criteria_lines,
+    renumbered,
+    retag,
     score_risks,
 )
 from qagenius.test_case_depth import compute_depth, summary_line
@@ -216,7 +228,17 @@ SYNTAX_WORDS = {
 # base64 (about 2.7 MB). Raised just for the bug form, still under Vercel's ~4.5 MB body.
 FORM_PART_LIMIT = 4 * 1024 * 1024
 
-app = FastAPI(title="QA-Genius v2")
+# QAG_DEV=1 turns on the things only a developer wants: the API docs and
+# the /dev check pages. Neither is on in production, where they are one
+# more surface and tell a stranger the shape of every route.
+DEV_MODE = os.environ.get("QAG_DEV") == "1"
+
+app = FastAPI(
+    title="QA-Genius v2",
+    docs_url="/docs" if DEV_MODE else None,
+    redoc_url="/redoc" if DEV_MODE else None,
+    openapi_url="/openapi.json" if DEV_MODE else None,
+)
 templates = Jinja2Templates(directory=BASE_DIR / "templates")
 # Drawer + key panel live in base.html, rendered by every page.
 templates.env.globals["providers"] = PROVIDERS
@@ -248,6 +270,84 @@ async def report_key_results(request: Request, call_next):
     if results:
         response.headers[KEY_RESULTS_HEADER] = json.dumps(results)
     return response
+
+
+# What this app is allowed to load, and from where. Everything but the
+# fonts is served from this origin: there is no analytics, no tag manager
+# and no CDN. Inline style attributes are still used on a handful of
+# cards, so style-src allows them; no inline script is allowed at all
+# except the one that picks the theme before first paint, which carries a
+# nonce minted for that single response.
+_CSP_PARTS = (
+    "default-src 'self'",
+    "base-uri 'self'",
+    "object-src 'none'",
+    "frame-ancestors 'none'",
+    "form-action 'self'",
+    "img-src 'self' data:",
+    "font-src 'self' https://fonts.gstatic.com",
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+    "connect-src 'self'",
+)
+
+SECURITY_HEADERS = {
+    "X-Content-Type-Options": "nosniff",
+    "X-Frame-Options": "DENY",
+    "Referrer-Policy": "strict-origin-when-cross-origin",
+    "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
+}
+
+
+def content_security_policy(nonce: str) -> str:
+    """The policy for one response, naming that response's script nonce."""
+    return "; ".join((*_CSP_PARTS, f"script-src 'self' 'nonce-{nonce}'"))
+
+
+@app.middleware("http")
+async def security_headers(request: Request, call_next):
+    """The same headers on every response, including the error ones."""
+    nonce = secrets.token_urlsafe(12)
+    request.state.csp_nonce = nonce
+    response = await call_next(request)
+    for name, value in SECURITY_HEADERS.items():
+        response.headers.setdefault(name, value)
+    response.headers.setdefault(
+        "Content-Security-Policy", content_security_policy(nonce)
+    )
+    return response
+
+
+def _csp_nonce(request: Request) -> str:
+    return getattr(request.state, "csp_nonce", "")
+
+
+templates.env.globals["csp_nonce"] = _csp_nonce
+
+
+@app.exception_handler(StarletteHTTPException)
+async def not_found(request: Request, exc: StarletteHTTPException):
+    """An address that is not a desk says so, in the app's own style.
+
+    A browser asking for a page gets the page; anything else -- a fetch, a
+    health check, a crawler -- gets the plain answer it asked for.
+    """
+    if exc.status_code != 404 or "text/html" not in request.headers.get("accept", ""):
+        return JSONResponse({"detail": exc.detail}, status_code=exc.status_code)
+    return templates.TemplateResponse(
+        request, "not_found.html", {"active": ""}, status_code=404
+    )
+
+
+@app.get("/robots.txt", include_in_schema=False)
+def robots() -> PlainTextResponse:
+    """Nothing here is anybody else's to index: it is one person's browser."""
+    return PlainTextResponse("\n".join(["User-agent: *", "Disallow:", ""]))
+
+
+@app.get("/requirements", include_in_schema=False)
+def requirements_root() -> RedirectResponse:
+    """The flow starts at the story. /requirements alone is not a page."""
+    return RedirectResponse("/requirements/story", status_code=307)
 # Every template that shows model text uses this to take the confidence
 # tag off the end of a line and show it as a pill instead.
 templates.env.filters["confidence"] = split_confidence
@@ -456,41 +556,56 @@ def _request_keys(request: Request) -> list[dict[str, str]]:
     return keys
 
 
+# The browser reads this to know the swap it is about to make is an error,
+# so the note lands under the button that was pressed and the result the
+# reader already had stays where it is.
+AI_ERROR_HEADER = "X-QAG-Error"
+
+
 def _error_card(
     request: Request,
     message: str,
     notes: list[str] | None = None,
     heading: str | None = None,
+    kind: str = "",
 ) -> HTMLResponse:
-    return templates.TemplateResponse(
+    response = templates.TemplateResponse(
         request,
         "_error.html",
-        {"message": message, "notes": notes or [], "heading": heading},
+        {
+            "message": message,
+            "notes": notes or [],
+            "heading": heading,
+            "kind": kind or "other",
+        },
     )
+    response.headers[AI_ERROR_HEADER] = kind or "other"
+    return response
 
 
-# What to do about it, in plain words, one line per kind of failure. The
-# notes under it say which key did what; this says what the reader can do.
-AI_ERROR_MESSAGES = (
-    (
-        llm.InvalidKeyError,
-        "Your key was rejected. Check it on the Your API keys page and try again.",
-    ),
-    (
-        llm.ModelUnavailableError,
-        "The AI model isn't available right now. Your keys are fine — "
-        "QA-Genius needs a model update.",
-    ),
-    (
-        llm.BadOutputError,
-        "No key could answer in the shape this desk needs. "
-        "Try again in a minute, or add another key.",
-    ),
-    (
-        llm.AllKeysBusyError,
-        "All your keys are busy. Try again in a minute, or add another key.",
-    ),
-)
+def ai_error_words(kind: str, provider: str = "") -> str:
+    """What to do about it, in plain words, one line per kind of failure.
+
+    The same four sentences the browser shows for a failure that never
+    reached a route at all (no network, a 500, a timeout), so a reader
+    never has to tell two kinds of "it did not work" apart.
+    """
+    if kind == "key":
+        who = f"Your {provider} key" if provider else "Your key"
+        return f"{who} was refused. Check it in Keys, or try your other key."
+    if kind == "busy":
+        return "The AI is busy. Try again in a minute, or add another key."
+    if kind == "model":
+        return (
+            "The AI model isn't available right now. Your keys are fine — "
+            "QA-Genius needs a model update."
+        )
+    if kind == "output":
+        return (
+            "No key could answer in the shape this desk needs. "
+            "Try again in a minute, or add another key."
+        )
+    return "Something went wrong on our side. Try again in a minute."
 
 
 def _ai_error_card(
@@ -502,13 +617,14 @@ def _ai_error_card(
     has to work out which page they are even on, so each desk names the
     thing it could not do.
     """
-    message = next(
-        (text for kind, text in AI_ERROR_MESSAGES if isinstance(error, kind)),
-        # A ProviderError already says what the provider said, in plain
-        # words and under 120 characters.
-        str(error),
-    )
-    return _error_card(request, message, error.notes, heading=heading)
+    kind = getattr(error, "kind", "")
+    if kind:
+        message = ai_error_words(kind, getattr(error, "provider", ""))
+    else:
+        # A ProviderError raised without a kind already says what the
+        # provider said, in plain words and under 120 characters.
+        message = str(error)
+    return _error_card(request, message, error.notes, heading=heading, kind=kind)
 
 
 def _highlight_story(story: str, phrases: list[str]) -> str:
@@ -657,19 +773,21 @@ def _story_result_context(
 ) -> dict:
     rows, passes = _invest_rows(result)
     clarity = max(0, 100 - result.ambiguity_score)
+    # The model is asked to mark what it guessed. Those marks are for us:
+    # "[VERIFY]" in a criterion travels into step 2, into the test cases
+    # written from it and into Ship check's quotes of the same sentence.
+    criteria_text = [
+        strip_markers(one) for one in result.generated_acceptance_criteria
+    ]
     # Same click: the rules run on the result that just came back, no AI.
-    epic, shadow_notes = _shadow_story(
-        story, result.generated_acceptance_criteria, context
-    )
+    epic, shadow_notes = _shadow_story(story, criteria_text, context)
     return {
         "epic": epic,
         "shadow_notes": shadow_notes,
         # A limit two criteria disagree about, or none of them decides, is
         # worth saying here: it is cheaper to fix a criterion than a suite.
         "limit_notes": limit_conflicts(
-            with_context(
-                number_criteria(result.generated_acceptance_criteria), context
-            ),
+            with_context(number_criteria(criteria_text), context),
             [],
         ),
         "result": result,
@@ -681,8 +799,8 @@ def _story_result_context(
         "highlighted_story": _highlight_story(
             story, [vp.phrase for vp in result.vague_phrases]
         ),
-        "acceptance_criteria": "\n\n".join(result.generated_acceptance_criteria),
-        "criteria_list": result.generated_acceptance_criteria,
+        "acceptance_criteria": "\n\n".join(criteria_text),
+        "criteria_list": criteria_text,
         # Ship check and Risk radar read this back and have nowhere to put
         # a confidence pill, so the tags come off before it is stored.
         "analysis_data": strip_confidence_deep(result.model_dump()),
@@ -693,7 +811,7 @@ def _story_result_context(
             shadow_notes,
             limit_conflicts(
                 with_context(
-                    number_criteria(result.generated_acceptance_criteria), context
+                    number_criteria(criteria_text), context
                 ),
                 [],
             ),
@@ -704,7 +822,7 @@ def _story_result_context(
             shadow_notes,
             limit_conflicts(
                 with_context(
-                    number_criteria(result.generated_acceptance_criteria), context
+                    number_criteria(criteria_text), context
                 ),
                 [],
             ),
@@ -712,7 +830,7 @@ def _story_result_context(
         # Criteria were drafted, so "no acceptance criteria" is no longer
         # true. Ship check drops the same lines.
         "missing_elements": without_criteria_lines(
-            result.missing_elements, bool(result.generated_acceptance_criteria)
+            result.missing_elements, bool(criteria_text)
         ),
         "notes": notes,
         "provider_name": provider_name,
@@ -1093,6 +1211,16 @@ def _nothing_to_add_line(review: CaseReview, thin: int = 0, total: int = 0) -> s
         return (
             f"No extra tests to add — but {thin} of {_criteria_word(total)} "
             "still need more tests (see below)."
+        )
+    # The same page is calling cases weak, or the story vague. "Nothing to
+    # add" beside that reads as "this suite is finished", which is the one
+    # thing it does not mean. The example hits this too, so the built-in
+    # example is never allowed to say it either.
+    if review.quality:
+        count = len(review.quality)
+        return (
+            f"No extra tests to add — but {count} "
+            f"note{'' if count == 1 else 's'} on weak cases below."
         )
     checked = len(review.covered)
     if not checked:
@@ -2496,9 +2624,14 @@ def risks_run(
     # The classics the AI left out, numbered and scored like everything else.
     extra = review_risks(user_story, texts, analysis)
     if extra:
+        before = analysis
         analysis, _ = clean_analysis(
             RiskAnalysis(failure_modes=list(analysis.failure_modes) + extra), *known_ids
         )
+        # Adding the classics can move a risk's number. A test written for
+        # R6 follows the risk it was written for, matched on what the risk
+        # is about rather than on where it now sits in the list.
+        cases = retag(cases, renumbered(before, analysis))
     provider = get_provider(keys[used_index]["provider"])
     return _risk_result(
         request,
@@ -2524,6 +2657,9 @@ def risks_rescore(
     anything else is someone having moved a score by hand.
     """
     automatic = by == "code"
+    # A rescore never renumbers: the ids the browser sent come straight
+    # back, so a test tagged risk:R6 is still about the risk it was written
+    # for. Anything that does renumber calls retag() with renumbered().
     return _risk_result(
         request,
         analysis=payload.analysis,
@@ -2808,6 +2944,8 @@ def _ship_result(
             "status_labels": SHIP_STATUS_LABELS,
             "tools": TOOLS,
             "acceptable": ACCEPTABLE,
+            # "Accept this risk" is only right on the risk row.
+            "accept_words": ACCEPT_WORDS,
             "ignored": ignored,
             # Copy as Markdown reads this; the browser never builds it.
             "markdown": ship_report_exports.to_markdown(
@@ -2855,6 +2993,7 @@ def _ship_data(report: ShipReport, story: str, is_example: bool) -> dict:
                 "status": item.status,
                 "status_label": SHIP_STATUS_LABELS[item.status],
                 "summary": item.summary,
+                "secondary": list(item.secondary),
                 "link": item.link,
                 "tool": TOOLS.get(item.id, ""),
                 "accepted_note": item.accepted_note,
@@ -2878,7 +3017,8 @@ def ship_page(request: Request) -> HTMLResponse:
             "active": "ship",
             "page_title": "Make the release call with the reasons attached.",
             "page_lede": (
-                "Rules and your own results decide this — not AI text."
+                "Rules and your own results decide this — not AI text. "
+                "No AI, no key needed."
             ),
             "eyebrow": "04 · Ship check",
         },
@@ -2889,7 +3029,23 @@ RING_VALUES = (0, 7, 44, 100)
 RING_TONES = {0: "bad", 7: "bad", 44: "warn", 100: "ok"}
 
 
-@app.get("/dev/rings", response_class=HTMLResponse)
+def dev_page(path: str):
+    """Register a check page, and only when QAG_DEV=1.
+
+    These exist so a screenshot can show every state of a card at once.
+    They are not desks, they are not in the rail, and in production the
+    route does not exist at all.
+    """
+
+    def keep(view):
+        if DEV_MODE:
+            app.get(path, response_class=HTMLResponse, include_in_schema=False)(view)
+        return view
+
+    return keep
+
+
+@dev_page("/dev/rings")
 def dev_rings(request: Request) -> HTMLResponse:
     """A check page: every round score at the values that used to overflow.
 
@@ -2913,7 +3069,7 @@ def dev_rings(request: Request) -> HTMLResponse:
     )
 
 
-@app.get("/dev/next-row", response_class=HTMLResponse)
+@dev_page("/dev/next-row")
 def dev_next_row(request: Request) -> HTMLResponse:
     """A check page: the "Next:" row in all three states, marks and all.
 
@@ -3013,6 +3169,32 @@ class MatrixBody(BaseModel):
     # Whether a model proposed these factors, so the footer stays honest
     # when the page is reopened from what the browser saved.
     from_ai: bool = False
+    # Rules the AI guessed but nobody has said yes to yet. They were drawn
+    # once and lost on the next reload, so the reader had to spend another
+    # AI call to see them again.
+    suggested: list[MatrixRuleBody] = []
+
+    @field_validator("suggested")
+    @classmethod
+    def _not_too_many_suggested(
+        cls, value: list[MatrixRuleBody]
+    ) -> list[MatrixRuleBody]:
+        if len(value) > MAX_RULES:
+            raise ValueError(f"Send at most {MAX_RULES} suggested rules.")
+        return value
+
+    def suggested_rules(self) -> list[Rule]:
+        return [
+            Rule(
+                if_factor=one.if_factor,
+                if_value=one.if_value,
+                then_factor=one.then_factor,
+                then_value=one.then_value,
+                reason=one.reason,
+                source="ai",
+            )
+            for one in self.suggested
+        ]
 
     @field_validator("reasons")
     @classmethod
@@ -3063,7 +3245,7 @@ class MatrixBody(BaseModel):
 
 def _saved_matrix(
     raw: str,
-) -> tuple[list[Factor], list[Rule], bool, dict[str, str]] | None:
+) -> tuple[list[Factor], list[Rule], bool, dict[str, str], list[Rule]] | None:
     """The factors the browser already has, or None to suggest fresh ones."""
     if not (raw or '').strip():
         return None
@@ -3074,7 +3256,7 @@ def _saved_matrix(
     factors, rules = body.as_engine()
     if validate(factors, rules):
         return None
-    return factors, rules, body.from_ai, dict(body.reasons)
+    return factors, rules, body.from_ai, dict(body.reasons), body.suggested_rules()
 
 
 def _matrix_context(
@@ -3125,6 +3307,16 @@ def _matrix_context(
             # Kept with the rest so a reload, an edit and Ship check all
             # read the same reasons the suggestion gave.
             "reasons": dict(reasons or {}),
+            "suggested": [
+                {
+                    "if_factor": one.if_factor,
+                    "if_value": one.if_value,
+                    "then_factor": one.then_factor,
+                    "then_value": one.then_value,
+                    "reason": one.reason,
+                }
+                for one in (suggested or [])
+            ],
             "runs": len(matrix.rows),
             "valid_pairs": matrix.valid_pairs,
             "covered_pairs": matrix.covered_pairs,
@@ -3152,6 +3344,36 @@ def matrix_page(request: Request) -> HTMLResponse:
     )
 
 
+@app.post("/requirements/matrix/editor", response_class=HTMLResponse)
+def matrix_editor(
+    request: Request,
+    saved_json: str = Form(default=""),
+) -> HTMLResponse:
+    """The editor as it stands, with no AI call. What a page load uses.
+
+    Opening this desk used to POST to /suggest, which spent a key on every
+    visit. The AI is asked only when somebody presses Suggest from my
+    story; until then this draws what the browser saved, or the standard
+    set with that button beside it.
+    """
+    saved = _saved_matrix(saved_json)
+    if saved is None:
+        factors, rules = standard_set()
+        matrix = build_matrix(factors, rules)
+        return templates.TemplateResponse(
+            request,
+            "_test_matrix_editor.html",
+            _matrix_context(factors, rules, matrix, []),
+        )
+    factors, rules, from_ai, saved_reasons, kept = saved
+    matrix = build_matrix(factors, rules)
+    return templates.TemplateResponse(
+        request,
+        "_test_matrix_editor.html",
+        _matrix_context(factors, rules, matrix, [], saved_reasons, from_ai, kept),
+    )
+
+
 @app.post("/requirements/matrix/suggest", response_class=HTMLResponse)
 def matrix_suggest(
     request: Request,
@@ -3174,13 +3396,13 @@ def matrix_suggest(
     # factors they edited by hand.
     saved = _saved_matrix(saved_json)
     if saved is not None:
-        factors, rules, from_ai, saved_reasons = saved
+        factors, rules, from_ai, saved_reasons, kept = saved
         matrix = build_matrix(factors, rules)
         return templates.TemplateResponse(
             request,
             "_test_matrix_editor.html",
             _matrix_context(
-                factors, rules, matrix, [], saved_reasons, from_ai=from_ai
+                factors, rules, matrix, [], saved_reasons, from_ai, kept
             ),
         )
 
@@ -3239,7 +3461,17 @@ def matrix_build(request: Request, payload: MatrixBody) -> HTMLResponse:
     return templates.TemplateResponse(
         request,
         "_test_matrix_result.html",
-        _matrix_context(factors, rules, matrix, [], dict(payload.reasons)),
+        # The suggested rules travel through every edit: they are drawn
+        # above this block, and losing them here would lose them on reload.
+        _matrix_context(
+            factors,
+            rules,
+            matrix,
+            [],
+            dict(payload.reasons),
+            payload.from_ai,
+            payload.suggested_rules(),
+        ),
     )
 
 

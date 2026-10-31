@@ -136,7 +136,7 @@ def test_run_works_before_any_test_case_exists(monkeypatch) -> None:
     response = client.post("/risks/run", data=data, headers=KEYS_HEADER)
     assert response.status_code == 200
     assert "(none yet)" in captured[0][1]
-    assert "No test for this yet" in response.text
+    assert "No test yet" in response.text
 
 
 def test_run_drops_test_case_ids_the_ai_invented(monkeypatch) -> None:
@@ -148,7 +148,7 @@ def test_run_drops_test_case_ids_the_ai_invented(monkeypatch) -> None:
     body = client.post("/risks/run", data=FORM, headers=KEYS_HEADER).text
     # The apostrophe in the note is escaped on the way into the page.
     assert "Removed 1 unknown test case ids from the AI" in body
-    assert "No test for this yet" in body
+    assert "No test yet" in body
 
 
 def test_run_escapes_whatever_the_ai_wrote(monkeypatch) -> None:
@@ -229,11 +229,11 @@ def test_the_page_data_round_trips_through_rescore(monkeypatch) -> None:
 def test_the_example_shows_every_coverage_state() -> None:
     body = client.post("/risks/example").text
     assert "Tested by TC-010 (tagged risk:R1)" in body
-    assert "Probably tested by TC-005" in body
+    assert "Has a test (not confirmed) — TC-005" in body
     assert "both say:" in body
     assert "and it counts for sure" in body
     assert "but it doesn't look like it" in body
-    assert "No test for this yet" in body
+    assert "No test yet" in body
 
 
 def test_the_example_counts_its_untested_high_risks() -> None:
@@ -244,7 +244,9 @@ def test_the_example_counts_its_untested_high_risks() -> None:
         r'<div class="num">(\d+)</div><div class="lbl">High risk, no test</div>', body
     )
     assert shown and int(shown.group(1)) >= 2
-    assert f"Write tests for {shown.group(1)} high risks with no test" in body
+    # The strip at the top names the same number the stat does.
+    assert f"{shown.group(1)} high risks have no test" in body
+    assert "Write tests for" in body
     assert "stat stat-bad" in body
 
 

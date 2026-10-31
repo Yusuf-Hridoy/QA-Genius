@@ -172,12 +172,18 @@ def risk_instruction(risks: list[ScoredRisk]) -> str:
 def add_risk_tags(
     current: TestCaseList, proposed: TestCaseList, risk_ids: list[str]
 ) -> TestCaseList:
-    """Tag a new case with risk:Rn when it says which risk it is for.
+    """Tag every new case with the risk it was written for.
 
-    The AI is asked for the tag; code puts it there when the AI only
-    mentioned the risk in the title or the traceability line.
+    Write a test on R6 added TC-014 and the page then showed it under R1:
+    nothing in the case said which risk it was for, so the desk guessed
+    from the words. Code says so instead.
+
+    One risk was asked for, so every new case belongs to it. Several, and
+    the case is tagged with the risk it names -- in its tags, its title or
+    its traceability line.
     """
-    known = {str(one or "").strip().upper() for one in risk_ids}
+    known = {str(one or "").strip().upper() for one in risk_ids if str(one or "").strip()}
+    only = next(iter(known)) if len(known) == 1 else ""
     current_ids = {str(case.id or "").strip().lower() for case in current.test_cases}
     cases = []
     for case in proposed.test_cases:
@@ -189,11 +195,17 @@ def add_risk_tags(
         text = " ".join(
             [case.traceability or "", case.title or "", " ".join(case.tags or [])]
         )
+        wanted = [
+            found.upper() for found in _RISK_ID.findall(text) if found.upper() in known
+        ]
+        # Nothing in the case names a risk, and only one was asked for: it
+        # is that one, and no word matching has any say in it.
+        if not wanted and only:
+            wanted = [only]
         added = False
-        for found in _RISK_ID.findall(text):
-            risk_id = found.upper()
+        for risk_id in wanted:
             tag = RISK_TAG + risk_id
-            if risk_id in known and tag.lower() not in have:
+            if tag.lower() not in have:
                 tags.append(tag)
                 have.add(tag.lower())
                 added = True

@@ -1,4 +1,8 @@
-{# The decision, the evidence behind it, and what to do next.
+{# The decision, what to do about it, and the evidence under both.
+
+   Order is the design: the decision card answers the question, Path to
+   Ready says what to press next, All checks holds the receipts, and the
+   story itself sits at the bottom where you would only look it up.
 
    Every number on this page was computed by qagenius/ship_check.py and the
    grade by qagenius/ship_grade.py. No AI text reaches either, so nothing
@@ -9,38 +13,53 @@
 {% include "_example_flag.html" %}
 {% endwith %}
 {% endif %}
+
+{% set ran = report.items | rejectattr("status", "equalto", "not_checked") | list %}
+{% set not_run = report.items | selectattr("status", "equalto", "not_checked") | list %}
+{# Needs fixing before check this. The list used to follow the order the
+   checks are computed in, so a failing "How well tested" sat under a
+   "How clear the story is" that only needed a look. #}
+{% set failed = report.items | selectattr("status", "equalto", "fail") | list %}
+{% set warned = report.items | selectattr("status", "equalto", "warn") | list %}
+{% set todo = failed + warned %}
+{% set fine = report.items | selectattr("status", "in", ["pass", "accepted"]) | list %}
+
 <div class="ship-report"{% if is_example %} data-example="1"{% endif %}>
+
+  {# ── 1. the decision ─────────────────────────────────────────────── #}
   <div class="ship-banner ship-{{ verdict_tone }}">
     <div class="ship-banner-words">
-      {# Which story this verdict is about, at the top of the screen and at
-         the top of the printed page: a report nobody can match to a ticket
-         is a report nobody acts on. #}
-      {% if story_label %}
-      <p class="ship-story-id"><span class="chip chip-id">{{ story_label }}</span>{% if story_status_word %}
-        <span class="chip">{{ story_status_word }}</span>{% endif %}</p>
-      {% endif %}
       <span class="ship-banner-label">Decided by rules</span>
       <h2 class="ship-verdict-label">{{ verdict_label }}</h2>
-      <p>{{ report.verdict_reason }}</p>
-      {% if report.stale %}
-      {# The decision is this minute's; some of what it read is not. #}
-      <p class="chip chip-warn ship-stale-header">Worked out just now — some inputs are older</p>
+      {% if todo %}
+      {# The one thing to do, before the reasoning behind it. #}
+      <p class="ship-fix-first"><span class="ship-fix-label">Fix first:</span>
+        <strong>{{ todo[0].summary }}</strong></p>
+      {% else %}
+      <p class="ship-fix-first">{{ report.verdict_reason }}</p>
       {% endif %}
+      {# One line about how current this is. source_card.js fills it; the
+         page used to carry three lines that could disagree with each other. #}
+      <div id="source-card-slot"></div>
       <p class="muted small">{{ report.checked }} of {{ total_checks }} checks ran</p>
+      <div class="ship-banner-actions">
+        {% if todo %}
+        <a class="btn btn-primary" href="{{ todo[0].link }}">Open {{ tools[todo[0].id] }} →</a>
+        {% else %}
+        <button type="button" class="btn btn-primary" id="ship-copy-md">Copy as Markdown</button>
+        {% endif %}
+      </div>
     </div>
     {% if grade %}
-    {# The letter is arithmetic on the rows below. Press it for the sums. #}
     <div class="grade-holder">
       <button type="button" class="btn grade-circle" id="grade-circle"
               aria-expanded="false" aria-controls="grade-why"
               aria-label="Grade {{ grade.letter }}. Why this grade?">
         <span class="grade-letter">{{ grade.letter }}</span>
       </button>
-      {# The sums are on the page, not behind the circle. A letter with no
-         arithmetic beside it is a letter nobody can check. #}
-      <p class="grade-reason" id="grade-reason">{{ grade.reason }}</p>
+      <p class="grade-points">{{ grade.points }} of {{ grade.max_points }} points</p>
       <button type="button" class="btn btn-small grade-open" id="grade-open"
-              aria-expanded="false" aria-controls="grade-why">See how it's worked out</button>
+              aria-expanded="false" aria-controls="grade-why">How it's worked out</button>
       <div class="grade-why card" id="grade-why" hidden>
         <p class="grade-why-head"><strong>Why {{ grade.letter }}: {{ grade.points }} of
           {{ grade.max_points }} points</strong></p>
@@ -56,132 +75,118 @@
   <p class="muted small">Some saved data could not be read, so these were skipped: {{ ignored | join(", ") }}</p>
   {% endif %}
 
-  {% set ran = report.items | rejectattr("status", "equalto", "not_checked") | list %}
-  {% set not_run = report.items | selectattr("status", "equalto", "not_checked") | list %}
-  {# Needs fixing before check this. The list used to follow the order the
-     checks are computed in, so a failing "How well tested" sat under a
-     "How clear the story is" that only needed a look -- and the one main
-     button at the bottom sent the reader to the Story desk every time. #}
-  {% set failed = report.items | selectattr("status", "equalto", "fail") | list %}
-  {% set warned = report.items | selectattr("status", "equalto", "warn") | list %}
-  {% set todo = failed + warned %}
-  {% set fine = report.items | selectattr("status", "in", ["pass", "accepted"]) | list %}
-
-  <div class="req-split">
-    <div class="req-main">
-      <div class="card">
-        <h2 class="card-title">Evidence receipt</h2>
-        <div class="receipt">
-          {% for item in ran %}
-          <div class="receipt-tile" data-check="{{ item.id }}" data-status="{{ item.status }}">
-            <span class="icon-tile tile-{{ 'ok' if item.status == 'pass' else ('warn' if item.status in ['warn', 'accepted'] else 'bad') }}">
-              <span class="receipt-mark" aria-hidden="true">{{ "✓" if item.status == "pass" else ("!" if item.status in ["warn", "accepted"] else "✕") }}</span>
-            </span>
-            <div class="receipt-words">
-              <p class="receipt-title">{{ item.title }}</p>
-              <p class="receipt-line">{{ item.summary }}</p>
-              {% if item.accepted_note %}
-              <p class="receipt-line"><em>{{ item.accepted_note }}</em></p>
-              {% endif %}
-              {% if item.review_passed %}
-              <p><span class="chip chip-bad">Review date passed</span></p>
-              {% endif %}
-              {% if item.stale_note %}
-              <p class="muted small ship-stale-note">{{ item.stale_note }}</p>
-              {% endif %}
-              {% if item.details %}
-              <details class="ship-details">
-                <summary>Details</summary>
-                <ul>
-                  {% for line in item.details %}<li>{{ line }}</li>{% endfor %}
-                </ul>
-              </details>
-              {% endif %}
-            </div>
-          </div>
-          {% endfor %}
-        </div>
-        {% if not_run %}
-        <p class="muted small">Not run yet:
-          {{ not_run | map(attribute="title") | join(", ") }}.</p>
-        {% endif %}
-        <p class="note">The decision comes from rules and your results — not AI text.</p>
-      </div>
+  {# ── 2. what to do, in order ─────────────────────────────────────── #}
+  {% if todo %}
+  <div class="card ship-path">
+    <div class="row card-head">
+      <h2 class="card-title">Path to Ready</h2>
+      <span class="spacer"></span>
+      <span class="chip">{{ fine | length }} of {{ ran | length }} checks fine</span>
     </div>
-
-    <div class="req-side">
-      <div class="card">
-        <div class="row card-head">
-          <h2 class="card-title">What to do next</h2>
-          <span class="spacer"></span>
-          <span class="chip{% if not todo %} chip-ok{% endif %}">{{ fine | length }} / {{ ran | length }} fine</span>
+    <ol class="path-list">
+      {% for item in todo %}
+      <li class="path-step" data-check="{{ item.id }}" data-status="{{ item.status }}">
+        <div class="path-words">
+          <p class="path-do">{{ item.instruction or item.summary }}</p>
+          <p class="path-why muted">{{ item.title }} · {{ status_labels[item.status] }}</p>
         </div>
-        {% if not todo %}
-        <p class="muted">Nothing is waiting on you. Every check that ran came back fine.</p>
+        <div class="path-side">
+          <a class="btn btn-sm ship-row-link" href="{{ item.link }}">Open {{ tools[item.id] }} →</a>
+          {# A criterion with no test and a story nobody can read are
+             fixed, not signed off. Those rows offer the fix only. #}
+          {% if item.status == "fail" and item.id in acceptable %}
+          <button type="button" class="btn btn-sm ship-accept" data-check="{{ item.id }}">{{ accept_words.get(item.id, "Accept anyway and say why") }}</button>
+          {% endif %}
+        </div>
+        {% if item.status == "fail" and item.id in acceptable %}
+        <div class="ship-accept-form" data-check="{{ item.id }}" hidden>
+          {% call field("ship-reason-" ~ item.id, "Why are you releasing with this?",
+                        help="At least " ~ min_reason ~ " characters.", counter_max=max_reason) %}
+          <textarea id="ship-reason-{{ item.id }}" class="ship-reason short" rows="3"
+                    minlength="{{ min_reason }}" maxlength="{{ max_reason }}"
+                    aria-describedby="ship-reason-{{ item.id }}-error"
+                    placeholder="Behind a feature flag for internal users until the shared counter lands."></textarea>
+          <p class="field-error ship-field-error" id="ship-reason-{{ item.id }}-error" role="alert" hidden></p>
+          {% endcall %}
+          {# Both of these are optional. A date nobody agreed is worse than
+             no date, so neither is ever filled in for you. #}
+          <div class="field-grid">
+            {% call field("ship-owner-" ~ item.id, "Who owns it", optional=true) %}
+            <input type="text" id="ship-owner-{{ item.id }}" class="ship-owner"
+                   maxlength="{{ max_owner }}" placeholder="e.g. Web team">
+            {% endcall %}
+            {% call field("ship-review-" ~ item.id, "Review by", optional=true) %}
+            <input type="date" id="ship-review-{{ item.id }}" class="ship-review">
+            {% endcall %}
+          </div>
+          <div class="form-actions">
+            <button type="button" class="btn btn-sm btn-pop-save ship-accept-save" data-check="{{ item.id }}">Accept</button>
+            <button type="button" class="btn btn-sm ship-accept-cancel" data-check="{{ item.id }}">Cancel</button>
+            <span class="muted small ship-accept-status" aria-live="polite"></span>
+          </div>
+        </div>
         {% endif %}
-        <div class="todo-list">
-          {% for item in todo %}
-          <div class="card ship-row todo-row" data-check="{{ item.id }}" data-status="{{ item.status }}">
-            <div class="row ship-row-head">
-              <span class="chip chip-{{ 'bad' if item.status == 'fail' else 'warn' }}">{{ "✕" if item.status == "fail" else "!" }} {{ status_labels[item.status] }}</span>
-              <strong class="ship-row-title">{{ item.title }}</strong>
-            </div>
-            <p class="ship-row-summary">{{ item.summary }}</p>
-            <div class="row">
-              <a class="btn btn-sm ship-row-link" href="{{ item.link }}">Open {{ tools[item.id] }} →</a>
-              {# A criterion with no test and a story nobody can read are
-                 fixed, not signed off. Those rows offer the fix only. #}
-              {% if item.status == "fail" and item.id in acceptable %}
-              <button type="button" class="btn btn-sm ship-accept" data-check="{{ item.id }}">Accept this risk and say why</button>
-              {% endif %}
-            </div>
-            {% if item.status == "fail" and item.id in acceptable %}
-            <div class="ship-accept-form" data-check="{{ item.id }}" hidden>
-              {% call field("ship-reason-" ~ item.id, "Why are you releasing with this?",
-                            help="At least " ~ min_reason ~ " characters.", counter_max=max_reason) %}
-              <textarea id="ship-reason-{{ item.id }}" class="ship-reason short" rows="3"
-                        minlength="{{ min_reason }}" maxlength="{{ max_reason }}"
-                        placeholder="Behind a feature flag for internal users until the shared counter lands."></textarea>
-              {% endcall %}
-              {# Both of these are optional. A date nobody agreed is worse than
-                 no date, so neither is ever filled in for you. #}
-              <div class="field-grid">
-                {% call field("ship-owner-" ~ item.id, "Who owns it", optional=true) %}
-                <input type="text" id="ship-owner-{{ item.id }}" class="ship-owner"
-                       maxlength="{{ max_owner }}" placeholder="Name or team">
-                {% endcall %}
-                {% call field("ship-review-" ~ item.id, "Review by", optional=true) %}
-                <input type="date" id="ship-review-{{ item.id }}" class="ship-review">
-                {% endcall %}
-              </div>
-              <div class="form-actions">
-                <button type="button" class="btn btn-sm btn-pop-save ship-accept-save" data-check="{{ item.id }}">Accept</button>
-                <button type="button" class="btn btn-sm ship-accept-cancel" data-check="{{ item.id }}">Cancel</button>
-                <span class="muted small ship-accept-status" aria-live="polite"></span>
-              </div>
-            </div>
-            {% endif %}
-          </div>
-          {% endfor %}
+      </li>
+      {% endfor %}
+      {# A medium risk is a real thing to look at, and it is not a high one.
+         It gets its own step rather than four extra rows under "High risks
+         without a test". #}
+      {% for item in report.items if item.secondary %}
+      <li class="path-step" data-check="{{ item.id }}-medium" data-status="warn">
+        <div class="path-words">
+          <p class="path-do">Look at {{ item.secondary | length }} medium risk{% if item.secondary | length != 1 %}s{% endif %} with no test</p>
+          <p class="path-why muted">{{ item.title }} · {{ status_labels["warn"] }}</p>
+          <ul class="checklist muted small">
+            {% for line in item.secondary %}<li>{{ line }}</li>{% endfor %}
+          </ul>
         </div>
-      </div>
+        <div class="path-side">
+          <a class="btn btn-sm ship-row-link" href="{{ item.link }}">Open {{ tools[item.id] }} →</a>
+        </div>
+      </li>
+      {% endfor %}
+    </ol>
+  </div>
+  {% endif %}
 
-      {% set accepted = report.items | selectattr("status", "equalto", "accepted") | list %}
-      {% if accepted %}
-      <div class="card">
-        <h2 class="card-title">Accepted risks</h2>
-        {% for item in accepted %}
-        <div class="ship-row accepted-row" data-check="{{ item.id }}">
-          <p class="receipt-title">{{ item.title }}</p>
-          <p class="ship-accepted-note"><em>Accepted: {{ item.accepted_note }}</em></p>
-          <div class="row">
-            <button type="button" class="btn btn-small btn-danger ship-unaccept" data-check="{{ item.id }}">Remove</button>
-          </div>
-        </div>
-        {% endfor %}
-      </div>
-      {% endif %}
+  {# ── 3. every check, with its evidence ───────────────────────────── #}
+  <div class="card ship-checks">
+    <div class="row card-head">
+      <h2 class="card-title">All checks</h2>
+      <span class="spacer"></span>
+      <span class="chip{% if not todo %} chip-ok{% endif %}">{{ fine | length }} / {{ ran | length }} fine</span>
     </div>
+    <div class="check-table">
+      {% for item in report.items %}
+      <div class="check-row" data-check="{{ item.id }}" data-status="{{ item.status }}">
+        <div class="check-words">
+          <p class="check-name">{{ item.title }}</p>
+          <p class="check-evidence muted">{{ item.summary }}</p>
+          {% if item.accepted_note %}
+          <p class="check-evidence"><em>Accepted: {{ item.accepted_note }}</em>{% if item.review_passed %}
+            <span class="bad-line">(passed)</span>{% endif %}</p>
+          {% endif %}
+          {% if item.stale_note %}
+          <p class="muted small ship-stale-note">{{ item.stale_note }}</p>
+          {% endif %}
+          {% if item.details or item.secondary %}
+          <details class="ship-details">
+            <summary>Details</summary>
+            <ul>
+              {% for line in item.details %}<li>{{ line }}</li>{% endfor %}
+              {% for line in item.secondary %}<li>{{ line }}</li>{% endfor %}
+            </ul>
+          </details>
+          {% endif %}
+          {% if item.status == "accepted" %}
+          <button type="button" class="btn btn-small btn-danger ship-unaccept" data-check="{{ item.id }}">Remove</button>
+          {% endif %}
+        </div>
+        <span class="chip chip-{{ status_tones[item.status] }} check-status">{{ status_labels[item.status] }}</span>
+      </div>
+      {% endfor %}
+    </div>
+    <p class="note">The decision comes from rules and your results — not AI text.</p>
   </div>
 
   <script type="application/json" id="ship-md">{{ markdown | tojson }}</script>
@@ -189,15 +194,27 @@
      the layout. The Overview reads this out of the HTML this route returns,
      so there is one decision in the app and one place that computes it. #}
   <script type="application/json" id="ship-data">{{ ship_data | tojson }}</script>
+
+  {# ── 4. the story itself, at the bottom ──────────────────────────── #}
+  <div class="card ship-story-card">
+    <div class="row card-head">
+      <span class="eyebrow">Your story</span>
+      {% if story_label %}<span class="chip chip-id">{{ story_label }}</span>{% endif %}
+      {% if story_status_word %}<span class="chip">{{ story_status_word }}</span>{% endif %}
+      <span class="spacer"></span>
+      <a class="btn btn-sm" href="/requirements/story">Change story</a>
+    </div>
+    <p class="ship-story-text">{{ story_short }}</p>
+    {% if not_run %}
+    <p class="muted small">Not run yet:
+      {{ not_run | map(attribute="title") | join(", ") }}.</p>
+    {% endif %}
+  </div>
+
   <div class="card ship-actions">
     <div class="row">
-      {# The one main button is the most useful next thing: the first check
-         that needs fixing, or the copy nobody has to retype. #}
       {% if todo %}
-      <a class="btn btn-primary" href="{{ todo[0].link }}">Open {{ tools[todo[0].id] }} →</a>
       <button type="button" class="btn" id="ship-copy-md">Copy as Markdown</button>
-      {% else %}
-      <button type="button" class="btn btn-primary" id="ship-copy-md">Copy as Markdown</button>
       {% endif %}
       <button type="button" class="btn" id="ship-print">Print / save as PDF</button>
       <span class="muted small" id="ship-copy-status" aria-live="polite"></span>

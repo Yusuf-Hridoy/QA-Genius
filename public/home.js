@@ -79,11 +79,27 @@
     automation: "/requirements/automation"
   };
 
-  /* Needs fixing first, then check this, then a desk built from older work.
-   * `statuses` is desk -> the state run_state.js reports for it. */
-  function attentionItems(report, statuses) {
+  /* The open question first, then needs fixing, then check this, then a
+   * desk built from older work. `statuses` is desk -> the state
+   * run_state.js reports for it; `question` is the one topQuestion() put
+   * on the workbench card.
+   *
+   * The card said "nobody says what happens at exactly $50" while this
+   * list said nothing was waiting. Two answers to one question, on one
+   * screen, is one answer too many. */
+  function attentionItems(report, statuses, question) {
     var items = [];
     var checks = (report && report.items) || [];
+    if (question && question.text) {
+      items.push({
+        title: "One question is still open",
+        detail: question.text,
+        href: question.href,
+        tone: "warn",
+        icon: "alert-triangle",
+        kind: "question"
+      });
+    }
 
     function take(status, tone, icon) {
       checks.forEach(function (check) {
@@ -589,10 +605,10 @@
       .then(function (html) {
         var report = reportFrom(html);
         rememberDecision(report);
-        paintAttention(attentionItems(report, stale), true);
+        paintAttention(attentionItems(report, stale, topQuestion(run)), true);
       })
       .catch(function () {
-        paintAttention(attentionItems(null, stale), true);
+        paintAttention(attentionItems(null, stale, topQuestion(run)), true);
       });
   }
 

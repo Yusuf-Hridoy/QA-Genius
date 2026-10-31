@@ -182,7 +182,7 @@ test("an edited story makes the matrix out of date", () => {
   const after = QAGRun.write(saved);
   const status = QAGRun.statusOf("matrix", after);
   assert.equal(status.state, "stale");
-  assert.match(status.changes[0], /Your story was edited/);
+  assert.match(status.changes[0], /Your story changed after this was built/);
 });
 
 test("changed test cases do not touch the matrix", () => {

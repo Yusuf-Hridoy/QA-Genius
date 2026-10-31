@@ -32,6 +32,11 @@
   /* The tab's own story. sessionStorage is per tab, which is the whole
    * point: two tabs, two ids, two stories. */
   var TAB_KEY = "qag.tab_story";
+  /* The revision of that story this tab has seen. It lives beside the id and
+   * never inside the run: a page that holds a run copy in memory from before
+   * its own save would otherwise write the old revision back and make its
+   * next edit look stale. Five edits in a row only saved the first one. */
+  var REV_KEY = "qag.tab_rev";
   /* Set when this tab's story was deleted under it. A tab with no story has
    * never had one and may make itself one from the first words typed; a tab
    * that has just lost one must not, or Delete would quietly undo itself. */
@@ -88,6 +93,9 @@
   function withRevision(one) {
     if (typeof one.revision !== "number" || one.revision < 0) one.revision = 0;
     if (typeof one.opened_at !== "string") one.opened_at = one.updated_at || "";
+    /* Files written before the revision moved into the tab carry it inside
+     * the run. It is ignored and dropped rather than read back. */
+    if (one.run && typeof one.run === "object") delete one.run._story_rev;
     return one;
   }
 
@@ -143,7 +151,7 @@
     }
   }
 
-  function setTabStory(id) {
+  function setTabStory(id, revision) {
     try {
       if (id) {
         global.sessionStorage.setItem(TAB_KEY, String(id));
@@ -154,7 +162,33 @@
     } catch (e) {
       /* storage blocked: the tab still works, it just forgets on reload */
     }
+    setTabRev(id ? revision : null);
     rememberLastOpened(id ? String(id) : "");
+  }
+
+  /* The revision of the tab's story this tab has seen, or null when this tab
+   * has not seen one. Only ever read for the story the tab is bound to. */
+  function tabRev() {
+    try {
+      var raw = global.sessionStorage.getItem(REV_KEY);
+      if (raw === null || raw === "") return null;
+      var seen = parseInt(raw, 10);
+      return isNaN(seen) ? null : seen;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function setTabRev(revision) {
+    try {
+      if (typeof revision === "number" && revision >= 0) {
+        global.sessionStorage.setItem(REV_KEY, String(revision));
+      } else {
+        global.sessionStorage.removeItem(REV_KEY);
+      }
+    } catch (e) {
+      /* storage blocked: the next save simply checks against nothing */
+    }
   }
 
   function clearTabStory() {
@@ -287,6 +321,10 @@
       return { error: "duplicate-label", story: null, message: takenMessage(label) };
     }
     var run = opts.run && typeof opts.run === "object" ? copy(opts.run) : {};
+    /* Stamp it the way a page would, so opening this story later hands the
+     * page exactly what is stored and the first auto-save finds nothing to
+     * do. Without this, opening a story counted as editing it. */
+    if (global.QAGRun && global.QAGRun.stampRun) run = global.QAGRun.stampRun(run);
     var story = {
       id: newId(),
       label: label || nextLabel(data.stories),
@@ -305,7 +343,7 @@
     var problem = writeAll(data);
     if (problem) return { error: problem, story: null };
     /* The new story is this tab's. Other tabs keep the story they had. */
-    setTabStory(story.id);
+    setTabStory(story.id, story.revision);
     return { error: "", story: story };
   }
 
@@ -313,43 +351,20 @@
   function open(id) {
     var story = get(id);
     if (!story) return null;
-    setTabStory(id);
+    /* Opening is not editing. Nothing about the story is written here: no
+     * revision, no "Last edited", not even the fingerprints run_state.js
+     * stamps on the copy it hands the page. A second tab that merely opened
+     * or reloaded the same story used to make the first tab's next edit
+     * look stale, and every page load counted as work. */
+    setTabStory(id, story.revision || 0);
     touchOpened(id);
-    if (global.QAGRun) {
-      global.QAGRun.write(bound(story));
-      /* run_state.js stamps fingerprints on every write, so the run in the
-       * tab is now a hair different from the one in storage. Put that copy
-       * back without touching "Last edited" or the revision: opening a
-       * story is not editing it, and the next auto-save must find nothing
-       * to do rather than bumping the story to the top of the list. */
-      restamp(id);
-    }
+    if (global.QAGRun) global.QAGRun.write(bound(story));
     return story;
   }
 
-  function restamp(id) {
-    var data = readAll();
-    var at = indexOf(data, id);
-    if (at === -1) return;
-    var run = global.QAGRun.read();
-    if (!run || run._story_id !== id) return;
-    var wanted = copy(run);
-    delete wanted._story_rev;
-    if (same(data.stories[at].run, wanted)) return;
-    data.stories[at].run = wanted;
-    writeAll(data);
-  }
-
-  /* The saved run, stamped with the story it came from and the revision this
-   * tab has seen. Both travel with the run so no save can go astray. */
-  function bound(story) {
-    var run = copy(story.run);
-    run._story_id = story.id;
-    run._story_rev = story.revision || 0;
-    return run;
-  }
-
-  /* Opening is not editing: it moves "Last opened" and leaves "Last edited". */
+  /* The one thing opening does record: which story was last looked at, for
+   * the order of the My stories list. It moves "Last opened" and touches
+   * neither "Last edited" nor the revision, so no other tab goes stale. */
   function touchOpened(id) {
     var data = readAll();
     var at = indexOf(data, id);
@@ -357,6 +372,16 @@
     data.stories[at].opened_at = now();
     data.last_opened_id = id;
     writeAll(data);
+  }
+
+  /* The saved run, stamped with the story it came from. The revision stays
+   * in the tab (see REV_KEY), never in the run: a page holding an older run
+   * copy would put an old revision back and lose its own next save. */
+  function bound(story) {
+    var run = copy(story.run);
+    run._story_id = story.id;
+    delete run._story_rev;
+    return run;
   }
 
   function copy(value) {
@@ -380,7 +405,9 @@
     var at = indexOf(data, id);
     if (at === -1) return "deleted";
     var story = data.stories[at];
-    var seen = run && typeof run._story_rev === "number" ? run._story_rev : null;
+    /* What this tab has seen, from the tab, never from the run handed in.
+     * A page may be holding a copy it read before its own last save. */
+    var seen = id === tabStory() ? tabRev() : null;
     if (seen !== null && seen < (story.revision || 0)) return "stale";
 
     var wanted = copy(run);
@@ -422,25 +449,25 @@
     }
   }
 
-  /* The tab has just written revision n, so the run it holds has seen it.
-   * Written straight into sessionStorage: announcing it would start the
-   * save timer again and the two would chase each other for ever. */
+  /* The tab has just written revision n, so this tab has seen it. Written
+   * straight into sessionStorage beside the id: the run is not touched, so
+   * no save timer starts and no page copy can put an old number back. */
   function carryRevision(id, revision) {
-    bindSession(id, revision, true);
+    if (id !== tabStory()) return;
+    setTabRev(revision);
   }
 
-  /* Tie the run in this tab to a story, quietly. `onlyIfMine` is for the
-   * ordinary case of recording a revision we have just written: it leaves a
-   * run that belongs to some other story alone. */
-  function bindSession(id, revision, onlyIfMine) {
+  /* Tie this tab to a story: the id in the tab, the id in the run, and the
+   * revision this tab has seen. Used when a run that had no story gets one. */
+  function bindSession(id, revision) {
+    setTabStory(id, revision);
     if (!global.QAGRun) return;
     try {
       var raw = global.sessionStorage.getItem(global.QAGRun.RUN_KEY);
       var run = raw ? JSON.parse(raw) : null;
       if (!run || typeof run !== "object") return;
-      if (onlyIfMine && run._story_id !== id) return;
       run._story_id = id;
-      run._story_rev = revision;
+      delete run._story_rev;
       global.sessionStorage.setItem(global.QAGRun.RUN_KEY, JSON.stringify(run));
     } catch (e) {
       /* storage blocked: the next save simply checks against what it has */
@@ -493,8 +520,11 @@
     var story = get(storyId);
     if (!story) return "deleted";
     var mine = copy(run);
-    mine._story_rev = story.revision || 0;
+    delete mine._story_rev;
     mine._story_id = storyId;
+    /* "Keep mine" is the reader saying this tab's copy wins: catch the tab
+     * up to the revision it is about to write over. */
+    if (storyId === tabStory()) setTabRev(story.revision || 0);
     /* A forced save is always a real write, even when the words match. */
     var problem = saveStory(storyId, mine);
     return problem === "same" ? "" : problem;
@@ -714,7 +744,7 @@
     var run = global.QAGRun ? global.QAGRun.read() : {};
     var mine = run && run._story_id ? get(run._story_id) : null;
     if (mine) {
-      setTabStory(mine.id);
+      setTabStory(mine.id, mine.revision || 0);
       if (global.QAGRun) global.QAGRun.write(bound(mine));
       return mine;
     }
@@ -773,8 +803,7 @@
     if (!id) return "";
     var story = get(id);
     if (!story) return "deleted";
-    var run = global.QAGRun ? global.QAGRun.read() : {};
-    var seen = run && typeof run._story_rev === "number" ? run._story_rev : null;
+    var seen = tabRev();
     if (seen === null) return "";
     return (story.revision || 0) > seen ? "changed" : "";
   }
@@ -818,8 +847,11 @@
     create: create,
     open: open,
     bound: bound,
+    REV_KEY: REV_KEY,
     tabStory: tabStory,
+    tabRev: tabRev,
     setTabStory: setTabStory,
+    setTabRev: setTabRev,
     storyWasDeleted: storyWasDeleted,
     clearTabStory: clearTabStory,
     forgetOpenStory: forgetOpenStory,

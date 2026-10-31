@@ -19,13 +19,14 @@
     {# autocomplete="off" because a reload of this same URL - which is what
        starting a new story is - made Chrome put the old story's words back
        into the box after the page had emptied it. #}
-    <form id="story-form" autocomplete="off" hx-post="/requirements/story/run" hx-target="#story-output" hx-swap="innerHTML" hx-indicator="#check-btn">
+    <form id="story-form" autocomplete="off" hx-post="/requirements/story/run" hx-target="#story-output" hx-swap="innerHTML" hx-indicator="#check-btn" data-error-title="Could not check the story">
       <div class="form-body">
         {# Optional: a reader who has a tracker id types it, and everything
            that quotes this story quotes that id. Left empty we number it. #}
-        {% call field("story-label", "Story ID", optional=true, hint="e.g. CART-204 — leave empty and we'll number it", help=label_rule) %}
-        <input type="text" id="story-label" class="mono" maxlength="24"
-               pattern="[A-Za-z0-9_-]+" placeholder="CART-204">
+        {% call field("story-label", "Story ID", optional=true, hint="Leave it empty and we'll number it.", help=label_rule) %}
+        <input type="text" id="story-label" class="mono"
+               aria-describedby="story-label-help"
+               pattern="[A-Za-z0-9_-]+" placeholder="e.g. CART-204">
         {% endcall %}
         {% call field("story-user-story", "User story", counter_max=3000) %}
         <textarea id="story-user-story" name="user_story" class="story-box" maxlength="3000" required placeholder="As a shopper, I want…"></textarea>
@@ -48,8 +49,13 @@
            a 1440px screen and the main one stopped looking main. #}
         <div class="form-actions">
           <button id="check-btn" type="submit" class="btn btn-primary" data-busy-label="Checking…"><span class="btn-label">Check story</span></button>
-          <button id="duel-btn" type="button" class="btn" data-busy-label="Reading…" hx-post="/requirements/story/duel" hx-target="#duel-output" hx-swap="innerHTML" hx-include="#story-form" hx-indicator="#duel-progress"><span class="btn-label">Run the two-reader check</span></button>
+          <button id="duel-btn" type="button" class="btn" data-busy-label="Reading…" data-error-title="Could not run the two-reader check" hx-post="/requirements/story/duel" hx-target="#duel-output" hx-swap="innerHTML" hx-include="#story-form" hx-indicator="#duel-progress"><span class="btn-label">Run the two-reader check</span></button>
           <button id="save-draft" type="button" class="btn">Save draft</button>
+          {# New here? The example is the fastest way to see what this does,
+             so it is on the row rather than only behind More. #}
+          <button id="load-example-link" type="button" class="btn btn-ghost link-button"
+                  hx-post="/requirements/story/example" hx-target="#story-output"
+                  hx-swap="innerHTML">New here? Load an example</button>
           <div class="more-menu">
             <button id="story-more" type="button" class="btn btn-ghost" aria-expanded="false" aria-controls="story-more-list">More &#9662;</button>
             <div class="more-list" id="story-more-list" hidden>
@@ -61,8 +67,10 @@
            far along the story is. Both are saved in this browser only. #}
         <div class="draft-pop card" id="draft-pop" hidden>
           {% call field("draft-label", "Story ID", optional=true) %}
-          <input type="text" id="draft-label" class="mono" maxlength="24"
-                 pattern="[A-Za-z0-9_-]+" placeholder="CART-204">
+          <input type="text" id="draft-label" class="mono"
+                 aria-describedby="draft-label-error"
+                 pattern="[A-Za-z0-9_-]+" placeholder="e.g. CART-204">
+          <p class="field-error" id="draft-label-error" role="alert" hidden></p>
           {% endcall %}
           {% call field("draft-status", "Status") %}
           <select id="draft-status">
@@ -83,7 +91,31 @@
       </div>
     </form>
   </div>
-  <div id="story-output" class="req-side"></div>
+  <div id="story-output" class="req-side">
+    {# Before anything has been checked, the right half of the page was
+       empty. This is what will land here, faded, so the shape of the
+       answer is clear before the button is pressed. It is replaced the
+       moment a real result arrives. #}
+    <div class="card result-preview" id="story-preview" aria-hidden="true">
+      <p class="eyebrow">What you'll get</p>
+      <div class="preview-score">
+        <span class="preview-ring"></span>
+        <div>
+          <p class="preview-head">How clear the story is</p>
+          <p class="preview-sub">A score out of 100, worked out from the words.</p>
+        </div>
+      </div>
+      <p class="preview-head">Unclear words</p>
+      <p class="row preview-chips"><span class="chip">quickly</span><span class="chip">too many</span><span class="chip">stays safe</span></p>
+      <p class="preview-head">Criteria drafts</p>
+      <ul class="preview-lines">
+        <li>Given a shopper on the sign-in page…</li>
+        <li>When they enter a wrong password 5 times…</li>
+        <li>Then the account is locked for 30 minutes…</li>
+      </ul>
+      <p class="muted small">Press Check story to fill this in.</p>
+    </div>
+  </div>
 </div>
 <div id="story-extra"></div>
 <div id="duel-output"></div>

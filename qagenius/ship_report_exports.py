@@ -34,7 +34,7 @@ def _status(item) -> str:
 
 
 def _summary(item) -> str:
-    if item.status == "accepted" and item.accepted_note:
+    if item.accepted_note:
         return f'{item.summary} — accepted: "{item.accepted_note}"'
     return item.summary
 
@@ -90,7 +90,10 @@ def to_markdown(
             lines += ["", f"### {item.title} — {STATUS_LABELS[item.status]}"]
             for line in item.details or [item.summary]:
                 lines.append(f"- {line}")
-            if item.status == "accepted" and item.accepted_note:
+            # An accepted risk travels with its reason, its owner and its
+            # review date whatever the row's own status is: a release
+            # thread needs to see what was signed off and by whom.
+            if item.accepted_note:
                 lines.append(f'- Accepted: "{item.accepted_note}"')
             if item.owner:
                 lines.append(f"- Owner: {item.owner}")

@@ -154,8 +154,10 @@
 
   /* ---------- the story's own id and status ---------- */
 
-  var LABEL_OK = /^[A-Za-z0-9_-]{1,24}$/;
+  var LABEL_CHARS = /^[A-Za-z0-9_-]+$/;
+  var LABEL_MAX = 24;
   var LABEL_RULE = "Use letters, numbers, - or _ (max 24).";
+  var LABEL_TOO_LONG = "That is too long. Use 24 characters or fewer.";
 
   function labelBox() {
     return document.getElementById("story-label");
@@ -183,10 +185,12 @@
     line.classList.toggle("field-error", Boolean(words));
   }
 
-  /* "" when the id may be saved, or why it may not. */
+  /* "" when the id may be saved, or why it may not. A long id is told it
+   * is long rather than cut to 24 characters behind the reader's back. */
   function labelProblem(wanted) {
     if (!wanted) return "";
-    if (!LABEL_OK.test(wanted)) return LABEL_RULE;
+    if (wanted.length > LABEL_MAX) return LABEL_TOO_LONG;
+    if (!LABEL_CHARS.test(wanted)) return LABEL_RULE;
     var kept = store();
     if (!kept) return "";
     var open = kept.tabStory();
@@ -194,32 +198,53 @@
     return "";
   }
 
-  /* The id in the form, written into the run so every desk can quote it. */
+  /* While the id is being typed: say whether it is one, and save nothing.
+   *
+   * "AUTH-100" is typed one character at a time, and "AUTH-10" is a
+   * perfectly good id on the way there. Saving every keystroke stored
+   * "AUTH-10", and then "cart" on the way to "cart-items". The id is
+   * written when the field is left, not while it is being filled in. */
+  function checkStoryLabel() {
+    var box = labelBox();
+    if (!box) return "";
+    var wrong = labelProblem(box.value.trim());
+    sayAboutLabel(wrong);
+    if (wrong) box.setAttribute("aria-invalid", "true");
+    else box.removeAttribute("aria-invalid");
+    return wrong;
+  }
+
+  /* The id in the form, written into the run so every desk can quote it.
+   * A wrong or taken id is not written at all: the last good one stays. */
   function saveStoryLabel() {
     var box = labelBox();
     if (!box) return;
+    if (checkStoryLabel()) return;
     var wanted = box.value.trim();
-    var wrong = labelProblem(wanted);
-    sayAboutLabel(wrong);
-    if (wrong) {
-      box.setAttribute("aria-invalid", "true");
-      return;
-    }
-    box.removeAttribute("aria-invalid");
     var run = readRun() || {};
     if (wanted) run.story_label = wanted;
     else delete run.story_label;
     writeRun(run);
   }
 
-  /* The form shows whatever the run already holds. */
+  /* The form shows whatever the run already holds.
+   *
+   * A brand new story shows nothing: the field is empty with its faded
+   * hint, and the number we would give it (S-003) turns up as the chip
+   * after the first save, not as something the reader has to delete. */
   function fillStoryLabel() {
     var box = labelBox();
     if (!box) return;
     var run = readRun() || {};
     var open = openStory();
-    var saved = run.story_label || (open ? open.label : "");
+    var saved = run.story_label || "";
+    if (!saved && open && !isAutoLabel(open.label)) saved = open.label;
     if (saved && !box.value) box.value = saved;
+  }
+
+  /* S-001, S-002…: the id we made up because nobody typed one. */
+  function isAutoLabel(label) {
+    return /^S-\d{3,}$/.test(String(label || ""));
   }
 
   /* ---------- nothing typed is lost ---------- */
@@ -281,20 +306,25 @@
     var status = document.getElementById("draft-status");
     var line = document.getElementById("draft-status-line");
     var wanted = label ? label.value.trim() : "";
-    if (wanted && !LABEL_OK.test(wanted)) {
-      if (line) {
-        line.textContent = LABEL_RULE;
+    /* The same rule the field on the form follows, in the same words: a
+     * long id is told it is long rather than cut to 24 characters. */
+    var wrong = labelProblem(wanted);
+    /* The message goes under the field it is about, and the cursor goes
+     * into it: a line beside the Save button left the reader guessing. */
+    var said = document.getElementById("draft-label-error");
+    if (said) {
+      said.textContent = wrong;
+      said.hidden = !wrong;
+    }
+    if (wrong) {
+      if (line) line.textContent = "";
+      if (label) {
+        label.setAttribute("aria-invalid", "true");
+        label.focus();
       }
-      if (label) label.setAttribute("aria-invalid", "true");
       return;
     }
-    /* An id another story already answers to would make two CHK-101s. */
     var kept = store();
-    if (kept && wanted && kept.labelTaken(kept.list(), wanted, kept.tabStory())) {
-      if (line) line.textContent = kept.takenMessage(wanted);
-      if (label) label.setAttribute("aria-invalid", "true");
-      return;
-    }
     if (label) label.removeAttribute("aria-invalid");
     /* A draft is what is on screen right now, not only what has been
      * checked: the words in the box go into the run first. */
@@ -448,6 +478,46 @@
     return Boolean(html) && html.length <= VIEW_MAX;
   }
 
+  /* The faded sample of what a result looks like. It fills the right half
+   * of the Story step before anything has been checked, and it is not a
+   * result: it is never saved, never restored and never counted as one. */
+  var previewHtml = "";
+
+  function keepPreview() {
+    var preview = document.getElementById("story-preview");
+    if (preview && !previewHtml) previewHtml = preview.outerHTML;
+  }
+
+  /* True when this box holds nothing but the sample (or nothing at all). */
+  function onlyPreview(box) {
+    if (!box) return true;
+    return !box.querySelector(":scope > *:not(.result-preview)");
+  }
+
+  function dropPreview(box) {
+    if (!box) return;
+    var preview = box.querySelector(".result-preview");
+    if (preview && preview.parentNode) preview.parentNode.removeChild(preview);
+  }
+
+  function showPreview() {
+    var box = document.getElementById("story-output");
+    if (!box || !previewHtml || box.querySelector(".result-preview")) return;
+    if (box.innerHTML.trim()) return;
+    box.innerHTML = previewHtml;
+  }
+
+  /* Every box the story result fills. The score card and the unclear words
+   * land in one, the criteria drafts and the senior-tester notes in
+   * another, both by an out-of-band swap, so keeping only #story-output
+   * kept a third of the answer and lost the rest on the next reload. */
+  var RESULT_BOXES = [
+    { id: "story-top", key: "top" },
+    { id: "story-output", key: "result" },
+    { id: "story-extra", key: "extra" },
+    { id: "duel-output", key: "duel" }
+  ];
+
   /* The cards as the server drew them, kept against the story they describe
    * so a saved card can never turn up under a different story. */
   function rememberStoryView() {
@@ -455,10 +525,11 @@
     if (!story) return;
     var view = readView() || {};
     if (view.story !== story) view = { story: story };
-    var result = document.getElementById("story-output");
-    var duel = document.getElementById("duel-output");
-    if (result && keepable(result.innerHTML.trim())) view.result = result.innerHTML;
-    if (duel && keepable(duel.innerHTML.trim())) view.duel = duel.innerHTML;
+    RESULT_BOXES.forEach(function (box) {
+      var node = document.getElementById(box.id);
+      if (!node || onlyPreview(node)) return;
+      if (keepable(node.innerHTML.trim())) view[box.key] = node.innerHTML;
+    });
     writeView(view);
   }
 
@@ -484,7 +555,9 @@
 
   function putBack(id, html) {
     var box = document.getElementById(id);
-    if (!box || !html || box.innerHTML.trim()) return;
+    if (!box || !html) return;
+    dropPreview(box);
+    if (box.innerHTML.trim()) return;
     box.innerHTML = html;
     /* The card carries hx-post buttons, which htmx only knows about once
      * it has been told to look at the new nodes. */
@@ -501,13 +574,62 @@
     var story = String(run.story || "").trim();
     var view = readView();
     if (view && story && view.story === story) {
-      putBack("story-output", view.result);
-      putBack("duel-output", view.duel);
+      RESULT_BOXES.forEach(function (box) {
+        putBack(box.id, view[box.key]);
+      });
+      /* The result card turns Check story into Check again. A restored
+       * result must come back with the button it was drawn with. */
+      if (view.result || view.top) secondaryCheckButton();
     }
     showStartFresh(Boolean(story));
     /* app.js counted the characters before these boxes had any in them, so
      * a restored story read "0 / 3000". Count them again now. */
     fieldsReady(form);
+  }
+
+  /* A new story is an empty page. Every box the last result filled is
+   * emptied and the main button goes back to Check story, all at once:
+   * the reader used to be left looking at the last story's criteria card
+   * with "Use these criteria" under it until they navigated away. */
+  function clearStoryResults() {
+    RESULT_BOXES.forEach(function (box) {
+      var node = document.getElementById(box.id);
+      if (node) node.innerHTML = "";
+    });
+    showPreview();
+    primaryCheckButton();
+    if (window.QAGAiError) window.QAGAiError.clearAll();
+    var run = readRun() || {};
+    delete run.story_view;
+    delete run.story_analysis;
+    delete run.story_notes;
+    delete run.duel_summary;
+    writeRun(run);
+  }
+
+  function checkButton() {
+    return document.getElementById("check-btn");
+  }
+
+  function labelOn(button, words) {
+    if (!button) return;
+    var label = button.querySelector(".btn-label");
+    if (label) label.textContent = words;
+    else button.textContent = words;
+  }
+
+  function primaryCheckButton() {
+    var button = checkButton();
+    if (!button) return;
+    button.className = "btn btn-primary";
+    labelOn(button, "Check story");
+  }
+
+  function secondaryCheckButton() {
+    var button = checkButton();
+    if (!button) return;
+    button.className = "btn";
+    labelOn(button, "Check again");
   }
 
   /* One link, and only when there is something to clear. */
@@ -567,10 +689,7 @@
     var idBox = labelBox();
     if (idBox) idBox.value = "";
     sayAboutLabel("");
-    ["story-output", "duel-output"].forEach(function (id) {
-      var box = document.getElementById(id);
-      if (box) box.innerHTML = "";
-    });
+    clearStoryResults();
     showStartFresh(false);
     if (window.QAGStoriesUI) window.QAGStoriesUI.paint();
     fieldsReady(document);
@@ -737,6 +856,17 @@
     box.style.height = box.scrollHeight + "px";
   }
 
+  /* Open the last criterion for editing, the way clicking it would. */
+  function openLastCriterion() {
+    var rows = document.querySelectorAll("#criteria-root .ac-row .ac-text");
+    if (!rows.length) return;
+    var last = rows[rows.length - 1];
+    last.click();
+    var boxes = document.querySelectorAll("#criteria-root .ac-row textarea");
+    var box = boxes[boxes.length - 1];
+    if (box && !box.hidden) box.focus();
+  }
+
   function renderCriteria() {
     var root = document.getElementById("criteria-root");
     if (!root) return;
@@ -762,8 +892,10 @@
       run.criteria = renumber(run.criteria);
       writeRun(run);
       renderCriteria();
-      var boxes = document.querySelectorAll("#criteria-root .ac-row textarea");
-      if (boxes.length) boxes[boxes.length - 1].focus();
+      /* The new row opens as an editor with the cursor in it. Focusing a
+       * textarea that is still hidden does nothing, which is why the new
+       * criterion used to look like a row you could not type in. */
+      openLastCriterion();
     });
     head.appendChild(add);
     card.appendChild(head);
@@ -1059,10 +1191,16 @@
     var words = el("div", "ac-words");
     words.appendChild(el("p", "ac-title", cardTitle(criterion)));
 
-    var shown = el("p", "ac-text", bodyText(criterion.text));
+    /* A criterion with nothing in it yet had an empty paragraph here: no
+     * words, no height, nothing to click and nothing for a screen reader
+     * to read out. It says what to do instead, and it is still tall
+     * enough to press. */
+    var words_said = bodyText(criterion.text);
+    var shown = el("p", "ac-text", words_said || "Write the criterion…");
+    if (!words_said) shown.classList.add("ac-text-empty");
     shown.setAttribute("tabindex", "0");
     shown.setAttribute("role", "button");
-    shown.setAttribute("aria-label", "Edit " + criterion.id);
+    shown.setAttribute("aria-label", "Edit " + (criterion.id || "this criterion"));
 
     var box = el("textarea");
     box.setAttribute("rows", "3");
@@ -1218,6 +1356,7 @@
     var form = el("form", "tc-form");
     form.id = "tc-form";
     form.setAttribute("hx-post", "/requirements/test-cases/run");
+    form.setAttribute("data-error-title", "Could not write test cases");
     form.setAttribute("hx-target", "#test-cases-output");
     form.setAttribute("hx-swap", "innerHTML");
     form.setAttribute("hx-indicator", "#tc-progress");
@@ -1512,6 +1651,7 @@
     var form = el("form", "tc-form");
     form.id = "automation-form";
     form.setAttribute("hx-post", "/requirements/automation/run");
+    form.setAttribute("data-error-title", "Could not write the code");
     form.setAttribute("hx-target", "#automation-output");
     form.setAttribute("hx-swap", "innerHTML");
     form.setAttribute("hx-indicator", "#automation-progress");
@@ -2070,7 +2210,7 @@
 
   document.addEventListener("input", function (event) {
     if (closest(event.target, "#story-label")) {
-      saveStoryLabel();
+      checkStoryLabel();
       return;
     }
     /* The story, its type and the context save themselves 600ms after the
@@ -2080,8 +2220,21 @@
   });
 
   document.addEventListener("change", function (event) {
+    if (closest(event.target, "#story-label")) {
+      saveStoryLabel();
+      return;
+    }
     if (closest(event.target, "#story-form")) saveTyping();
   });
+
+  /* Leaving the field is the reader saying they have finished typing it. */
+  document.addEventListener(
+    "blur",
+    function (event) {
+      if (closest(event.target, "#story-label")) saveStoryLabel();
+    },
+    true
+  );
 
   /* A tab closed or a page left mid-sentence still keeps the sentence. */
   if (window.addEventListener) {
@@ -2186,6 +2339,7 @@
   });
 
   document.addEventListener("DOMContentLoaded", function () {
+    keepPreview();
     restoreStoryPage();
     fillStoryLabel();
     renderCriteria();
@@ -2202,10 +2356,16 @@
       renumber: renumber,
       restoreStoryPage: restoreStoryPage,
       startFreshStory: startFreshStory,
+      clearStoryResults: clearStoryResults,
+      rememberStoryView: rememberStoryView,
+      RESULT_BOXES: RESULT_BOXES,
       canGenerate: canGenerate,
       syncGenerate: syncGenerate,
       cardTitle: cardTitle,
       bodyText: bodyText,
+      labelProblem: labelProblem,
+      isAutoLabel: isAutoLabel,
+      openLastCriterion: openLastCriterion,
     };
   }
 })();

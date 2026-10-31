@@ -5,7 +5,7 @@
 {% from "_form_fields.html" import field, group %}
 <div class="card card-form" data-input-card="Your notes">
   <h2>What went wrong?</h2>
-  <form id="bug-form" hx-post="/bugs/run" hx-target="#bug-output" hx-swap="innerHTML" hx-indicator="#bug-progress">
+  <form id="bug-form" data-error-title="Could not write the bug report" hx-post="/bugs/run" hx-target="#bug-output" hx-swap="innerHTML" hx-indicator="#bug-progress">
     <div class="form-body">
       {% call field("bug-notes", "What happened?", hint="What you did, what you expected, what you saw instead.", help="At least 20 characters.", counter_max=3000, counter_id="bug-notes-count") %}
       <textarea id="bug-notes" name="notes" rows="5" minlength="20" maxlength="3000" required

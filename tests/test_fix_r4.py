@@ -34,7 +34,7 @@ def _ship(**body) -> str:
 
 
 def _todo_order(markup: str) -> list[str]:
-    return re.findall(r'class="card ship-row todo-row" data-check="([a-z_]+)"', markup)
+    return re.findall(r'class="path-step" data-check="([a-z_]+)"', markup)
 
 
 def test_the_main_button_opens_the_first_check_that_needs_fixing() -> None:
@@ -69,7 +69,7 @@ def test_the_main_button_opens_the_first_check_that_needs_fixing() -> None:
 def test_what_to_do_next_puts_needs_fixing_above_check_this() -> None:
     body = client.post("/ship/example").text
     order = _todo_order(body)
-    statuses = re.findall(r'todo-row" data-check="[a-z_]+" data-status="(\w+)"', body)
+    statuses = re.findall(r'path-step" data-check="[a-z_]+" data-status="(\w+)"', body)
     assert statuses, body[:400]
     # Every fail comes before every warn.
     assert statuses == sorted(statuses, key=lambda one: 0 if one == "fail" else 1)
@@ -79,11 +79,13 @@ def test_what_to_do_next_puts_needs_fixing_above_check_this() -> None:
 def test_the_grade_says_why_on_the_page() -> None:
     """A letter on its own is a letter nobody can argue with."""
     body = client.post("/ship/example").text
-    assert 'id="grade-reason"' in body
-    assert "See how it's worked out" in body
-    reason = re.search(r'<p class="grade-reason" id="grade-reason">([^<]+)</p>', body)
-    assert reason, body[:400]
-    assert re.match(r"^[A-F][+-]? — \d+ of \d+ points\.", reason.group(1).strip())
+    assert 'class="grade-points"' in body
+    assert "How it's worked out" in body
+    points = re.search(r'<p class="grade-points">([^<]+)</p>', body)
+    assert points, body[:400]
+    assert re.match(r"^\d+ of \d+ points$", points.group(1).strip())
+    # The sums themselves open in place, under the circle.
+    assert 'id="grade-why"' in body
 
 
 def test_a_capped_grade_says_it_was_capped_and_why() -> None:

@@ -113,7 +113,25 @@
     });
   }
 
-  /* ---------- the line above the verdict ---------- */
+  /* ---------- the page header ---------- */
+
+  /* "04 · SHIP CHECK · CART-204 · Ready for review". Which story the
+   * verdict is about belongs at the top of the screen, not halfway down. */
+  function paintEyebrow(run) {
+    var mark = byId("page-eyebrow");
+    if (!mark) return;
+    var parts = ["04 · Ship check"];
+    var label = run && run.story_label ? String(run.story_label).trim() : "";
+    if (label) parts.push(label);
+    var word =
+      window.QAGStoriesUI && run && run.story_status
+        ? window.QAGStoriesUI.statusWord(run.story_status)
+        : "";
+    if (word) parts.push(word);
+    mark.textContent = parts.join(" · ");
+  }
+
+  /* ---------- the empty state ---------- */
 
   function storyLine(run) {
     var root = byId("ship-root");
@@ -146,15 +164,27 @@
       return;
     }
 
-    var shown = story.length > STORY_IN_LINE ? story.slice(0, STORY_IN_LINE) + "…" : story;
-    card.appendChild(el("span", "eyebrow", "Your story"));
-    card.appendChild(el("p", "ship-story-text", shown));
-    var line = el("div", "row");
-    var change = el("a", "small", "Change story");
-    change.href = "/requirements/story";
-    line.appendChild(change);
-    card.appendChild(line);
-    root.appendChild(card);
+    /* With a story in hand there is nothing to say here: the report
+     * carries the story card itself, at the bottom where it belongs. */
+  }
+
+  /* While the report is being worked out, the shape of it. A blank page
+   * for a second reads as a page that failed. */
+  function skeleton() {
+    var output = byId("ship-output");
+    if (!output || output.querySelector(".ship-banner")) return;
+    output.textContent = "";
+    var card = el("div", "ship-banner ship-working");
+    var words = el("div", "ship-banner-words");
+    words.appendChild(el("span", "ship-banner-label", "Decided by rules"));
+    words.appendChild(el("p", "skeleton skeleton-title"));
+    words.appendChild(el("p", "skeleton skeleton-line"));
+    words.appendChild(el("p", "skeleton skeleton-line short"));
+    card.appendChild(words);
+    card.appendChild(el("div", "skeleton skeleton-circle"));
+    card.setAttribute("role", "status");
+    card.setAttribute("aria-label", "Working out the verdict");
+    output.appendChild(card);
   }
 
   /* ---------- running the check ---------- */
@@ -169,23 +199,19 @@
    * says how fresh it is belongs inside it. Both are moved rather than
    * rendered twice, so there is still one of each on the page. */
   function liftBanner() {
-    var slot = byId("ship-banner-slot");
-    var banner = document.querySelector("#ship-output .ship-banner");
+    var slot = document.querySelector("#ship-output #source-card-slot");
     var card = byId("source-card");
     var home = byId("source-card-home");
-    if (!slot) return;
-    if (!banner) {
-      /* No decision on screen: everything goes back where it started. */
-      if (card && home && card.parentNode !== home) home.appendChild(card);
-      slot.textContent = "";
+    if (!card) return;
+    if (!slot) {
+      /* No decision on screen: the card goes back where it started. */
+      if (home && card.parentNode !== home) home.appendChild(card);
+      card.classList.remove("source-in-banner");
       return;
     }
-    slot.textContent = "";
-    slot.appendChild(banner);
-    var words = banner.querySelector(".ship-banner-words");
-    if (card && words && card.parentNode !== words) {
+    if (card.parentNode !== slot) {
       card.classList.add("source-in-banner");
-      words.appendChild(card);
+      slot.appendChild(card);
     }
   }
 
@@ -200,12 +226,14 @@
 
   function runCheck() {
     var run = readRun();
+    paintEyebrow(run);
     storyLine(run);
     if (!run) {
       var output = byId("ship-output");
       if (output) output.textContent = "";
       return;
     }
+    skeleton();
     fetch("/ship/report", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -265,6 +293,24 @@
     if (status) status.textContent = "";
   }
 
+  /* A problem belongs under the field it is about, and the cursor belongs
+   * in that field. A line beside the Save button left the reader hunting
+   * for which box was wrong. */
+  function sayUnderField(box, words) {
+    if (!box) return;
+    var line = document.getElementById(box.id + "-error");
+    if (line) {
+      line.textContent = words;
+      line.hidden = !words;
+    }
+    if (words) {
+      box.setAttribute("aria-invalid", "true");
+      box.focus();
+    } else {
+      box.removeAttribute("aria-invalid");
+    }
+  }
+
   function saveAcceptance(checkId) {
     var form = formFor(checkId);
     if (!form) return;
@@ -272,12 +318,14 @@
     var status = form.querySelector(".ship-accept-status");
     var reason = box ? box.value.trim() : "";
     if (reason.length < MIN_REASON || reason.length > MAX_REASON) {
-      if (status) {
-        status.textContent =
-          "Write between " + MIN_REASON + " and " + MAX_REASON + " characters.";
-      }
+      sayUnderField(
+        box,
+        "Write between " + MIN_REASON + " and " + MAX_REASON + " characters."
+      );
+      if (status) status.textContent = "";
       return;
     }
+    sayUnderField(box, "");
     var owner = form.querySelector(".ship-owner");
     var review = form.querySelector(".ship-review");
     var run = readRun();

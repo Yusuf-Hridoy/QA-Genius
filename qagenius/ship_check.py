@@ -66,6 +66,15 @@ LINKS = {
 # fix them instead.
 ACCEPTABLE = ("risks", "depth", "matrix")
 
+# What the accept button says, per check. "Accept this risk" is only right
+# on the risk row; on "How well tested" there is no risk to accept, there
+# is a thin suite somebody is choosing to live with.
+ACCEPT_WORDS = {
+    "risks": "Accept this risk and say why",
+    "depth": "Accept anyway and say why",
+    "matrix": "Accept anyway and say why",
+}
+
 # The name a reader would use for the desk a check came from.
 TOOLS = {
     "clarity": "Story check",
@@ -104,6 +113,13 @@ class ShipCheckItem:
     details: list[str]          # short lines, max 8
     link: str                   # where to fix it, e.g. "/risks"
     accepted_note: str = ""
+    # A lesser problem the same check found, shown as its own "check this"
+    # line rather than inside this row: medium risks under "High risks
+    # without a test" read as high ones.
+    secondary: list[str] = field(default_factory=list)
+    # What to do about it, as an instruction: "Add a test for AC-5". The
+    # summary says what is wrong; this says what to press next.
+    instruction: str = ""
     # Set when the browser says this check's inputs lag the latest work.
     stale_note: str = ""
     # Who owns the accepted risk and when they said they would look again.
@@ -218,7 +234,13 @@ def _not_checked(check_id: str) -> ShipCheckItem:
     )
 
 
-def _item(check_id: str, status: str, summary: str, details: list[str]) -> ShipCheckItem:
+def _item(
+    check_id: str,
+    status: str,
+    summary: str,
+    details: list[str],
+    instruction: str = "",
+) -> ShipCheckItem:
     return ShipCheckItem(
         id=check_id,
         title=TITLES[check_id],
@@ -226,7 +248,22 @@ def _item(check_id: str, status: str, summary: str, details: list[str]) -> ShipC
         summary=summary,
         details=_trim(details),
         link=LINKS[check_id],
+        instruction=instruction or DEFAULT_INSTRUCTIONS.get(check_id, ""),
     )
+
+
+# What to do about a check that is not fine, when the check itself has
+# nothing more exact to say. "Path to Ready" is a list of instructions, and
+# an instruction is a sentence with a verb in it.
+DEFAULT_INSTRUCTIONS = {
+    "clarity": "Make the story clearer, or write the numbers into a criterion",
+    "duel": "Settle what the two readers read differently",
+    "coverage": "Write a test for every criterion that has none",
+    "depth": "Add the missing tests",
+    "risks": "Write tests for the high risks, or accept them",
+    "automation": "Fix what the generated project cannot run",
+    "matrix": "Cover the pairs the runs miss",
+}
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -343,7 +380,11 @@ def _coverage(inputs: ShipInputs, criteria: list[Criterion]) -> ShipCheckItem:
         f"{ac_id} {text_by_id[ac_id].splitlines()[0]} — no test case lists it"
         for ac_id in coverage.uncovered
     ]
-    return _item("coverage", "fail", summary, details)
+    which = _listed(coverage.uncovered)
+    word = "a test" if len(coverage.uncovered) == 1 else "tests"
+    return _item(
+        "coverage", "fail", summary, details, f"Add {word} for {which}"
+    )
 
 
 def _depth(inputs: ShipInputs, criteria: list[Criterion]) -> ShipCheckItem:
@@ -364,6 +405,7 @@ def _depth(inputs: ShipInputs, criteria: list[Criterion]) -> ShipCheckItem:
             "warn" if conflicts else "pass",
             f"All {_criteria_count(total)} have the tests they need",
             conflicts,
+            "Settle the limits the tests and the criteria disagree about",
         )
     # "More than half" is the point where the suite stops being a safety net.
     status = "fail" if len(thin) * 2 > total else "warn"
@@ -373,7 +415,9 @@ def _depth(inputs: ShipInputs, criteria: list[Criterion]) -> ShipCheckItem:
     details = conflicts + [
         f"{row.id} — {', '.join(row.reasons)}" for row in depth.rows if row.thin
     ]
-    return _item("depth", status, summary, details)
+    return _item(
+        "depth", status, summary, details, f"Add the missing tests for {_listed(thin)}"
+    )
 
 
 def accepted_risk_ids(
@@ -393,6 +437,24 @@ def accepted_risk_ids(
     return found
 
 
+def overdue_risk_ids(
+    acceptances: dict[str, Acceptance | dict | str],
+    today: date | None = None,
+) -> set[str]:
+    """Risks accepted in writing whose review date has gone by.
+
+    Still accepted: somebody wrote down why, and that writing does not
+    disappear. It is the date that has run out, so the row says "Review
+    date passed" and the check asks to be looked at again.
+    """
+    found = set()
+    for risk_id, raw in (acceptances or {}).items():
+        one = read_acceptance(raw)
+        if one is not None and one.passed(today):
+            found.add(str(risk_id).upper())
+    return found
+
+
 def _risks(inputs: ShipInputs) -> ShipCheckItem:
     analysis = inputs.risk_analysis
     if analysis is None:
@@ -403,7 +465,12 @@ def _risks(inputs: ShipInputs) -> ShipCheckItem:
     report = score_risks(analysis, cases)
     # A risk the team accepted in writing is not an untested risk any more.
     # It is still on the page, with its reason, owner and date beside it.
-    accepted = accepted_risk_ids(inputs.risk_acceptances, inputs.today)
+    live = accepted_risk_ids(inputs.risk_acceptances, inputs.today)
+    overdue = overdue_risk_ids(inputs.risk_acceptances, inputs.today)
+    # A risk somebody signed off is never counted as untested again, even
+    # once its review date has passed: it comes back as "check this", with
+    # the reason, the owner and the date still beside it.
+    accepted = live | overdue
 
     def pick(level: str, coverage: str) -> list:
         return [
@@ -444,35 +511,72 @@ def _risks(inputs: ShipInputs) -> ShipCheckItem:
     elif medium_none:
         status = "warn"
         summary = medium_part
+    elif overdue:
+        # Nothing is untested, but a review somebody promised is late.
+        status = "warn"
+        summary = (
+            f"{_plural(len(overdue), 'accepted risk')} past the review date"
+        )
+        if live:
+            summary += f" · {_plural(len(live), 'risk')} accepted in writing"
     else:
         # Nothing is left untested -- but if that is only true because the
         # team signed something off, this check is "accepted", not "fine".
         # A written reason is not a test, and the grade must not read as if
         # it were.
-        status = "accepted" if accepted else "pass"
+        status = "accepted" if live else "pass"
         summary = (
             f"Every high and medium risk has a test "
             f"({_plural(report.counts['total'], 'risk')} scored)"
         )
-        if accepted:
-            summary += f" · {_plural(len(accepted), 'risk')} accepted in writing"
+        if live:
+            summary += f" · {_plural(len(live), 'risk')} accepted in writing"
 
-    # Worst first, and each line says which level it belongs to: the old list
-    # was five unlabelled rows under a summary that mentioned one risk.
-    details = [
-        f"{LEVEL_WORDS[one.level]} · {one.risk.id} {one.risk.title} — "
-        + ("no test" if one.coverage == "none" else RISK_WEAK_NOTE)
-        for one in high_none + high_weak + medium_none + medium_weak
-    ]
-    item = _item("risks", status, summary, details)
-    if status == "accepted":
-        note = _accepted_risk_note(inputs.risk_acceptances, accepted)
-        item = replace(item, accepted_note=note)
+    def line(one) -> str:
+        return (
+            f"{LEVEL_WORDS[one.level]} · {one.risk.id} {one.risk.title} — "
+            + ("no test" if one.coverage == "none" else RISK_WEAK_NOTE)
+        )
+
+    # The row is called "High risks without a test", so it lists high risks
+    # and nothing else. The medium ones are a real problem of their own and
+    # get their own line rather than padding this one out to five rows.
+    details = [line(one) for one in high_none + high_weak]
+    secondary = [line(one) for one in medium_none + medium_weak]
+    if high_loose:
+        word = "a test" if len(high_loose) == 1 else "tests"
+        it = "it" if len(high_loose) == 1 else "them"
+        instruction = (
+            f"Write {word} for {_plural(len(high_loose), 'high risk')}, "
+            f"or accept {it}"
+        )
+    elif medium_none:
+        instruction = f"Look at {_plural(len(medium_none), 'medium risk')} with no test"
+    elif overdue:
+        instruction = f"Look again at {_plural(len(overdue), 'accepted risk')}"
+    else:
+        instruction = ""
+    item = _item("risks", status, summary, details, instruction)
+    if secondary:
+        item = replace(item, secondary=secondary)
+    # Whatever the verdict, an accepted risk keeps its reason, its owner
+    # and its date on the page. They used to appear only when the whole
+    # check was "accepted", so one untested risk elsewhere hid them all.
+    if accepted:
+        item = replace(
+            item,
+            accepted_note=_accepted_risk_note(
+                inputs.risk_acceptances, accepted, inputs.today
+            ),
+            review_passed=bool(overdue),
+        )
     return item
 
 
 def _accepted_risk_note(
-    acceptances: dict[str, Acceptance | dict | str], ids: set[str]
+    acceptances: dict[str, Acceptance | dict | str],
+    ids: set[str],
+    today: date | None = None,
 ) -> str:
     """Who accepted what, in the order the risks were written down."""
     lines = []
@@ -482,7 +586,7 @@ def _accepted_risk_note(
         one = read_acceptance(raw)
         if one is None:
             continue
-        lines.append(f"{risk_id}: {acceptance_note(one)}")
+        lines.append(f"{risk_id}: {acceptance_note(one, today)}")
     return " · ".join(lines)
 
 
@@ -527,7 +631,15 @@ def _automation(inputs: ShipInputs) -> ShipCheckItem:
         for finding in errors + warnings
     ]
     details += [f"{case_id} — not found in the test code" for case_id in report.missing]
-    return _item("automation", status, summary, details)
+    if errors:
+        instruction = f"Fix {_plural(len(errors), 'syntax error')} in the code"
+    elif report.missing:
+        instruction = f"Write the code for {_listed(report.missing)}"
+    elif warnings:
+        instruction = f"Replace {_plural(len(warnings), 'fixed wait')} with a real wait"
+    else:
+        instruction = ""
+    return _item("automation", status, summary, details, instruction)
 
 
 def _accepted(
@@ -548,17 +660,16 @@ def _accepted(
     if one is None:
         return item
     passed = one.passed(today)
-    return ShipCheckItem(
-        id=item.id,
-        title=item.title,
+    return replace(
+        item,
         status="warn" if passed else "accepted",
-        summary=item.summary,
-        details=item.details,
-        link=item.link,
         accepted_note=acceptance_note(one, today),
         owner=one.owner,
         review_date=one.review_date,
         review_passed=passed,
+        instruction=(
+            "Look at this again — the review date has passed" if passed else ""
+        ),
     )
 
 
@@ -582,6 +693,7 @@ def _matrix(inputs: ShipInputs) -> ShipCheckItem:
             "warn",
             f"{runs} planned, {run.covered_pairs} of {run.valid_pairs} pairs covered",
             details,
+            f"Cover the {run.valid_pairs - run.covered_pairs} pairs the runs miss",
         )
     if run.manual_only:
         details.append(f"{run.manual_only} cannot be driven by Playwright")
@@ -590,6 +702,7 @@ def _matrix(inputs: ShipInputs) -> ShipCheckItem:
             "warn",
             f"{runs} cover every pair; {run.manual_only} of them must be tested by hand",
             details,
+            f"Plan who runs the {run.manual_only} by hand",
         )
     return _item("matrix", "pass", f"{runs} cover every pair of values", details)
 

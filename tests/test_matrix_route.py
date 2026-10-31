@@ -362,5 +362,5 @@ def test_the_source_card_can_load_the_matrix_example_before_the_editor_exists():
     root = Path(__file__).resolve().parent.parent
     matrix_js = (root / "public" / "test_matrix.js").read_text(encoding="utf-8")
     card_js = (root / "public" / "source_card.js").read_text(encoding="utf-8")
-    assert "window.QAGMatrix = { loadExample: loadExample }" in matrix_js
+    assert "window.QAGMatrix = { loadExample: loadExample," in matrix_js
     assert "QAGMatrix.loadExample" in card_js

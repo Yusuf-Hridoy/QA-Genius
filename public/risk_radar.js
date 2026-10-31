@@ -146,6 +146,7 @@
     var form = el("form");
     form.id = "risk-paste-form";
     form.setAttribute("hx-post", "/risks/run");
+    form.setAttribute("data-error-title", "Could not find risks");
     form.setAttribute("hx-target", "#risk-output");
     form.setAttribute("hx-swap", "innerHTML");
     form.setAttribute("hx-indicator", "#risk-paste-progress");
@@ -278,6 +279,7 @@
     var form = el("form", "risk-form");
     form.id = "risk-form";
     form.setAttribute("hx-post", "/risks/run");
+    form.setAttribute("data-error-title", "Could not find risks");
     form.setAttribute("hx-target", "#risk-output");
     form.setAttribute("hx-swap", "innerHTML");
     form.setAttribute("hx-indicator", "#risk-progress");
@@ -396,16 +398,33 @@
   }
 
   /* The body every risk request takes: the analysis plus the run it belongs to. */
+  /* Three places the same thing can come from, best first: the desk that
+   * owns it, the result on screen, then the copy saved with the analysis.
+   * An empty list is not an answer, so it falls through to the next one. */
+  function firstFilled(a, b, c) {
+    if (a && a.length) return a;
+    if (b && b.length) return b;
+    return c && c.length ? c : [];
+  }
+
   function rescoreBody(analysis) {
     var run = readRun() || {};
     var shown = displayedData() || {};
-    var cases = currentCases(run);
+    /* On a reload there is no result on the page yet — this recheck is what
+     * draws it — so the cases the analysis was scored against live only in
+     * the run. Without them every risk came back "No test yet", and a page
+     * that said "2 high risks have no test" said 3 after a reload nobody
+     * asked for. */
+    var saved = run.risk_analysis || {};
     return {
-      analysis: analysis || shown.analysis || { failure_modes: [] },
-      cases: cases.length ? cases : shown.cases || [],
-      criteria: criteriaTexts(run).length
-        ? criteriaTexts(run)
-        : shown.criteria || [],
+      analysis: analysis || shown.analysis || saved.analysis ||
+        { failure_modes: [] },
+      cases: firstFilled(currentCases(run), shown.cases, saved.cases),
+      criteria: firstFilled(
+        criteriaTexts(run),
+        shown.criteria,
+        saved.criteria
+      ),
       /* The register carries what was accepted, so a downloaded file says
        * why a risk with no test was signed off and who is watching it. */
       risk_acceptances: run.risk_acceptances || {}
@@ -425,6 +444,7 @@
     pickFirstRisk();
     paintAcceptances();
     paintPagePill();
+    keepOneMainButton();
     // The card may need to dim what just landed.
     if (window.QAGRun) window.QAGRun.announceResult();
   }
@@ -699,15 +719,32 @@
     body.append("current_json", JSON.stringify(before.result || {}));
 
     busyOn(button, true);
+    if (window.QAGAiError) window.QAGAiError.clear(button);
+    var failed = null;
     fetch("/requirements/test-cases/refine", {
       method: "POST",
       headers: keyHeader(),
       body: body
     })
       .then(function (response) {
+        /* A 500, a refused key or a timeout is not an answer about this
+         * risk. It is said under the button in the words every desk uses,
+         * and nothing is written into the run. */
+        if (!response.ok || (response.headers.get && response.headers.get("X-QAG-Error"))) {
+          failed = response;
+          return "";
+        }
         return response.text();
       })
       .then(function (html) {
+        if (failed) {
+          if (window.QAGAiError) {
+            window.QAGAiError.fromFetch(button, failed, function () {
+              writeTests(button);
+            });
+          }
+          return;
+        }
         var proposal = proposalIn(html);
         if (!proposal) {
           /* No key, or the model refused: the card the route sent says
@@ -725,7 +762,13 @@
         sayOnRisk(first, addedWords(added), "ok", true);
       })
       .catch(function () {
-        sayOnRisk(first, nothingWritten(ids), "warn", false);
+        if (window.QAGAiError) {
+          window.QAGAiError.fromFetch(button, null, function () {
+            writeTests(button);
+          });
+        } else {
+          sayOnRisk(first, nothingWritten(ids), "warn", false);
+        }
       })
       .then(function () {
         busyOn(button, false);
@@ -771,6 +814,41 @@
     );
   }
 
+  /* One main button per screen state.
+   *
+   * "Find risks" is the main button while the page has no answer on it.
+   * Once the risks are drawn, the to-do strip at the top carries the main
+   * button ("Write tests for both →") and finding them again is a second
+   * thought, so it drops to an ordinary button. Loading the example swaps
+   * the form away and hid the clash; a reload draws both, which is where
+   * the two yellow buttons showed up.
+   *
+   * Both ways in carry one: the form built from the run ("risk-find") and
+   * the paste-your-own form ("risk-paste-find"), and a reload draws the
+   * paste form, so covering only the first left the clash in place. */
+  function keepOneMainButton() {
+    var answered = Boolean(document.querySelector("#risk-list .risk-card"));
+    ["risk-find", "risk-paste-find"].forEach(function (id) {
+      var find = document.getElementById(id);
+      if (find) find.classList.toggle("btn-primary", !answered);
+    });
+  }
+
+  /* The three scores read as a line until somebody wants to change them. */
+  function toggleScores(button) {
+    var riskId = button.getAttribute("data-risk-id");
+    var box = document.getElementById("risk-scores-" + riskId);
+    if (!box) return;
+    var open = box.hidden;
+    box.hidden = !open;
+    button.setAttribute("aria-expanded", open ? "true" : "false");
+    button.textContent = open ? "Done" : "Change";
+    if (open) {
+      var first = box.querySelector(".score-input");
+      if (first) first.focus();
+    }
+  }
+
   /* ---------- picking a risk, and accepting one ---------- */
 
   /* The card you picked, and the evidence panel beside it, are one choice. */
@@ -782,6 +860,19 @@
     var details = document.querySelectorAll("#risk-trace .risk-detail");
     Array.prototype.forEach.call(details, function (detail) {
       detail.hidden = detail.getAttribute("data-risk-id") !== riskId;
+    });
+    moveTheYellow(riskId);
+  }
+
+  /* One yellow button on the screen, and it follows the risk you picked.
+   * The strip above keeps it while high risks still have no test, because
+   * writing all of them at once is the bigger move. */
+  function moveTheYellow(riskId) {
+    if (document.getElementById("risk-write-tests")) return;
+    var buttons = document.querySelectorAll("#risk-trace .risk-write-one");
+    Array.prototype.forEach.call(buttons, function (button) {
+      var mine = button.getAttribute("data-risk-ids") === riskId;
+      button.classList.toggle("btn-primary", mine);
     });
   }
 
@@ -870,6 +961,24 @@
     if (reason) reason.focus();
   }
 
+  /* A problem belongs under the field it is about, and the cursor belongs
+   * in that field. A line beside the Save button left the reader hunting
+   * for which box was wrong. */
+  function sayUnderField(box, words) {
+    if (!box) return;
+    var line = document.getElementById(box.id + "-error");
+    if (line) {
+      line.textContent = words;
+      line.hidden = !words;
+    }
+    if (words) {
+      box.setAttribute("aria-invalid", "true");
+      box.focus();
+    } else {
+      box.removeAttribute("aria-invalid");
+    }
+  }
+
   function saveAccept(riskId) {
     var form = acceptForm(riskId);
     if (!form) return;
@@ -877,12 +986,14 @@
     var status = form.querySelector(".risk-accept-status");
     var text = reason ? reason.value.trim() : "";
     if (text.length < MIN_REASON || text.length > MAX_REASON) {
-      if (status) {
-        status.textContent =
-          "Write between " + MIN_REASON + " and " + MAX_REASON + " characters.";
-      }
+      sayUnderField(
+        reason,
+        "Write between " + MIN_REASON + " and " + MAX_REASON + " characters."
+      );
+      if (status) status.textContent = "";
       return;
     }
+    sayUnderField(reason, "");
     var owner = form.querySelector(".risk-owner");
     var review = form.querySelector(".risk-review");
     var run = readRun() || {};
@@ -957,6 +1068,11 @@
       download("xlsx", "qa-genius-risk-register.xlsx");
       return;
     }
+    var change = closest(event.target, ".risk-scores-change");
+    if (change) {
+      toggleScores(change);
+      return;
+    }
     if (closest(event.target, "#risk-write-tests")) {
       writeTests(null);
     }
@@ -990,10 +1106,23 @@
     pickFirstRisk();
     paintAcceptances();
     paintPagePill();
+    keepOneMainButton();
   });
 
+  /* "02 · RISK RADAR · CART-204". Which story these risks belong to, at
+   * the top of the page rather than nowhere. */
+  function paintEyebrow() {
+    var mark = document.getElementById("page-eyebrow");
+    if (!mark) return;
+    var run = readRun() || {};
+    var label = run.story_label ? String(run.story_label).trim() : "";
+    mark.textContent = label ? "02 · Risk radar · " + label : "02 · Risk radar";
+  }
+
   document.addEventListener("DOMContentLoaded", function () {
+    paintEyebrow();
     renderPage();
+    keepOneMainButton();
     /* Coming back from step 3: re-score against the test cases that exist now,
      * so a case tagged risk:R1 shows as verified straight away. */
     autoRecheck();
@@ -1016,7 +1145,9 @@
       caseIds: caseIds,
       addedIds: addedIds,
       addedWords: addedWords,
-      nothingWritten: nothingWritten
+      nothingWritten: nothingWritten,
+      keepOneMainButton: keepOneMainButton,
+      firstFilled: firstFilled
     };
   }
 })();

@@ -33,7 +33,10 @@
       {{ pq.label("" if review.added else "Checked by senior tester") }}
       <strong>{{ review_line }}</strong>
       <span class="spacer"></span>
-      <span class="pq-more-word">Show detail</span>
+      {# app.js swaps the word and the aria-expanded when the box opens:
+         "Show detail" over an open box says the opposite of what it does. #}
+      <span class="pq-more-word" data-open-word="Hide detail"
+            data-shut-word="Show detail">Show detail</span>
     </span>
   </summary>
   <div class="pq-review-more">
@@ -118,7 +121,7 @@
   <div class="form-actions" id="tc-actions">
     {% if depth.thin_ids %}
     <button type="button" class="btn" id="strengthen-btn"
-      hx-post="/requirements/test-cases/refine" hx-target="#tc-proposal" hx-swap="innerHTML" hx-indicator="#tc-refine-progress"><span class="btn-label">Add more tests where needed</span></button>
+      data-error-title="Could not write test cases" hx-post="/requirements/test-cases/refine" hx-target="#tc-proposal" hx-swap="innerHTML" hx-indicator="#tc-refine-progress"><span class="btn-label">Add more tests where needed</span></button>
     {% endif %}
     <button type="button" class="btn" id="refine-open">Change with your own instruction…</button>
     <span class="spacer"></span>
@@ -131,7 +134,7 @@
     {% endcall %}
     <div class="form-actions">
       <button type="button" class="btn" id="refine-submit"
-        hx-post="/requirements/test-cases/refine" hx-target="#tc-proposal" hx-swap="innerHTML" hx-indicator="#tc-refine-progress"><span class="btn-label">Propose changes</span></button>
+        data-error-title="Could not write test cases" hx-post="/requirements/test-cases/refine" hx-target="#tc-proposal" hx-swap="innerHTML" hx-indicator="#tc-refine-progress"><span class="btn-label">Propose changes</span></button>
       <button type="button" class="btn" id="refine-cancel">Cancel</button>
     </div>
   </div>

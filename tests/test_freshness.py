@@ -96,9 +96,12 @@ def test_the_three_states_never_rest_on_colour_alone() -> None:
     card = (ROOT / "public" / "source_card.js").read_text(encoding="utf-8")
     for state in ("none", "stale", "fresh"):
         assert f"{state}:" in card or f'"{state}"' in card
-    assert "Old — your work changed." in card
+    assert '"Your work changed."' in card
     assert "Matches your latest story" in card
     assert "Your latest work" in card
+    # One line per state: a dot and a sentence, never the dot alone.
+    assert 'el("span", "status-dot dot-" + tone)' in card
+    assert 'el("span", "status-words", words)' in card
 
 
 # ---------- the sidebar says the state before you click ----------

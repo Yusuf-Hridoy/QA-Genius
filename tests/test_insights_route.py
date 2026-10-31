@@ -354,7 +354,7 @@ def test_a_busy_key_shows_an_error_card(monkeypatch) -> None:
         "/insights/explain", data={"facts_json": facts}, headers=KEYS_HEADER
     )
 
-    assert "All your keys are busy" in response.text
+    assert "The AI is busy. Try again in a minute" in response.text
 
 
 # ---------- the saved example ----------

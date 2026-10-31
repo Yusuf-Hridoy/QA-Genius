@@ -105,7 +105,7 @@ def test_busy_keys_return_plain_error(monkeypatch) -> None:
     response = client.post(
         "/requirements/story/run", data=FORM, headers=KEYS_HEADER
     )
-    assert "All your keys are busy" in response.text
+    assert "The AI is busy. Try again in a minute" in response.text
 
 
 def test_invalid_key_returns_plain_error(monkeypatch) -> None:
@@ -116,7 +116,7 @@ def test_invalid_key_returns_plain_error(monkeypatch) -> None:
     response = client.post(
         "/requirements/story/run", data=FORM, headers=KEYS_HEADER
     )
-    assert "was rejected" in response.text
+    assert "was refused" in response.text
 
 
 def test_unreadable_output_returns_plain_error(monkeypatch) -> None:

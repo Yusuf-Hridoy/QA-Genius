@@ -1,4 +1,7 @@
-{# Risks worst first, and beside them the evidence for the one you picked.
+{# The answer first: which high risks have no test and what to press.
+
+   Then the risks worst first, and beside them the one you picked, actions
+   at the top of its panel.
 
    Every number here is worked out by code: the score is how bad × how likely
    × how hard to notice, and the coverage words come from matching test cases
@@ -11,20 +14,30 @@
 {% endwith %}
 {% endif %}
 
-<div class="stat-row stat-row-4">
+{# ── the one thing to do, full width ──────────────────────────────── #}
+{% if untested %}
+<div class="todo-strip todo-strip-bad" role="status">
+  <div class="todo-strip-words">
+    <p class="todo-strip-head">{{ untested | length }} high risk{% if untested | length != 1 %}s have{% else %} has{% endif %} no test</p>
+    <p class="todo-strip-names">{% for one in untested %}{{ one.id }} {{ one.title }}{% if not loop.last %} · {% endif %}{% endfor %}</p>
+  </div>
+  <button type="button" class="btn btn-primary" id="risk-write-tests" data-error-title="Could not write a test"
+          data-risk-ids="{{ untested | map(attribute='id') | join(',') }}">
+    {% if untested | length == 1 %}Write a test →{% elif untested | length == 2 %}Write tests for both →{% else %}Write tests for all {{ untested | length }} →{% endif %}
+  </button>
+</div>
+{% else %}
+<div class="todo-strip todo-strip-ok" role="status">
+  <p class="todo-strip-head">Every high risk has a test.</p>
+</div>
+{% endif %}
+
+{# ── one compact row of numbers ───────────────────────────────────── #}
+<div class="stat-row stat-row-4 stat-row-tight">
   <div class="stat"><div class="num">{{ report.counts.total }}</div><div class="lbl">Ways this can break<span data-explain="risk-score"></span></div></div>
   <div class="stat"><div class="num">{{ report.counts.high }}</div><div class="lbl">High risk</div></div>
-  <div class="stat stat-with-ring">
-    <div>
-      <div class="num">{{ covered }}<span class="unit"> / {{ report.counts.total }}</span></div>
-      <div class="lbl">{{ verified_count }} tested · {{ probably_count }} probably tested</div>
-    </div>
-    {% set tested_pct = (covered / report.counts.total * 100) | round | int if report.counts.total else 0 %}
-    <div class="score-ring stat-ring" style="--pct:{{ tested_pct }};--ring-color:var(--{{ 'ok' if not report.counts.untested_high else 'bad' }}-line)"
-      role="img" aria-label="Tested {{ tested_pct }} percent">
-      <span class="score-num">{{ tested_pct }}<span class="pct">%</span></span>
-    </div>
-  </div>
+  <div class="stat"><div class="num">{{ covered }}<span class="unit"> / {{ report.counts.total }}</span></div>
+    <div class="lbl">Tested</div></div>
   <div class="stat{% if report.counts.untested_high %} stat-bad{% endif %}">
     <div class="num">{{ report.counts.untested_high }}</div><div class="lbl">High risk, no test</div>
   </div>
@@ -46,18 +59,19 @@
             <span class="risk-score-of">/125</span>
           </div>
           <div class="risk-words">
-            <p class="risk-title">{{ item.risk.id }} · {{ item.risk.title }}</p>
+            <h3 class="risk-title">{{ item.risk.id }} · {{ item.risk.title }}</h3>
             <p class="risk-effect">{{ item.risk.effect }}</p>
             <div class="risk-chips">
               <span class="chip chip-{{ 'bad' if item.level == 'high' else ('warn' if item.level == 'medium' else 'info') }}">{{ item.level }}</span>
-              <span class="chip">{{ item.risk.category }}</span>
               {% if item.risk.source == principal_source %}{{ pq.label() }}{% endif %}
+              {# Coverage in the words a reader uses, not in the word code
+                 files it under. #}
               {% if item.coverage == "verified" %}
               <span class="chip chip-ok">Tested by {{ item.covered_tests[0][0] }}</span>
               {% elif item.coverage == "covered" %}
-              <span class="chip chip-ok">Probably tested by {{ item.covered_tests[0][0] }}</span>
+              <span class="chip chip-ok">Has a test (not confirmed) — {{ item.covered_tests[0][0] }}</span>
               {% elif item.coverage == "weak" %}
-              <span class="chip chip-warn" title="The AI thinks {{ item.covered_tests[0][0] }} tests this, but it doesn't look like it.">Claim doesn't match</span>
+              <span class="chip chip-warn" title="The AI thinks {{ item.covered_tests[0][0] }} tests this, but it doesn't look like it.">Test may not match — check it</span>
               {% else %}
               <span class="chip chip-bad">No test yet</span>
               {% endif %}
@@ -67,15 +81,6 @@
               <span class="chip chip-ok risk-accepted-chip" hidden>Accepted</span>
             </div>
           </div>
-          <div class="risk-action">
-            {% if item.coverage == "none" %}
-            <button type="button" class="btn btn-sm risk-write-one" data-risk-ids="{{ item.risk.id }}">Write a test</button>
-            {% elif item.coverage == "weak" %}
-            <a class="btn btn-sm" href="/requirements/test-cases">Review</a>
-            {% else %}
-            <a class="btn btn-sm" href="/requirements/test-cases">View test</a>
-            {% endif %}
-          </div>
         </div>
         {% endfor %}
       </div>
@@ -84,102 +89,48 @@
 
   <div class="req-side">
     <div class="card risk-trace" id="risk-trace">
-      <h2 class="card-title">Trace to evidence</h2>
       {% for item in report.risks %}
       <div class="risk-detail" data-risk-id="{{ item.risk.id }}"{% if not loop.first %} hidden{% endif %}>
-        <div class="trace">
-          <span class="chip chip-id story-id-chip">STORY</span>
-          <span class="arrow" aria-hidden="true">&rarr;</span>
-          <span class="chip chip-id">{{ item.risk.id }}</span>
-          {% if item.covered_tests %}
-          <span class="arrow" aria-hidden="true">&rarr;</span>
-          <span class="chip chip-id">{{ item.covered_tests[0][0] }}</span>
-          {% else %}
-          <span class="muted small">no test yet</span>
-          {% endif %}
+        <h2 class="card-title risk-detail-title">{{ item.risk.title }}</h2>
+
+        {# Actions first: what you came to this panel to do.
+
+           Only the panel on screen carries the yellow, and only when the
+           strip above is not already holding it: two yellow buttons are
+           two answers to the same question. risk_radar.js moves it as the
+           reader picks another risk. #}
+        <div class="row panel-actions">
+          <button type="button" class="btn{% if loop.first and not untested %} btn-primary{% endif %} risk-write-one"
+                  data-error-title="Could not write a test"
+                  data-risk-ids="{{ item.risk.id }}">Write a test →</button>
+          <button type="button" class="btn risk-accept-open" data-risk-id="{{ item.risk.id }}">Accept this risk</button>
+          <button type="button" class="btn btn-sm btn-danger risk-accept-remove" data-risk-id="{{ item.risk.id }}" hidden>Remove</button>
         </div>
-        <p class="risk-detail-title">{{ item.risk.title }}</p>
-        <p class="muted small"><strong>Cause:</strong> {{ item.risk.cause }}</p>
-        {% if item.risk.source == principal_source %}
-        <p class="pq-why">The AI did not raise this one. It goes wrong on most builds of
-          this kind of feature, and it is scored by the same rules as the rest.</p>
-        {% endif %}
-        {# The exact words behind the coverage chip, so a reader can check
-           the claim rather than take it. #}
-        <p class="small coverage {{ coverage_tone[item.coverage] }}">
-          {% if item.coverage == "verified" %}
-          Tested by {{ item.covered_tests[0][0] }} (tagged risk:{{ item.risk.id }})
-          {% elif item.coverage == "covered" %}
-          Probably tested by {{ item.covered_tests[0][0] }} — {{ item.covered_tests[0][1] }}{%
-            if item.covered_tests[0][3] %} · both say: {{ item.covered_tests[0][3] | join(", ") }}{% endif %}
-          {% elif item.coverage == "weak" %}
-          The AI thinks {{ item.covered_tests[0][0] }} tests this, but it doesn't look like it.
-          {% else %}
-          No test for this yet
-          {% endif %}
-        </p>
-        {# Once somebody has moved a score, these are their scores and the
-           card stops calling them typical ones. #}
-        <p class="risk-why-head"><strong>{{ "Your scores" if yours else "Why these scores" }}</strong></p>
-        {% if item.risk.source == "principal-qa" %}
-        <p class="small"><strong>How bad {{ item.risk.severity }} · how likely {{ item.risk.likelihood }} · how hard to notice {{ item.risk.detectability }}</strong>
-          {# The senior-tester rules write "Typical scores for this kind of
-             problem" into the reason itself. Once a reader has typed their
-             own numbers, that sentence is about somebody else's. A reason
-             somebody actually wrote is left alone. #}
-          — {% if yours and item.risk.severity_reason in ["", pack_score_reason] %}Your scores.{% else %}{{ item.risk.severity_reason or "Typical scores for this kind of problem." }}{% endif %}</p>
-        {% else %}
-        <p class="small"><strong>How bad {{ item.risk.severity }}</strong> — {{ item.risk.severity_reason or "no reason given" }}</p>
-        <p class="small"><strong>How likely {{ item.risk.likelihood }}</strong> — {{ item.risk.likelihood_reason or "no reason given" }}</p>
-        <p class="small"><strong>How hard to notice {{ item.risk.detectability }}</strong> — {{ item.risk.detectability_reason or "no reason given" }}</p>
-        {% endif %}
-        {% if item.risk.test_idea %}
-        <p class="small"><strong>Test idea:</strong> {{ item.risk.test_idea }}</p>
-        {% endif %}
-        <div class="field">
-          <div class="row score-row">
-            {% for name, label, value in [("severity", "How bad", item.risk.severity), ("likelihood", "How likely", item.risk.likelihood), ("detectability", "How hard to notice", item.risk.detectability)] %}
-            <label class="score-field">{{ label }}
-              <input type="number" min="1" max="5" step="1" value="{{ value }}"
-                     class="score-input" data-risk-id="{{ item.risk.id }}" data-field="{{ name }}">
-            </label>
-            {% endfor %}
-          </div>
-        </div>
-        {% if yours %}
-        <p class="muted small">Your scores. Change any of them again whenever you like.</p>
-        {% elif item.risk.source == "principal-qa" %}
-        <p class="muted small">These scores come from QA-Genius's testing rules. Change any of them to your own.</p>
-        {% else %}
-        <p class="muted small">These scores are the AI's guess. Change any of them to your own.</p>
-        {% endif %}
-        {% if item.coverage == "covered" %}
-        <p class="muted small">Read the test and check it really covers this. Tag it
-          <span class="mono">risk:{{ item.risk.id }}</span> and it counts for sure.</p>
-        {% endif %}
 
         {# Accepting a risk is a decision, so it is written down: the reason
-           is required, the owner and the date are not. #}
+           is required, the owner and the date are not. The form opens right
+           under the button that opened it. #}
         <div class="risk-accept" data-risk-id="{{ item.risk.id }}">
           <p class="risk-accepted-line" hidden></p>
-          <div class="row">
-            <button type="button" class="btn btn-sm risk-accept-open" data-risk-id="{{ item.risk.id }}">Accept this risk</button>
-            <button type="button" class="btn btn-sm btn-danger risk-accept-remove" data-risk-id="{{ item.risk.id }}" hidden>Remove</button>
-          </div>
           <div class="risk-accept-form" data-risk-id="{{ item.risk.id }}" hidden>
             {% call field("risk-reason-" ~ item.risk.id, "Why are you accepting this?",
                           help="At least " ~ min_reason ~ " characters.", counter_max=max_reason) %}
             <textarea id="risk-reason-{{ item.risk.id }}" class="risk-reason short" rows="3"
                       minlength="{{ min_reason }}" maxlength="{{ max_reason }}"
+                      aria-describedby="risk-reason-{{ item.risk.id }}-error"
                       placeholder="Behind a feature flag for internal users until the shared counter lands."></textarea>
+            <p class="field-error risk-field-error" id="risk-reason-{{ item.risk.id }}-error" role="alert" hidden></p>
             {% endcall %}
             <div class="field-grid">
               {% call field("risk-owner-" ~ item.risk.id, "Who owns it", optional=true) %}
               <input type="text" id="risk-owner-{{ item.risk.id }}" class="risk-owner"
-                     maxlength="{{ max_owner }}" placeholder="Name or team">
+                     maxlength="{{ max_owner }}" placeholder="e.g. Web team">
+              <p class="field-error risk-field-error" id="risk-owner-{{ item.risk.id }}-error" role="alert" hidden></p>
               {% endcall %}
               {% call field("risk-review-" ~ item.risk.id, "Review by", optional=true) %}
-              <input type="date" id="risk-review-{{ item.risk.id }}" class="risk-review">
+              <input type="date" id="risk-review-{{ item.risk.id }}" class="risk-review"
+                     aria-describedby="risk-review-{{ item.risk.id }}-error">
+              <p class="field-error risk-field-error" id="risk-review-{{ item.risk.id }}-error" role="alert" hidden></p>
               {% endcall %}
             </div>
             <div class="form-actions">
@@ -189,6 +140,89 @@
             </div>
           </div>
         </div>
+
+        {# The three scores on one line, with the editors behind Change. #}
+        <p class="risk-scores-line">
+          <strong>How bad {{ item.risk.severity }}</strong> ·
+          <strong>How likely {{ item.risk.likelihood }}</strong> ·
+          <strong>How hard to notice {{ item.risk.detectability }}</strong>
+          <button type="button" class="btn btn-small risk-scores-change"
+                  data-risk-id="{{ item.risk.id }}" aria-expanded="false"
+                  aria-controls="risk-scores-{{ item.risk.id }}">Change</button>
+        </p>
+        <div class="field risk-scores-edit" id="risk-scores-{{ item.risk.id }}" hidden>
+          <div class="row score-row">
+            {% for name, label, value in [("severity", "How bad", item.risk.severity), ("likelihood", "How likely", item.risk.likelihood), ("detectability", "How hard to notice", item.risk.detectability)] %}
+            <label class="score-field">{{ label }}
+              <input type="number" min="1" max="5" step="1" value="{{ value }}"
+                     class="score-input" data-risk-id="{{ item.risk.id }}" data-field="{{ name }}">
+            </label>
+            {% endfor %}
+          </div>
+          {% if yours %}
+          <p class="muted small">Your scores. Change any of them again whenever you like.</p>
+          {% elif item.risk.source == "principal-qa" %}
+          <p class="muted small">These scores come from QA-Genius's testing rules. Change any of them to your own.</p>
+          {% else %}
+          <p class="muted small">These scores are the AI's guess. Change any of them to your own.</p>
+          {% endif %}
+        </div>
+
+        {# The exact words behind the coverage chip, so a reader can check
+           the claim rather than take it. #}
+        <p class="small coverage {{ coverage_tone[item.coverage] }}">
+          {% if item.coverage == "verified" %}
+          Tested by {{ item.covered_tests[0][0] }} (tagged risk:{{ item.risk.id }})
+          {% elif item.coverage == "covered" %}
+          Has a test (not confirmed) — {{ item.covered_tests[0][0] }} · {{ item.covered_tests[0][1] }}{%
+            if item.covered_tests[0][3] %} · both say: {{ item.covered_tests[0][3] | join(", ") }}{% endif %}
+          {% elif item.coverage == "weak" %}
+          Test may not match — check it. The AI thinks {{ item.covered_tests[0][0] }} tests this.
+          {% else %}
+          No test yet
+          {% endif %}
+        </p>
+        {% if item.coverage == "covered" %}
+        <p class="muted small">Read the test and check it really covers this. Tag it
+          <span class="mono">risk:{{ item.risk.id }}</span> and it counts for sure.</p>
+        {% endif %}
+
+        {# Collapsed: the reasoning and the trace are there to be checked,
+           not to be read every time. #}
+        <details class="risk-why">
+          <summary>{{ "Your scores" if yours else "Why these scores" }}</summary>
+          <p class="muted small"><strong>Cause:</strong> {{ item.risk.cause }}</p>
+          {% if item.risk.source == principal_source %}
+          <p class="pq-why">The AI did not raise this one. It goes wrong on most builds of
+            this kind of feature, and it is scored by the same rules as the rest.</p>
+          {% endif %}
+          {% if item.risk.source == "principal-qa" %}
+          <p class="small"><strong>How bad {{ item.risk.severity }} · how likely {{ item.risk.likelihood }} · how hard to notice {{ item.risk.detectability }}</strong>
+            {# The senior-tester rules write "Typical scores for this kind of
+               problem" into the reason itself. Once a reader has typed their
+               own numbers, that sentence is about somebody else's. A reason
+               somebody actually wrote is left alone. #}
+            — {% if yours and item.risk.severity_reason in ["", pack_score_reason] %}Your scores.{% else %}{{ item.risk.severity_reason or "Typical scores for this kind of problem." }}{% endif %}</p>
+          {% else %}
+          <p class="small"><strong>How bad {{ item.risk.severity }}</strong> — {{ item.risk.severity_reason or "no reason given" }}</p>
+          <p class="small"><strong>How likely {{ item.risk.likelihood }}</strong> — {{ item.risk.likelihood_reason or "no reason given" }}</p>
+          <p class="small"><strong>How hard to notice {{ item.risk.detectability }}</strong> — {{ item.risk.detectability_reason or "no reason given" }}</p>
+          {% endif %}
+          {% if item.risk.test_idea %}
+          <p class="small"><strong>Test idea:</strong> {{ item.risk.test_idea }}</p>
+          {% endif %}
+          <div class="trace">
+            <span class="chip chip-id story-id-chip">STORY</span>
+            <span class="arrow" aria-hidden="true">→</span>
+            <span class="chip chip-id">{{ item.risk.id }}</span>
+            {% if item.covered_tests %}
+            <span class="arrow" aria-hidden="true">→</span>
+            <span class="chip chip-id">{{ item.covered_tests[0][0] }}</span>
+            {% else %}
+            <span class="muted small">no test yet</span>
+            {% endif %}
+          </div>
+        </details>
       </div>
       {% endfor %}
       <p class="note">"No test yet" is not "failed".</p>
@@ -250,19 +284,9 @@
 <script type="application/json" id="risk-data">{{ risk_data | tojson }}</script>
 <div class="card">
   <div class="row">
-    {# With a gap to close, that is the one thing to press. With none, the
-       next desk is. Only one of them is ever on the page. #}
-    {% if untested %}
-    <button type="button" class="btn btn-primary" id="risk-write-tests"
-            data-risk-ids="{{ untested | map(attribute='id') | join(',') }}">
-      Write tests for {{ untested | length }} high risk{% if untested | length != 1 %}s{% endif %} with no test
-    </button>
-    <a class="btn btn-small ship-link" href="/ship">Ship check
+    {# The way on, whatever the strip at the top is saying. #}
+    <a class="btn ship-link" href="/ship">Open Ship check
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a>
-    {% else %}
-    <a class="btn btn-primary ship-link" href="/ship">Open Ship check
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a>
-    {% endif %}
     <span class="spacer"></span>
     <button type="button" class="btn" id="risk-download-csv">Download CSV</button>
     <button type="button" class="btn" id="risk-download-xlsx">Download Excel</button>

@@ -126,7 +126,7 @@
 <script type="application/json" id="insights-facts">{{ facts | tojson }}</script>
 <script type="application/json" id="insights-md">{{ summary_markdown | tojson }}</script>
 <div class="card">
-  <form id="insights-explain-form" hx-post="/insights/explain" hx-target="#insights-explanation"
+  <form id="insights-explain-form" data-error-title="Could not explain the result" hx-post="/insights/explain" hx-target="#insights-explanation"
         hx-swap="innerHTML" hx-indicator="#insights-explain-progress">
     <input type="hidden" name="facts_json" id="insights-facts-input">
     <div class="row">

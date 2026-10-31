@@ -122,13 +122,40 @@
     return rules;
   }
 
+  /* The rules the AI guessed that nobody has said yes to yet. They travel
+   * with every edit so a rebuild, and then a reload, still shows them. */
+  function readSuggested() {
+    var found = [];
+    var items = document.querySelectorAll(".matrix-suggested-rule");
+    Array.prototype.forEach.call(items, function (item) {
+      found.push({
+        if_factor: item.getAttribute("data-if-factor") || "",
+        if_value: item.getAttribute("data-if-value") || "",
+        then_factor: item.getAttribute("data-then-factor") || "",
+        then_value: item.getAttribute("data-then-value") || "",
+        reason: item.getAttribute("data-reason") || "",
+        source: "ai"
+      });
+    });
+    return found;
+  }
+
   function editorBody() {
     return {
       factors: readFactors(),
       rules: readRules(),
       pinned: pinned,
-      reasons: readReasons()
+      reasons: readReasons(),
+      from_ai: fromAi(),
+      suggested: readSuggested()
     };
+  }
+
+  /* Whether a model proposed what is on screen, kept across edits so the
+   * footer does not change its mind when a value is typed. */
+  function fromAi() {
+    var data = readMatrixData();
+    return Boolean(data && data.from_ai);
   }
 
   /* ---------- talking to the server ---------- */
@@ -226,40 +253,78 @@
     });
   }
 
-  /* `saved` keeps the factors this browser already holds, so reopening the
-   * page costs no AI call and never overwrites hand-edited factors. */
-  function suggest(saved) {
-    var run = readRun() || {};
+  /* The editor as it stands, drawn by the server with no AI call: what the
+   * browser saved, or the standard set with Suggest from my story beside
+   * it. Opening this desk used to POST to /suggest every single time, which
+   * spent the reader's quota on a page they had only looked at. */
+  function draw(saved) {
     var form = new FormData();
-    form.append("user_story", String(run.story || ""));
-    form.append("criteria_json", JSON.stringify(criteriaTexts(run)));
-    form.append("cases_json", JSON.stringify(currentCases(run)));
     if (saved) {
       form.append("saved_json", JSON.stringify(saved));
       pinned = saved.pinned || [];
     } else {
       pinned = [];
     }
-    /* The page asks the model the moment it opens, with no button pressed,
-     * and the wait used to be silent. The line says how long it takes
-     * whether or not a button started it. */
+    return fetch("/requirements/matrix/editor", { method: "POST", body: form })
+      .then(function (response) {
+        return response.text();
+      })
+      .then(showEditor)
+      .catch(function () {
+        drawFailed(byId("matrix-root"));
+      });
+  }
+
+  function drawFailed(root) {
+    if (!root) return;
+    root.textContent = "";
+    var card = el("div", "card error-card");
+    card.appendChild(
+      el("p", null, "Could not open the test matrix. Reload the page and try again.")
+    );
+    root.appendChild(card);
+  }
+
+  /* The AI call, and the only one on this desk. It happens when somebody
+   * presses Suggest from my story, never on a page load. */
+  function suggest(button) {
+    var run = readRun() || {};
+    var form = new FormData();
+    form.append("user_story", String(run.story || ""));
+    form.append("criteria_json", JSON.stringify(criteriaTexts(run)));
+    form.append("cases_json", JSON.stringify(currentCases(run)));
+    pinned = [];
+    var where = button || byId("matrix-suggest");
+    if (window.QAGAiError) window.QAGAiError.clear(where);
     if (window.QAGBusy) window.QAGBusy.noteUnder(byId("matrix-root"));
+    var failed = null;
     fetch("/requirements/matrix/suggest", {
       method: "POST",
       headers: keyHeader(),
       body: form
     })
       .then(function (response) {
+        if (
+          !response.ok ||
+          (response.headers.get && response.headers.get("X-QAG-Error"))
+        ) {
+          failed = response;
+          return "";
+        }
         return response.text();
       })
-      .then(showEditor)
+      .then(function (html) {
+        /* An answer the AI could not give leaves the matrix exactly where
+         * it was, on screen and in storage, and says so under the button. */
+        if (failed) {
+          if (window.QAGAiError) window.QAGAiError.fromFetch(where, failed, suggest);
+          return;
+        }
+        showEditor(html);
+      })
       .catch(function () {
-        var root = byId("matrix-root");
-        if (!root) return;
-        root.textContent = "";
-        var card = el("div", "card error-card");
-        card.appendChild(el("p", null, "Could not suggest what to vary. Reload the page and try again."));
-        root.appendChild(card);
+        if (window.QAGAiError) window.QAGAiError.fromFetch(where, null, suggest);
+        else drawFailed(byId("matrix-root"));
       })
       // The answer replaces the editor, button and all; an error leaves it
       // where it was. Either way nothing is working any more.
@@ -543,7 +608,7 @@
       // An explicit click is the one time the model is asked. The button says
       // so while it runs, and a second click on it does nothing.
       if (window.QAGBusy && !window.QAGBusy.start(ask, "Thinking…")) return;
-      suggest();
+      suggest(ask);
       return;
     }
     if (target.closest("#matrix-example")) {
@@ -627,15 +692,16 @@
    * exists once the editor has rendered, so the card calls the function
    * instead and the first press works. */
   if (typeof window !== "undefined") {
-    window.QAGMatrix = { loadExample: loadExample };
+    window.QAGMatrix = { loadExample: loadExample, draw: draw, suggest: suggest };
   }
 
   document.addEventListener("DOMContentLoaded", function () {
     if (!byId("matrix-root")) return;
     var run = readRun() || {};
     var saved = run.matrix;
-    // Only ask the model when this browser has nothing to show.
-    if (saved && saved.factors && saved.factors.length >= 2) suggest(saved);
-    else suggest();
+    // No AI on a page load, ever. What the browser saved, or the standard
+    // set with Suggest from my story beside it.
+    if (saved && saved.factors && saved.factors.length >= 2) draw(saved);
+    else draw(null);
   });
 })();

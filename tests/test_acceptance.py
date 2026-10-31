@@ -199,9 +199,18 @@ def test_a_high_risk_with_no_test_fails_until_it_is_accepted() -> None:
     assert _risks_status(accepted) != "fail"
 
 
-def test_an_acceptance_whose_review_date_passed_does_not_count() -> None:
+def test_an_acceptance_whose_review_date_passed_asks_to_be_looked_at() -> None:
+    """The writing does not disappear; the date has run out.
+
+    It used to go back to "fail", which threw away the reason, the owner
+    and the date along with it. It is "check this" now, and the row still
+    says who accepted it and when they said they would look again.
+    """
     gone = _ship_body({"R-01": {"reason": LONG, "review_date": "2020-01-01"}})
-    assert _risks_status(gone) == "fail"
+    assert _risks_status(gone) == "warn"
+    text = client.post("/ship/report", json=gone).text
+    assert "Review date passed" in text
+    assert "2020-01-01" in text
 
 
 def test_a_risk_id_the_radar_would_never_write_is_ignored() -> None:

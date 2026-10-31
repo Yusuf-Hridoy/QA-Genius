@@ -38,14 +38,14 @@ def post(body: dict) -> str:
     return client.post("/ship/report", content=json.dumps(body)).text
 
 
-_PIECE = re.compile(r'<div class="(?:receipt-tile|card ship-row todo-row)"')
+_PIECE = re.compile(r'<(?:div class="check-row"|li class="path-step")')
 
 
 def blocks(text: str) -> list[str]:
     """One piece of markup per check on the page.
 
-    A check shows up as a tile in the receipt and, when something has to be
-    done about it, again in the list of what to do next. Each piece runs to
+    A check shows up as a row in All checks and, when something has to be
+    done about it, again as a step in Path to Ready. Each piece runs to
     the start of the next one.
     """
     starts = [m.start() for m in _PIECE.finditer(text)] + [len(text)]
@@ -195,7 +195,7 @@ def test_the_home_page_sends_you_to_ship_check():
 
 def test_the_risk_result_still_links_on_to_ship_check():
     body = client.post("/risks/example").text
-    assert 'class="btn btn-small ship-link" href="/ship"' in body
+    assert 'class="btn ship-link" href="/ship"' in body
 
 
 @pytest.mark.parametrize(

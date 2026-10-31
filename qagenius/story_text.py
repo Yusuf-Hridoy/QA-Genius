@@ -35,10 +35,27 @@ _TRAILING_LEVEL = re.compile(
     re.IGNORECASE,
 )
 _FOUND_LEVEL = re.compile(_LEVEL, re.IGNORECASE)
-# The prompt asks the model to mark anything it had to guess. The mark is
+# The prompt asks the model to mark anything it had to guess. The marks are
 # for us, not for the reader: "[VERIFY]" on a screen is a word nobody can
-# act on. The sentence stays; the bracket goes.
-_VERIFY = re.compile(r"\s*\[\s*verify\s*\]", re.IGNORECASE)
+# act on, and it ended up inside the acceptance criteria the next desk
+# writes tests from. The sentence stays; the bracket goes.
+_MARKER_WORDS = (
+    "verify",
+    "not provided",
+    "please confirm",
+    "needs confirmation",
+    "confirm",
+    "assumed",
+    "assumption",
+    "guess",
+    "tbd",
+    "todo",
+)
+_VERIFY = re.compile(
+    r"\s*\[\s*(?:" + "|".join(_MARKER_WORDS) + r")\s*\]",
+    re.IGNORECASE,
+)
+
 # What is left after a tag comes out: a space in front of the full stop, the
 # sentence's own full stop followed by the tag's, two spaces mid-sentence.
 _SPACE_BEFORE_STOP = re.compile(r"\s+([.,;:!?])")
@@ -85,6 +102,16 @@ def split_confidence(value: object) -> Said:
         return Said(_tidy(cleaned), "")
     level = _FOUND_LEVEL.search(found[-1].group(0))
     return Said(_tidy(cleaned), level.group(0).capitalize() if level else "")
+
+
+def strip_markers(value: object) -> str:
+    """One line with every [VERIFY]-style mark taken out of it.
+
+    The shared cleaner: the story card, the criteria the next desk edits
+    and everything Ship check quotes all go through it, so a bracket the
+    model wrote for us never reaches a page.
+    """
+    return _tidy(_VERIFY.sub(" ", "" if value is None else str(value)))
 
 
 def strip_confidence(value: object) -> str:

@@ -344,12 +344,19 @@ def test_a_stale_input_adds_a_note_under_that_check():
     assert "Built from older work — update Risk radar for an accurate result." in text
 
 
-def test_the_header_says_the_inputs_are_old():
-    # The verdict itself was worked out this minute. Only what it read is
-    # older, and the header says so rather than the reason trailing off.
+def test_the_decision_card_says_it_once_and_the_row_says_which():
+    """Three lines that could disagree became one, inside the decision card.
+
+    The page used to carry a chip saying the inputs were old, a source
+    card saying everything was from the latest results, and a tick before
+    "Some of this is older…". source_card.js fills the one line now; the
+    row that is actually old still says so in its own words.
+    """
     text = _stale(sample(), ["risks"])
-    assert "Worked out just now — some inputs are older" in text
-    assert 'class="chip chip-warn ship-stale-header"' in text
+    assert 'id="source-card-slot"' in text
+    assert "ship-stale-header" not in text
+    assert "Worked out just now" not in text
+    assert "Built from older work — update Risk radar for an accurate result." in text
 
 
 def test_nothing_is_said_when_no_input_is_stale():
@@ -383,9 +390,10 @@ def test_every_check_can_carry_the_note():
 
 
 def test_the_note_sits_under_its_own_row():
+    """In All checks, where the evidence for that check is."""
     text = _stale(sample(), ["risks"])
-    start = text.index('data-check="risks"')
-    nxt = text.find('data-check="', start + 20)
+    start = text.index('<div class="check-row" data-check="risks"')
+    nxt = text.find('<div class="check-row"', start + 20)
     row = text[start : nxt if nxt != -1 else len(text)]
     assert "Built from older work" in row
 

@@ -101,7 +101,7 @@ def test_duel_error_renders_error_card(monkeypatch) -> None:
     response = client.post(
         "/requirements/story/duel", data=FORM, headers=KEYS_HEADER
     )
-    assert "All your keys are busy" in response.text
+    assert "The AI is busy. Try again in a minute" in response.text
 
 
 def test_side_by_side_tables_removed(monkeypatch) -> None:

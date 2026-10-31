@@ -428,9 +428,19 @@ test("the two bars say what happened in plain words", () => {
   vm.runInContext(storiesUi, one.sandbox);
   const ui = one.sandbox.QAGStoriesUI;
 
+  // Nothing left in the browser: one sentence, one button.
+  ui.deletedBar();
+  const gone = nodes["story-bar"];
+  assert.equal(gone.hidden, false);
+  assert.equal(gone.children[0].textContent, ui.ALL_GONE_WORDS);
+  assert.equal(ui.ALL_GONE_WORDS, "All stories deleted. Start a new one.");
+  assert.equal(gone.children[1].children.length, 1);
+  assert.equal(gone.children[1].children[0].textContent, "Start a new story");
+
+  // One story deleted while others remain: there is another to open.
+  one.S.create({ run: { story: CART }, label: "CART-204" });
   ui.deletedBar();
   const bar = nodes["story-bar"];
-  assert.equal(bar.hidden, false);
   assert.equal(bar.children[0].textContent, ui.DELETED_WORDS);
   assert.equal(
     ui.DELETED_WORDS,

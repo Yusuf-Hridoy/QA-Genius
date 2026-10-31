@@ -271,32 +271,66 @@
   }
 
   function openRename(card, story) {
-    var box = el("div", "row story-inline");
+    var box = el("div", "story-inline");
+    var row = el("div", "row");
     var input = el("input", "mono");
     input.type = "text";
     input.value = story.label;
-    input.maxLength = 24;
+    input.id = "rename-" + story.id;
     input.setAttribute("aria-label", "New ID for " + story.label);
-    box.appendChild(input);
-    var say = el("span", "muted small");
-    box.appendChild(
-      button("Save", function () {
-        var problem = store().rename(story.id, input.value);
-        if (problem === "bad-label") {
-          say.textContent = store().LABEL_RULE;
-          return;
-        }
-        if (problem === "duplicate-label") {
-          say.textContent = store().takenMessage(input.value);
-          return;
-        }
+    /* The problem belongs under this box, and a screen reader is told
+     * which box it is about. */
+    var say = el("p", "field-error");
+    say.id = input.id + "-error";
+    say.setAttribute("role", "alert");
+    say.hidden = true;
+    input.setAttribute("aria-describedby", say.id);
+    row.appendChild(input);
+
+    function wrong(words) {
+      say.textContent = words;
+      say.hidden = !words;
+      if (words) {
+        input.setAttribute("aria-invalid", "true");
+        input.focus();
+      } else {
+        input.removeAttribute("aria-invalid");
+      }
+    }
+
+    function save() {
+      var problem = store().rename(story.id, input.value);
+      if (problem === "bad-label") {
+        wrong(store().LABEL_RULE);
+        return;
+      }
+      if (problem === "duplicate-label") {
+        wrong(store().takenMessage(input.value));
+        return;
+      }
+      wrong("");
+      render();
+    }
+
+    /* Enter saves and Escape cancels, the way every other box on a page
+     * behaves. Reaching for the mouse to press Save was the only way. */
+    input.addEventListener("keydown", function (event) {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        save();
+      } else if (event.key === "Escape") {
+        event.preventDefault();
         render();
-      })
-    );
-    box.appendChild(button("Cancel", render));
+      }
+    });
+
+    row.appendChild(button("Save", save));
+    row.appendChild(button("Cancel", render));
+    box.appendChild(row);
     box.appendChild(say);
     card.appendChild(box);
     input.focus();
+    input.select();
   }
 
   function statusPicker(story) {
@@ -452,6 +486,8 @@
         say("All your stories are gone from this browser.");
         render();
         paintRail();
+        /* Said here, once, where the reader pressed the button. */
+        if (window.QAGStoriesUI) window.QAGStoriesUI.deletedBar();
       });
     }
   }

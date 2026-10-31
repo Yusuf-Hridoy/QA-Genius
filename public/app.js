@@ -15,6 +15,43 @@
     return value !== "" && value.indexOf("@") === -1 && !/\s/.test(value);
   }
 
+  /* Hiding a key while it is pasted.
+   *
+   * The box is a text box on purpose: browsers offer to fill a password
+   * field with a saved login, and a key is neither a login nor ours to
+   * save. -webkit-text-security does the hiding in Chrome, Safari and
+   * Firefox 118 and later. Anything older has no way to hide the
+   * characters of a text box at all, so there the box becomes a password
+   * field after all -- a filled-in email is a nuisance, a key read over a
+   * shoulder or in a screen share is not.
+   */
+  function maskSupported() {
+    try {
+      return Boolean(
+        window.CSS &&
+          window.CSS.supports &&
+          window.CSS.supports("-webkit-text-security", "disc")
+      );
+    } catch (err) {
+      return false;
+    }
+  }
+
+  /* Hide or show one key box, whichever way this browser can. */
+  function maskKeyBox(box, hidden) {
+    if (!box) return;
+    box.classList.toggle("masked", hidden);
+    if (maskSupported()) return;
+    box.type = hidden ? "password" : "text";
+    /* "new-password" is the one value password managers leave alone. */
+    box.autocomplete = hidden ? "new-password" : "off";
+  }
+
+  function keyBoxHidden(box) {
+    if (!box) return true;
+    return box.classList.contains("masked");
+  }
+
   function loadKeys() {
     var raw = null;
     try {
@@ -229,8 +266,8 @@
     // Never leave a key on screen for the next time the panel opens.
     var keyBox = document.getElementById("drawer-key");
     var showKey = document.getElementById("drawer-key-show");
-    if (keyBox && !keyBox.classList.contains("masked")) {
-      keyBox.classList.add("masked");
+    if (keyBox && !keyBoxHidden(keyBox)) {
+      maskKeyBox(keyBox, true);
       if (showKey) {
         showKey.setAttribute("aria-pressed", "false");
         showKey.textContent = "Show";
@@ -508,6 +545,7 @@
     var keyInput = el("input", "ctl masked");
     keyInput.type = "text";
     keyInput.value = "";
+    maskKeyBox(keyInput, true);
     keyInput.placeholder = "Key (empty = keep current key)";
     keyInput.setAttribute("aria-label", "API key, empty keeps the current key");
     keyInput.autocomplete = "off";
@@ -746,12 +784,14 @@
     var showKey = document.getElementById("drawer-key-show");
     if (showKey && keyInput) {
       showKey.addEventListener("click", function () {
-        var shown = !keyInput.classList.contains("masked");
-        keyInput.classList.toggle("masked", shown);
-        showKey.setAttribute("aria-pressed", shown ? "false" : "true");
-        showKey.textContent = shown ? "Show" : "Hide";
+        var hide = !keyBoxHidden(keyInput);
+        maskKeyBox(keyInput, hide);
+        showKey.setAttribute("aria-pressed", hide ? "false" : "true");
+        showKey.textContent = hide ? "Show" : "Hide";
         keyInput.focus();
       });
+      /* On a browser with no CSS mask the box starts as a password field. */
+      maskKeyBox(keyInput, true);
     }
 
     listNode.addEventListener("click", function (event) {
@@ -812,6 +852,16 @@
       }
       keyError.textContent = message || "";
       keyError.hidden = !message;
+      /* The cursor goes to the box the message is about, so nobody has to
+       * work out which of three fields the sentence belongs to. */
+      if (keyInput) {
+        if (message) {
+          keyInput.setAttribute("aria-invalid", "true");
+          keyInput.focus();
+        } else {
+          keyInput.removeAttribute("aria-invalid");
+        }
+      }
     }
 
     form.addEventListener("submit", function (event) {
@@ -1292,6 +1342,9 @@
   }
 
   document.body.addEventListener("htmx:afterSwap", freshenExampleCaptions);
+  document.body.addEventListener("htmx:afterSwap", function (event) {
+    initDisclosures(event.target);
+  });
 
   /* Stop on the answer and on the error alike, and stop every button this
    * click made busy: a source card's button starts the desk's own button,
@@ -1303,6 +1356,31 @@
       });
     }
   );
+
+  /* A <details> whose summary says "Show detail" has to say "Hide detail"
+   * once it is open, and tell a screen reader which it is. */
+  function syncDisclosure(box) {
+    if (!box) return;
+    var word = box.querySelector("[data-open-word]");
+    var summary = box.querySelector("summary");
+    if (summary) summary.setAttribute("aria-expanded", box.open ? "true" : "false");
+    if (!word) return;
+    word.textContent = box.open
+      ? word.getAttribute("data-open-word")
+      : word.getAttribute("data-shut-word");
+  }
+
+  function initDisclosures(scope) {
+    var boxes = (scope || document).querySelectorAll("details:has([data-open-word])");
+    Array.prototype.forEach.call(boxes, syncDisclosure);
+  }
+
+  document.addEventListener("toggle", function (event) {
+    var box = event.target;
+    if (box && box.tagName === "DETAILS" && box.querySelector("[data-open-word]")) {
+      syncDisclosure(box);
+    }
+  }, true);
 
   /* On a phone the rail is a scrolling strip. The desk you are on is scrolled
    * into view, so it is never half a word cut off at the edge. */
@@ -1394,6 +1472,7 @@
     initExampleLink();
     initShowAll();
     initFields();
+    initDisclosures();
     initNavScroll();
   });
 
@@ -1481,6 +1560,8 @@
     pasteWouldBeCut: pasteWouldBeCut,
     initInputCards: initInputCards,
     initFields: initFields,
+    maskSupported: maskSupported,
+    maskKeyBox: maskKeyBox,
     loadKeys: loadKeys,
     storeKeys: storeKeys,
     headerKeys: headerKeys,

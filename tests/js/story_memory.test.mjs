@@ -21,8 +21,16 @@ const source = read("requirements_flow.js");
 const runState = read("run_state.js");
 const storyStore = read("story_store.js");
 
-/** A box the page writes HTML into. */
-const box = (html = "") => ({ innerHTML: html, focus() {} });
+/** A box the page writes HTML into.
+ *
+ * It answers querySelector the way the Story step uses it: the only thing
+ * ever asked for is the faded sample that sits in #story-output before a
+ * result arrives, and this stub never holds one. */
+const box = (html = "") => ({
+  innerHTML: html,
+  focus() {},
+  querySelector: () => null,
+});
 
 /** An input or select the page reads and writes. */
 const input = (value = "") => ({ value, focus() {} });

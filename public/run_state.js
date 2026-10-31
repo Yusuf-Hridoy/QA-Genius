@@ -37,8 +37,11 @@
   };
 
   /* What a changed part is called in a sentence. */
+  /* One sentence per part, and each one names the part it is about. The
+   * story line used to say "Your story was edited" for a context change
+   * too, and "Your criteria changed" turned up when only the story had. */
   var PART_WORDS = {
-    story: "Your story was edited",
+    story: "Your story changed after this was built",
     criteria: "Your criteria changed",
     test_cases: "Your test cases changed",
     automation_cases: "Your selected test cases changed",
@@ -59,10 +62,24 @@
     }
   }
 
-  function write(run) {
+  /* Everything write() does to a run except saving it: the fingerprints
+   * and the record of what each result was built from. A store that keeps
+   * a run of its own hands it through here first, so the copy it holds is
+   * the copy a page would write back and opening it changes nothing. */
+  function stampRun(run) {
     var saved = run && typeof run === "object" ? run : {};
+    /* The revision this tab has seen lives in the tab, beside the story id,
+     * never in the run. A page that writes a run copy it read before its
+     * own last save would otherwise put the old number back and make its
+     * next edit look stale. Writing the run never binds the tab. */
+    delete saved._story_rev;
     stampAll(saved);
     recordBuilds(saved);
+    return saved;
+  }
+
+  function write(run) {
+    var saved = stampRun(run);
     try {
       global.sessionStorage.setItem(RUN_KEY, JSON.stringify(saved));
     } catch (e) {
@@ -356,6 +373,7 @@
     DESKS: DESKS,
     read: read,
     write: write,
+    stampRun: stampRun,
     stamp: stamp,
     markBuilt: markBuilt,
     statusOf: statusOf,

@@ -66,15 +66,36 @@ class AiError(Exception):
 
     Every desk shows these the same way, so they share a base: the desk
     supplies its own title and this carries the words.
+
+    `kind` is which of the four things went wrong, in the words the page
+    uses: "key" a key was refused, "busy" every key is rate limited,
+    "server" the other end broke, "model" the model is gone, "output" no
+    key could answer in the shape the desk needs. `provider` is the short
+    name of the provider whose key was refused, when one key is to blame.
+    A page never shows a status code or a line of JSON, so both of these
+    carry the meaning instead.
     """
 
-    def __init__(self, message: str, notes: list[str] | None = None) -> None:
+    kind = ""
+
+    def __init__(
+        self,
+        message: str,
+        notes: list[str] | None = None,
+        kind: str = "",
+        provider: str = "",
+    ) -> None:
         super().__init__(message)
         self.notes = list(notes or [])
+        if kind:
+            self.kind = kind
+        self.provider = provider
 
 
 class AllKeysBusyError(AiError):
     """Raised when every key failed with a retryable (busy/down) error."""
+
+    kind = "busy"
 
     def __init__(self, notes: list[str]) -> None:
         super().__init__("All keys busy", notes)
@@ -83,12 +104,16 @@ class AllKeysBusyError(AiError):
 class InvalidKeyError(AiError):
     """Raised when every key tried was rejected as invalid (401/403)."""
 
-    def __init__(self, notes: list[str]) -> None:
-        super().__init__("Invalid key", notes)
+    kind = "key"
+
+    def __init__(self, notes: list[str], provider: str = "") -> None:
+        super().__init__("Invalid key", notes, provider=provider)
 
 
 class ModelUnavailableError(AiError):
     """Raised when every key failed only because the model is gone (404)."""
+
+    kind = "model"
 
     def __init__(self, notes: list[str]) -> None:
         super().__init__("Model unavailable", notes)
@@ -100,6 +125,8 @@ class ProviderError(AiError):
 
 class BadOutputError(AiError):
     """Raised when no key could give an answer in the shape the desk needs."""
+
+    kind = "output"
 
 
 UNREADABLE = "The AI returned something unreadable. Try again."
@@ -142,6 +169,8 @@ REASON_LIMIT = 120
 _JSON_MESSAGE = re.compile(r'"(?:message|error|detail)"\s*:\s*"([^"]{3,})"')
 _BRACES = re.compile(r"[{}\[\]]+")
 _SPACES = re.compile(r"\s+")
+# "Error code: 400" and "400 - " tell a reader nothing, so they go.
+_STATUS_ONLY = re.compile(r"^(?:error code:?\s*)?\d{3}\s*[-:]?\s*", re.IGNORECASE)
 
 
 def _cut(text: str, limit: int) -> str:
@@ -164,6 +193,7 @@ def clean_reason(text: str, key: str) -> str:
     if found:
         said = found.group(1)
     said = _SPACES.sub(" ", _BRACES.sub(" ", said)).strip()
+    said = _STATUS_ONLY.sub("", said).strip(" -:")
     if key:
         said = said.replace(key, "[hidden]")
     said = KEYLIKE_RE.sub("[hidden]", said)
@@ -336,6 +366,9 @@ def generate_json(
     # Anything else worth saying, which is not part of that sentence.
     asides: list[str] = []
     invalid_count = 0
+    # Which providers refused a key. One name here means the page can say
+    # "Your Gemini key was refused" instead of "Your key was refused".
+    invalid_shorts: list[str] = []
     notfound_count = 0
     unreadable_count = 0
     attempted = 0
@@ -364,6 +397,7 @@ def generate_json(
                     notes.append(f"{_label(index, short)} looked invalid")
                     record_key(index, False, "the key was rejected")
                     invalid_count += 1
+                    invalid_shorts.append(short)
                     attempted += 1
                     continue
                 except openai.PermissionDeniedError:
@@ -371,6 +405,7 @@ def generate_json(
                     notes.append(f"{_label(index, short)} looked invalid")
                     record_key(index, False, "the key was not allowed")
                     invalid_count += 1
+                    invalid_shorts.append(short)
                     attempted += 1
                     continue
                 except openai.OpenAIError:
@@ -410,12 +445,14 @@ def generate_json(
             notes.append(f"{label} looked invalid")
             record_key(index, False, "the key was rejected")
             invalid_count += 1
+            invalid_shorts.append(short)
             continue
         except openai.PermissionDeniedError:
             logger.warning("%s rejected (forbidden)", label)
             notes.append(f"{label} looked invalid")
             record_key(index, False, "the key was not allowed")
             invalid_count += 1
+            invalid_shorts.append(short)
             continue
         except openai.RateLimitError:
             logger.warning("%s rate limited", label)
@@ -447,15 +484,25 @@ def generate_json(
                 continue
             logger.warning("%s failed (%d)", label, status)
             reason = clean_reason(str(e), api_key)
-            record_key(index, False, reason)
+            record_key(index, False, reason or "the request was refused")
+            # A 400 from a provider is almost always the key: the page says
+            # so in plain words rather than printing the number back.
             raise ProviderError(
-                f"{label} failed ({status}): {reason}"
+                f"{label} failed ({status}): {reason}" if reason else f"{label} failed",
+                notes=[f"{label}: {reason}"] if reason else [],
+                kind="key" if status in (400, 401, 403) else "server",
+                provider=short,
             ) from None
         except openai.OpenAIError as e:
             logger.warning("%s failed", label)
             reason = clean_reason(str(e), api_key)
-            record_key(index, False, reason)
-            raise ProviderError(f"{label} failed: {reason}") from None
+            record_key(index, False, reason or "the request was refused")
+            raise ProviderError(
+                f"{label} failed: {reason}" if reason else f"{label} failed",
+                notes=[f"{label}: {reason}"] if reason else [],
+                kind="server",
+                provider=short,
+            ) from None
 
         data = json_repair_utils.parse_json_resilient(content)
         result = None
@@ -483,7 +530,8 @@ def generate_json(
         return result, index, asides + notes
 
     if attempted > 0 and invalid_count == attempted:
-        raise InvalidKeyError(notes)
+        only = set(invalid_shorts)
+        raise InvalidKeyError(notes, provider=only.pop() if len(only) == 1 else "")
     if attempted > 0 and notfound_count == attempted:
         raise ModelUnavailableError(notes)
     if attempted > 0 and unreadable_count == attempted:

@@ -283,7 +283,7 @@ def test_a_busy_key_shows_the_friendly_card(monkeypatch) -> None:
     response = client.post(
         "/requirements/automation/run", data=_form(), headers=KEYS_HEADER
     )
-    assert "All your keys are busy." in response.text
+    assert "The AI is busy. Try again in a minute, or add another key." in response.text
 
 
 # ---------------------------------------------------------------- the example

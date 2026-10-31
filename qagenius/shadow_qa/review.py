@@ -19,9 +19,7 @@ from qagenius.models import (
     TestCaseList,
 )
 from qagenius.shadow_qa.boundaries import (
-    COUNT_UNIT_NAMES,
     CURRENCIES,
-    LOOSE_COUNT,
     MONEY_ANY,
     Boundary,
     case_text,
@@ -33,6 +31,7 @@ from qagenius.shadow_qa.boundaries import (
     states_value,
     value_quantity,
 )
+from qagenius.say_numbers import family_of, say_amount
 from qagenius.shadow_qa.detect import PackHit, detect_hits, mentions, story_text
 from qagenius.shadow_qa.packs import SEVERITY_RANK, Check, PackRisk
 from qagenius.test_case_diff import STOPWORDS, normalised_words, title_score
@@ -1380,23 +1379,40 @@ def _ordinal(number: float) -> str:
     return f"{whole}{ {1: 'st', 2: 'nd', 3: 'rd'}.get(whole % 10, 'th') }"
 
 
-def _trigger_count(case: TestCase) -> float | None:
-    """The count at which a case expects the rule to bite, if it says one.
+def _trigger_quantity(case: TestCase) -> tuple[str, str, float] | None:
+    """The value at which a case expects the rule to bite: family, unit, amount.
 
     Read from the steps, the data and the expected result -- never from the
     title, which names the rule rather than the run.
+
+    A case that talks about two different kinds of number is not read at
+    all. "Lock the account with 5 wrong passwords, wait 9 minutes, try
+    again" is a test about minutes whose setup happens to count to five,
+    and reading the five out of it is how TC-007 was reported as expecting
+    the lockout "on the 5th try" when it is about nine minutes.
     """
-    text = " \n ".join(
-        [*(case.steps or []), str(case.test_data or ""), str(case.expected_result or "")]
-    )
-    counted = [
-        amount
-        for unit, amount in scan(text)
-        if unit in COUNT_UNIT_NAMES or unit == LOOSE_COUNT
+    # One sentence at a time: "Wait 9 minutes" and "Try to sign in" are two
+    # steps, and reading them as one line turns the nine into nine tries.
+    said = [
+        quantity
+        for sentence in _sentences(_case_parts(case))
+        for quantity in scan(sentence)
     ]
-    # The run ends on the try that trips the rule, so the highest count a
-    # case names is the one it expects to be refused on.
-    return max(counted) if counted else None
+    if not said:
+        return None
+    families = {family_of(unit) for unit, _ in said}
+    if len(families) != 1:
+        return None
+    # The run ends on the value that trips the rule, so the largest one a
+    # case names is the one it expects to be refused at.
+    unit, amount = max(said, key=lambda one: one[1])
+    return families.pop(), unit, amount
+
+
+def _trigger_count(case: TestCase) -> float | None:
+    """The count a case trips the rule on, when counting is what it is about."""
+    found = _trigger_quantity(case)
+    return found[2] if found and found[0] == "count" else None
 
 
 def trigger_disagreements(cases: list[TestCase]) -> list[str]:
@@ -1406,32 +1422,55 @@ def trigger_disagreements(cases: list[TestCase]) -> list[str]:
     TC-007 locking it on the 5th. Both passed review on their own; together
     they say the suite does not know what the rule is.
     """
-    by_criterion: dict[str, list[tuple[TestCase, float]]] = {}
+    # (criterion, family) -> the cases and the value each trips the rule on.
+    # The family is in the key because a test about minutes and a test about
+    # tries are not two answers to one question.
+    by_criterion: dict[tuple[str, str], list[tuple[TestCase, str, float]]] = {}
     for case in cases or []:
         if _expects_in(str(case.expected_result or "")) != "refused":
             continue
-        count = _trigger_count(case)
-        if count is None:
+        found = _trigger_quantity(case)
+        if found is None:
             continue
+        family, unit, amount = found
         key = str(case.traceability or "").strip()
         if not key:
             continue
-        by_criterion.setdefault(key, []).append((case, count))
+        by_criterion.setdefault((key, family), []).append((case, unit, amount))
 
     notes: list[str] = []
-    for source, found in by_criterion.items():
-        counts = {count for _, count in found}
+    for (source, family), found in by_criterion.items():
+        counts = {amount for _, _, amount in found}
         if len(counts) < 2:
             continue
         first, second = found[0], next(
-            pair for pair in found if pair[1] != found[0][1]
+            row for row in found if row[2] != found[0][2]
         )
+        if family == "count":
+            notes.append(
+                f"{first[0].id} expects {source} to apply on the "
+                f"{_ordinal(first[2])} try, {second[0].id} on the "
+                f"{_ordinal(second[2])}. Decide which is right."
+            )
+            continue
         notes.append(
-            f"{first[0].id} expects {source} to apply on the "
-            f"{_ordinal(first[1])} try, {second[0].id} on the "
-            f"{_ordinal(second[1])}. Decide which is right."
+            f"{first[0].id} expects {source} to apply at "
+            f"{say_amount(first[1], first[2])}, {second[0].id} at "
+            f"{say_amount(second[1], second[2])}. Decide which is right."
         )
     return notes
+
+
+def _case_parts(case: TestCase) -> list[str]:
+    """Everything of a case a value it is testing could be written in.
+
+    Never the title: it names the rule rather than the run.
+    """
+    return [
+        *(case.steps or []),
+        str(case.test_data or ""),
+        str(case.expected_result or ""),
+    ]
 
 
 # A money amount written to the cent, with or without a currency in front.
@@ -1502,6 +1541,10 @@ def precondition_notes(
     A run wrote TC-008 with a $19.99 cart for a coupon that needs at least
     $50, and expected the discount to apply. The test cannot pass as
     written, whatever the code does.
+
+    A test is only ever weighed against the criteria it says it covers.
+    TC-001 is a valid-upload test for AC-1; it was reported as unable to
+    pass AC-3, a criterion it never claimed and never touched.
     """
     rules = [one for one in limit_rules(criteria) if one.outcome == "accepted"]
     if not rules:
@@ -1510,10 +1553,17 @@ def precondition_notes(
     for case in cases or []:
         if _expects_in(str(case.expected_result or "")) != "accepted":
             continue
+        covers = _covered_ids(case) & {
+            rule.source.strip().upper() for rule in rules
+        }
         said = scan(
             " ".join([str(case.test_data or ""), str(case.pre_conditions or "")])
         )
         for rule in rules:
+            # Only the criteria this case is linked to. Without this, every
+            # limit anywhere in the story is held against every test.
+            if covers and rule.source.strip().upper() not in covers:
+                continue
             wanted = value_quantity(rule.value)
             if wanted is None:
                 continue
@@ -1534,6 +1584,16 @@ def precondition_notes(
     return notes
 
 
+# "AC-1", "AC-1, AC-3", "Covers AC-2" -- however the line was written.
+_AC_ID = re.compile(r"\b([A-Za-z]{1,6}[-_]\d+)\b")
+
+
+def _covered_ids(case: TestCase) -> set[str]:
+    """The criteria a case says it covers, upper case. Empty when it says none."""
+    said = " ".join([str(case.traceability or ""), " ".join(case.tags or [])])
+    return {found.upper().replace("_", "-") for found in _AC_ID.findall(said)}
+
+
 def _matching_units(unit: str) -> set[str]:
     """The units an amount of this kind could have been written in."""
     if unit in CURRENCIES:
@@ -1541,13 +1601,34 @@ def _matching_units(unit: str) -> set[str]:
     return {unit}
 
 
+# The word right after a number that makes it the rule rather than the data.
+_THE_RULE_AFTER = re.compile(
+    r"\b(limit|maximum|max|cap|minimum|min|threshold|rule)\b", re.IGNORECASE
+)
+
+
+def _quotes_the_limit(sentence: str, value: str) -> bool:
+    """Is this sentence naming the rule's own number rather than using one?
+
+    "rejected with a message about the 2 MB limit" says what the message
+    says. The photo in that test is 2 MB and 1 byte, and reading the 2 MB
+    out of the message is how a sound test was called wrong.
+    """
+    text = str(sentence or "")
+    for number in re.finditer(re.escape(str(value or "")), text, re.IGNORECASE):
+        after = text[number.end() : number.end() + 16]
+        if _THE_RULE_AFTER.search(after):
+            return True
+    return False
+
+
 def _said_as(unit: str, amount: float) -> str:
-    """"$19.99", or "19.99 minutes" when the unit is not a currency."""
-    if unit in CURRENCIES:
-        return f"{unit}{amount:.2f}"
-    if unit == MONEY_ANY:
-        return f"{amount:.2f}"
-    return f"{_plain(amount)} {unit}"
+    """"$19.99", "1.5 MB", "11 minutes" — the one formatter every note uses.
+
+    Comparing means working in bytes and seconds; saying so does not.
+    A note once read "TC-001 uses 1.57286e+06 bytes" about a 1.5 MB photo.
+    """
+    return say_amount(unit, amount)
 
 
 def limit_conflicts(criteria: list[Criterion], cases: list[TestCase]) -> list[str]:
@@ -1575,9 +1656,14 @@ def limit_conflicts(criteria: list[Criterion], cases: list[TestCase]) -> list[st
         return disagreements[:MAX_QUALITY_NOTES]
     # A gap first: nobody deciding is worse than two people disagreeing.
     notes = _gap_notes(rules) + _criteria_conflicts(rules) + disagreements
+    # The values nobody has decided yet. A test that answers one of these is
+    # not wrong; it is quietly making the decision, which is worth saying.
+    open_values = {over.value for over, _ in gap_pairs(rules)}
+    known = {rule.source.strip().upper() for rule in rules}
     for case in cases or []:
         if len(notes) >= MAX_QUALITY_NOTES:
             break
+        covers = _covered_ids(case) & known
         # The title is a label, not data. "Discount on an order over $50" is
         # the name of a test whose cart is $75, and reading the $50 out of it
         # is how a sound case was called wrong about a limit it never used.
@@ -1590,10 +1676,20 @@ def limit_conflicts(criteria: list[Criterion], cases: list[TestCase]) -> list[st
         if not scanned:
             continue
         for rule in rules:
+            # A test is weighed only against the criteria it says it covers.
+            # TC-001 is a valid-upload test for AC-1; holding AC-3's limit
+            # against it produced "this test can't pass" about a rule it
+            # never claimed.
+            if covers and rule.source.strip().upper() not in covers:
+                continue
             about = [
                 one
                 for one, numbers in scanned
-                if states(rule.value, numbers) and not over_in(rule.value, one, numbers)
+                if states(rule.value, numbers)
+                and not over_in(rule.value, one, numbers)
+                # "rejected with a message about the 2 MB limit" is the rule
+                # being quoted back, not the size of the photo in the test.
+                and not _quotes_the_limit(one, rule.value)
             ]
             if not about:
                 continue
@@ -1606,6 +1702,14 @@ def limit_conflicts(criteria: list[Criterion], cases: list[TestCase]) -> list[st
                 # expected result: two sentences, one test.
                 verdict = _expects_in(str(case.expected_result or ""))
             if not verdict:
+                break
+            if rule.value in open_values:
+                # Nobody wrote down what happens here, and this test has
+                # just settled it on its own.
+                notes.append(
+                    f"{case.id} decides {rule.plain} is {verdict} while that "
+                    f"question is still open."
+                )
                 break
             wanted = "accepted" if rule.allowed else "refused"
             if verdict != wanted:

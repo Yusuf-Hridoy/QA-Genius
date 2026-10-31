@@ -167,11 +167,25 @@ def test_the_dark_theme_redeclares_every_colour_it_changes() -> None:
 
 
 def test_a_field_is_darker_than_the_card_it_sits_on_in_the_dark() -> None:
-    """A box the same colour as the card behind it has no shape of its own."""
-    assert DARK["--field"].upper() == "#0F1636"
+    """A box the same colour as the card behind it has no shape of its own.
+
+    #0F1636 was rgb 15,22,54 against a page of rgb 14,20,48, which nobody
+    could see. This one is a well in the card, with a border on top.
+    """
+    assert DARK["--field"].upper() == "#0A1029"
     assert _luminance(DARK["--field"]) < _luminance(DARK["--card"])
+    assert _luminance(DARK["--field"]) < _luminance(DARK["--canvas"])
     # And it keeps a border a reader can see.
     assert "background:var(--field)" in CSS
+    assert ":root[data-theme=\"dark\"] .ctl{border-color:var(--border-strong)}" in CSS
+
+
+def test_the_amber_strip_is_a_soft_wash_in_the_dark() -> None:
+    """A solid #E8B84A bar across a dark card read as a brown block."""
+    assert DARK["--strip-soft"] == "rgba(232,184,74,.16)"
+    assert DARK["--strip-soft-ink"].upper() == "#F2C96B"
+    assert DARK["--strip-soft-line"].upper() == "#E8B84A"
+    assert ':root[data-theme="dark"] .bench-strip{background:var(--strip-soft)' in CSS
 
 
 def test_the_big_strip_is_a_softer_yellow_in_the_dark() -> None:

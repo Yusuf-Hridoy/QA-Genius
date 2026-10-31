@@ -180,6 +180,9 @@
     }
     global.QAGRun.write(store.bound(made.story));
     paint();
+    /* The counters under the boxes were drawn before the example filled
+     * them, so they read "0 / 3000" under three thousand characters. */
+    if (global.QAG && global.QAG.initFields) global.QAG.initFields();
     /* The banner said "this is a saved example". It is your story now, so
      * the banner goes rather than being left to argue with the chip. */
     dropExampleFlag();
@@ -212,6 +215,10 @@
 
   var CHANGED_WORDS = "This story changed in another tab.";
   var DELETED_WORDS = "This story was deleted. Start a new story or open another.";
+  /* Delete all leaves nothing to open, so "Open another" would be a button
+   * that goes to an empty list. One story gone is a different sentence
+   * from every story gone. */
+  var ALL_GONE_WORDS = "All stories deleted. Start a new one.";
 
   function barSlot() {
     var found = byId("story-bar");
@@ -263,21 +270,43 @@
       },
       {
         words: "Keep mine",
-        go: function () {
-          var store = stories();
-          if (!store || !global.QAGRun) return;
-          var ask =
-            "Keep this tab's copy? The version saved in the other tab is " +
-            "written over and cannot be brought back.";
-          if (global.confirm && !global.confirm(ask)) return;
-          store.forceSave(store.tabStory(), global.QAGRun.read());
-          hideBar();
-        }
+        go: askKeepMine
       }
     ]);
   }
 
+  /* The browser's own confirm box is a different app arriving on top of
+   * this one: different type, different buttons, no theme. The question
+   * is asked in the bar it came from instead. */
+  var KEEP_MINE_ASK =
+    "Keep this tab's copy? The version saved in the other tab is written " +
+    "over and cannot be brought back.";
+
+  function askKeepMine() {
+    showBar(KEEP_MINE_ASK, [
+      {
+        words: "Yes, keep mine",
+        main: true,
+        go: function () {
+          var store = stories();
+          if (!store || !global.QAGRun) return;
+          store.forceSave(store.tabStory(), global.QAGRun.read());
+          hideBar();
+        }
+      },
+      { words: "No, leave it", go: changedBar }
+    ]);
+  }
+
   function deletedBar() {
+    var store = stories();
+    /* Nothing left to open: one button, and it is the only thing to do. */
+    if (store && !store.count()) {
+      showBar(ALL_GONE_WORDS, [
+        { words: "Start a new story", main: true, go: startNewStory }
+      ]);
+      return;
+    }
     showBar(DELETED_WORDS, [
       { words: "Start a new story", main: true, go: startNewStory },
       {
@@ -323,9 +352,9 @@
     /* The tab points at a story that is not there any more: nothing to save
      * into, so the run goes and every desk draws its own empty screen. */
     if (store.tabStory() && !store.active()) store.forgetOpenStory();
-    /* And it keeps saying so on every page of this tab until the reader
-     * starts a story or opens one. */
-    if (store.storyWasDeleted()) deletedBar();
+    /* Said once, where it happened. A banner that came back on every page
+     * and every reload read like the app was stuck, long after the reader
+     * had taken it in. */
     store.listen(function (problem) {
       showSave(problem);
       paintRail();
@@ -367,8 +396,11 @@
     changedBar: changedBar,
     deletedBar: deletedBar,
     dropExampleFlag: dropExampleFlag,
+    askKeepMine: askKeepMine,
     CHANGED_WORDS: CHANGED_WORDS,
-    DELETED_WORDS: DELETED_WORDS
+    KEEP_MINE_ASK: KEEP_MINE_ASK,
+    DELETED_WORDS: DELETED_WORDS,
+    ALL_GONE_WORDS: ALL_GONE_WORDS
   };
 
   if (global.document) {

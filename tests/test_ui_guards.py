@@ -156,8 +156,9 @@ def test_the_number_in_a_ring_is_sized_from_the_ring() -> None:
     assert "font-size:clamp(17px,calc(var(--ring-size) * .25),26px)" in STYLE
     assert "font-variant-numeric:tabular-nums" in STYLE
     assert "white-space:nowrap" in STYLE
-    # The sign is a footnote to the number, not half of it.
-    assert ".score-ring .score-num .pct{font-size:.55em" in STYLE
+    # The sign is a footnote to the number, not half of it — with a floor,
+    # because .55em of the small ring came out at 7px.
+    assert ".score-ring .score-num .pct{font-size:max(12px,.55em)" in STYLE
 
 
 def test_no_ring_sizes_its_percent_sign_by_hand() -> None:
@@ -165,3 +166,26 @@ def test_no_ring_sizes_its_percent_sign_by_hand() -> None:
     for path in TEMPLATES:
         body = path.read_text(encoding="utf-8")
         assert 'style="font-size:16px"' not in body, path.name
+
+
+# Each of these draws its own button and turns the shared focus ring off to
+# do it, at the same weight as ".btn:focus-visible" but later in the file,
+# so the ring loses. The keyboard then lands on them with nothing to show
+# where it is. A browser pass found all four; these keep them fixed.
+RING_OFF = (
+    ".btn.tc-row-main",
+    ".btn.btn-icon-tiny",
+    ".btn.grade-circle",
+    ".steps li.locked a",
+)
+
+
+def test_a_control_that_drops_the_shared_ring_puts_its_own_back() -> None:
+    for selector in RING_OFF:
+        rule = f"{selector}:focus-visible{{box-shadow:var(--ring)}}"
+        assert rule in STYLE, f"{selector} takes focus with no ring"
+
+
+def test_the_shared_ring_is_still_there_for_everything_else() -> None:
+    assert ":focus-visible{outline:none;box-shadow:var(--ring)}" in STYLE
+    assert ".btn:focus-visible{outline:none;box-shadow:var(--ring)}" in STYLE
