@@ -133,6 +133,25 @@
 
   /* ---------- the empty state ---------- */
 
+  /* Anything another desk has already produced — the same list the report
+   * itself is built from, so the two can never disagree about whether this
+   * run has anything in it. */
+  function hasAnyResult(run) {
+    if (!run) return false;
+    return Boolean(
+      run.story_analysis ||
+        run.duel_summary ||
+        (run.test_cases && run.test_cases.result) ||
+        (run.risk_analysis && run.risk_analysis.analysis) ||
+        (run.automation && run.automation.script) ||
+        run.insights ||
+        (run.matrix && run.matrix.runs) ||
+        criteriaTexts(run).some(function (text) {
+          return text.trim() !== "";
+        })
+    );
+  }
+
   function storyLine(run) {
     var root = byId("ship-root");
     if (!root) return;
@@ -141,6 +160,21 @@
 
     var card = el("div", "card ship-story");
     if (!story) {
+      /* With results already on the page, "Start from a story" is the wrong
+       * thing to say and its yellow button fought the report's own. The
+       * missing piece is the story text, so the page says only that, and
+       * says it quietly. */
+      if (hasAnyResult(run)) {
+        card.className = "card ship-story ship-story-note";
+        card.appendChild(
+          el("p", "muted", "Add the story text on the Story step")
+        );
+        var back = el("a", "btn", "Go to the Story step");
+        back.href = "/requirements/story";
+        card.appendChild(back);
+        root.appendChild(card);
+        return;
+      }
       card.className = "card ship-story card-form";
       card.appendChild(el("h2", null, "Start from a story"));
       card.appendChild(
@@ -484,4 +518,11 @@
   });
 
   document.addEventListener("DOMContentLoaded", runCheck);
+
+  /* What counts as "this run has something in it", for the unit tests in
+   * tests/js. It decides whether Ship check asks for a story or only for
+   * the story text, so it is worth pinning down away from a browser. */
+  if (typeof window !== "undefined") {
+    window.QAGShip = { hasAnyResult: hasAnyResult };
+  }
 })();

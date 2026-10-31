@@ -182,12 +182,23 @@
     actions.appendChild(link);
   }
 
+  /* Is the result itself already saying it is a sample? Every desk's result
+   * carries the shared flag from _example_flag.html, and a reader does not
+   * need telling twice on the same screen. A reload drops the flag and
+   * leaves only this card, so the sentence is skipped, never deleted. */
+  function resultSaysSample() {
+    var flag = document.querySelector(".example-flag");
+    return Boolean(flag && flag.getClientRects().length);
+  }
+
   /* A sample is on screen: say so, and offer to do the real thing. */
   function buildExample(card, desk, latest) {
     card.className = "source-card none example";
     card.appendChild(icon(ICONS.none, "source-mark"));
     var body = el("div", "source-body");
-    body.appendChild(el("p", "source-title", "Showing a sample."));
+    if (!resultSaysSample()) {
+      body.appendChild(el("p", "source-title", "Showing a sample."));
+    }
     body.appendChild(
       el(
         "p",
@@ -506,5 +517,11 @@
     document.addEventListener("DOMContentLoaded", start);
   } else {
     start();
+  }
+
+  /* Whether the result is already calling itself a sample, for the unit
+   * tests in tests/js: two notices saying the same thing was the bug. */
+  if (typeof window !== "undefined") {
+    window.QAGSourceCard = { resultSaysSample: resultSaysSample };
   }
 })();

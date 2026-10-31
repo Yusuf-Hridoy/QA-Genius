@@ -244,8 +244,14 @@ a{color:var(--accent);text-underline-offset:2px}
 
 .rail-foot{margin-top:auto;padding:16px;display:flex;flex-direction:column;
   gap:4px;border-top:1px solid rgba(255,255,255,.1)}
+/* "LOCAL-FIRST · NO ACCOUNT" wants 225px at .12em and the rail gives it
+   219px, so it broke onto a second line with "ACCOUNT" alone. At .06em it
+   takes 206px and still reads as the spaced-out mono label it is; nowrap
+   keeps it one line if the wording ever grows, and the sideways-scroll
+   check in scripts/check_polish.py catches it if it grows too far. */
 .rail-foot-label{font-family:var(--font-mono);font-size:13px;font-weight:500;
-  letter-spacing:.12em;text-transform:uppercase;color:var(--rail-ink)}
+  letter-spacing:.06em;text-transform:uppercase;color:var(--rail-ink);
+  white-space:nowrap}
 .rail-foot-line{font-size:13px;color:var(--rail-ink-2)}
 .rail-foot strong{color:var(--rail-ink);font-weight:600}
 
@@ -1978,6 +1984,13 @@ svg.next-mark{color:var(--ok-line)}
 .accepted-row:last-child{border-bottom:none}
 
 .ship-story .ship-story-text{margin:6px 0 10px;color:var(--text);max-width:80ch}
+/* The quiet half of the empty state. With a report already on the page the
+   only thing missing is the story text, so this is a note on one line, not
+   a front door — and its button stays secondary so the report keeps the
+   page's one yellow button. */
+.ship-story-note{display:flex;align-items:center;gap:14px;flex-wrap:wrap;
+  padding:14px 18px}
+.ship-story-note p{margin:0}
 .ship-verdict{display:block;padding:24px 26px}
 .ship-verdict .ship-verdict-label{margin:8px 0 6px;font-size:28px;letter-spacing:-.028em}
 .ship-verdict.ship-ok{border-color:color-mix(in srgb,var(--ok-line) 40%,transparent);

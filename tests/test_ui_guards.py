@@ -189,3 +189,40 @@ def test_a_control_that_drops_the_shared_ring_puts_its_own_back() -> None:
 def test_the_shared_ring_is_still_there_for_everything_else() -> None:
     assert ":focus-visible{outline:none;box-shadow:var(--ring)}" in STYLE
     assert ".btn:focus-visible{outline:none;box-shadow:var(--ring)}" in STYLE
+
+
+def test_the_rail_footer_label_fits_on_one_line() -> None:
+    """"LOCAL-FIRST · NO ACCOUNT" broke onto a second line.
+
+    The rail is 252px with 16px of padding each side, so the label gets
+    219px. At .12em it wants 225px and "ACCOUNT" dropped underneath; at
+    .06em it takes 206px. nowrap keeps it one line if the wording grows,
+    and scripts/check_polish.py catches it if it grows past the rail.
+    """
+    assert "letter-spacing:.06em;text-transform:uppercase" in STYLE
+    assert ".12em;text-transform:uppercase;color:var(--rail-ink)" not in STYLE
+    label = STYLE[STYLE.index(".rail-foot-label{") :][:220]
+    assert "white-space:nowrap" in label
+
+
+def test_the_quiet_ship_note_never_takes_the_yellow() -> None:
+    """With a report on screen the note is a note, not a second front door."""
+    ship = (ROOT / "public" / "ship_check.js").read_text(encoding="utf-8")
+    note = ship[ship.index("ship-story-note") :][:400]
+    assert "btn-primary" not in note, "the note's button must stay secondary"
+    assert "Add the story text on the Story step" in note
+
+
+def test_the_sample_sentence_is_only_said_when_nothing_else_says_it() -> None:
+    """Two notices saying "this is a sample" was the bug.
+
+    The JS tests cover resultSaysSample on its own; this is the half they
+    cannot see, that the card actually asks before speaking.
+    """
+    card = (ROOT / "public" / "source_card.js").read_text(encoding="utf-8")
+    guarded = (
+        'if (!resultSaysSample()) {\n'
+        '      body.appendChild(el("p", "source-title", "Showing a sample."));\n'
+        "    }"
+    )
+    assert guarded in card, "the sample sentence is said unconditionally again"
