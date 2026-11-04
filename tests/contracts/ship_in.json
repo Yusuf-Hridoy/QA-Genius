@@ -1,0 +1,309 @@
+{
+  "$defs": {
+    "CriterionIn": {
+      "additionalProperties": false,
+      "description": "One acceptance criterion: one rule the feature has to obey.",
+      "properties": {
+        "id": {
+          "default": "",
+          "description": "Your id for this criterion. Use the shape \"AC-1\" and it is kept exactly. Leave it out and ids are given in order: AC-1, AC-2, AC-3. Any other shape is renumbered to AC-1\u2026AC-n by position \u2014 the answer says so in notes, and the ids in your test cases' \"covers\" are renumbered to match.",
+          "maxLength": 40,
+          "title": "Id",
+          "type": "string"
+        },
+        "text": {
+          "description": "The rule in one sentence, with the real numbers in it. \"The account locks for 30 minutes after 5 wrong passwords\" \u2014 not \"the account locks quickly\".",
+          "maxLength": 1000,
+          "title": "Text",
+          "type": "string"
+        }
+      },
+      "required": [
+        "text"
+      ],
+      "title": "CriterionIn",
+      "type": "object"
+    },
+    "MatrixIn": {
+      "additionalProperties": false,
+      "description": "How much of a test matrix the planned runs actually cover.",
+      "properties": {
+        "covered_pairs": {
+          "default": 0,
+          "description": "How many of those pairs the runs reach.",
+          "minimum": 0,
+          "title": "Covered Pairs",
+          "type": "integer"
+        },
+        "factors": {
+          "description": "What varies between runs, such as [\"browser\", \"device\"].",
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 40,
+          "title": "Factors",
+          "type": "array"
+        },
+        "manual_only": {
+          "default": 0,
+          "description": "How many runs nobody can automate.",
+          "minimum": 0,
+          "title": "Manual Only",
+          "type": "integer"
+        },
+        "runs": {
+          "default": 0,
+          "description": "How many runs are planned.",
+          "minimum": 0,
+          "title": "Runs",
+          "type": "integer"
+        },
+        "valid_pairs": {
+          "default": 0,
+          "description": "How many pairs of values are worth covering.",
+          "minimum": 0,
+          "title": "Valid Pairs",
+          "type": "integer"
+        }
+      },
+      "title": "MatrixIn",
+      "type": "object"
+    },
+    "RiskIn": {
+      "additionalProperties": false,
+      "description": "One way the feature could fail, scored the way an FMEA scores it.",
+      "properties": {
+        "category": {
+          "default": "functional",
+          "description": "One of: security, performance, reliability, data, usability, accessibility, functional. Anything else is read as functional.",
+          "maxLength": 40,
+          "title": "Category",
+          "type": "string"
+        },
+        "cause": {
+          "default": "",
+          "description": "Why it would happen.",
+          "maxLength": 600,
+          "title": "Cause",
+          "type": "string"
+        },
+        "covered_by": {
+          "description": "The test ids you believe already reach this risk. The check reads the tests themselves and will disagree if the words do not.",
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 300,
+          "title": "Covered By",
+          "type": "array"
+        },
+        "detectability": {
+          "default": 3,
+          "description": "How hard it is to notice, 1 to 5. 5 means nobody would.",
+          "maximum": 5,
+          "minimum": 1,
+          "title": "Detectability",
+          "type": "integer"
+        },
+        "effect": {
+          "default": "",
+          "description": "What the user suffers when it happens.",
+          "maxLength": 600,
+          "title": "Effect",
+          "type": "string"
+        },
+        "id": {
+          "default": "",
+          "description": "Your id for this risk, such as \"R1\".",
+          "maxLength": 40,
+          "title": "Id",
+          "type": "string"
+        },
+        "likelihood": {
+          "default": 3,
+          "description": "How likely it is, 1 to 5.",
+          "maximum": 5,
+          "minimum": 1,
+          "title": "Likelihood",
+          "type": "integer"
+        },
+        "related_criteria": {
+          "description": "The criterion ids this risk belongs to, such as [\"AC-2\"].",
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 60,
+          "title": "Related Criteria",
+          "type": "array"
+        },
+        "severity": {
+          "default": 3,
+          "description": "How bad it is, 1 to 5.",
+          "maximum": 5,
+          "minimum": 1,
+          "title": "Severity",
+          "type": "integer"
+        },
+        "test_idea": {
+          "default": "",
+          "description": "One line saying what a test for this would do.",
+          "maxLength": 600,
+          "title": "Test Idea",
+          "type": "string"
+        },
+        "title": {
+          "description": "The failure, in one line.",
+          "maxLength": 300,
+          "title": "Title",
+          "type": "string"
+        }
+      },
+      "required": [
+        "title"
+      ],
+      "title": "RiskIn",
+      "type": "object"
+    },
+    "TestIn": {
+      "additionalProperties": false,
+      "description": "One test case.",
+      "properties": {
+        "covers": {
+          "description": "The criterion ids this test proves, such as [\"AC-1\", \"AC-3\"]. Use the same ids you sent in criteria. A criterion no test names is reported as having no tests.",
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 60,
+          "title": "Covers",
+          "type": "array"
+        },
+        "expected": {
+          "description": "What must be true afterwards, worded so it can only be true or false. \"The page shows: Locked for 30 minutes\" \u2014 not \"it works\".",
+          "maxLength": 1000,
+          "title": "Expected",
+          "type": "string"
+        },
+        "id": {
+          "description": "Your id for this test, such as \"TC-04\".",
+          "maxLength": 40,
+          "title": "Id",
+          "type": "string"
+        },
+        "kind": {
+          "default": "normal",
+          "description": "What kind of test this is. \"normal\" is the path that works; \"wrong input\" is bad data or no permission; \"at the limit\" uses the exact boundary value; \"unusual\" is everything rarer.",
+          "enum": [
+            "normal",
+            "wrong input",
+            "at the limit",
+            "unusual"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "steps": {
+          "description": "What the tester does, one action per step. At least one.",
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 50,
+          "minItems": 1,
+          "title": "Steps",
+          "type": "array"
+        },
+        "test_data": {
+          "default": "",
+          "description": "The exact values this test uses: the amount, the file size, the number of tries. Say \"$50.00\", not \"an order over the limit\".",
+          "maxLength": 1000,
+          "title": "Test Data",
+          "type": "string"
+        },
+        "title": {
+          "description": "What this test proves, in one line.",
+          "maxLength": 300,
+          "title": "Title",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "title",
+        "steps",
+        "expected"
+      ],
+      "title": "TestIn",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Everything the release decision is made from.",
+  "properties": {
+    "accepted": {
+      "description": "Risk ids the team has accepted in writing. An accepted risk is still shown, with its id, but it no longer counts as untested.",
+      "items": {
+        "type": "string"
+      },
+      "maxItems": 200,
+      "title": "Accepted",
+      "type": "array"
+    },
+    "context": {
+      "default": "",
+      "description": "Anything else that decides the answer: limits, rules.",
+      "maxLength": 2000,
+      "title": "Context",
+      "type": "string"
+    },
+    "criteria": {
+      "description": "The acceptance criteria, in order.",
+      "items": {
+        "$ref": "#/$defs/CriterionIn"
+      },
+      "maxItems": 60,
+      "title": "Criteria",
+      "type": "array"
+    },
+    "matrix_summary": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/MatrixIn"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "The test matrix, if you planned one. Leave it out and the matrix check comes back \"not done yet\"."
+    },
+    "risks": {
+      "description": "The risks, if you scored any. Leave it out and the risk check comes back \"not done yet\" \u2014 never \"fine\".",
+      "items": {
+        "$ref": "#/$defs/RiskIn"
+      },
+      "maxItems": 200,
+      "title": "Risks",
+      "type": "array"
+    },
+    "story": {
+      "description": "The user story or the bug, in the words the team wrote.",
+      "maxLength": 3000,
+      "title": "Story",
+      "type": "string"
+    },
+    "test_cases": {
+      "description": "The tests written for those criteria.",
+      "items": {
+        "$ref": "#/$defs/TestIn"
+      },
+      "maxItems": 300,
+      "title": "Test Cases",
+      "type": "array"
+    }
+  },
+  "required": [
+    "story",
+    "criteria",
+    "test_cases"
+  ],
+  "title": "ShipIn",
+  "type": "object"
+}

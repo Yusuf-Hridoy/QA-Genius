@@ -1,0 +1,224 @@
+{
+  "tool": "review_tests",
+  "input": {
+    "story": "As a reader, I want a navigation bar with a sidebar menu and breadcrumbs so that I can move around the site.",
+    "context": "A documentation site. The admin link is role-based.",
+    "criteria": [
+      {
+        "text": "The sidebar highlights the item for the page the reader is on"
+      },
+      {
+        "text": "Breadcrumbs show the path to the current page, with a hint when the reader moves their mouse cursor over a step"
+      },
+      {
+        "text": "The menu opens and closes with the menu button on a phone"
+      },
+      {
+        "text": "The current item is shown in bold"
+      },
+      {
+        "text": "A reader without the admin role is not shown the admin link and cannot open it by URL"
+      }
+    ],
+    "test_cases": [
+      {
+        "id": "TC-01",
+        "title": "The item for the open page is highlighted",
+        "steps": [
+          "Open the Guides page",
+          "Look at the sidebar"
+        ],
+        "expected": "The sidebar shows Guides highlighted",
+        "test_data": "",
+        "covers": [
+          "AC-1"
+        ],
+        "kind": "normal"
+      },
+      {
+        "id": "TC-02",
+        "title": "No other sidebar item is highlighted at the same time",
+        "steps": [
+          "Open the Guides page",
+          "Look at every sidebar item"
+        ],
+        "expected": "Only Guides is highlighted",
+        "test_data": "",
+        "covers": [
+          "AC-1"
+        ],
+        "kind": "unusual"
+      },
+      {
+        "id": "TC-03",
+        "title": "Breadcrumbs show the path to the current page",
+        "steps": [
+          "Open Guides › Getting started",
+          "Read the breadcrumb trail"
+        ],
+        "expected": "The breadcrumbs read Home › Guides › Getting started",
+        "test_data": "",
+        "covers": [
+          "AC-2"
+        ],
+        "kind": "normal"
+      },
+      {
+        "id": "TC-04",
+        "title": "A breadcrumb step shows its hint on hover",
+        "steps": [
+          "Open Guides › Getting started",
+          "Hover over the Guides step"
+        ],
+        "expected": "A hint appears naming the Guides section",
+        "test_data": "",
+        "covers": [
+          "AC-2"
+        ],
+        "kind": "normal"
+      },
+      {
+        "id": "TC-05",
+        "title": "The menu button opens the menu on a phone",
+        "steps": [
+          "Open the site on a 390px wide screen",
+          "Press the menu button"
+        ],
+        "expected": "The sidebar menu is shown",
+        "test_data": "width=390px",
+        "covers": [
+          "AC-3"
+        ],
+        "kind": "normal"
+      },
+      {
+        "id": "TC-06",
+        "title": "The menu closes again on the second press",
+        "steps": [
+          "Open the menu on a phone",
+          "Press the menu button again"
+        ],
+        "expected": "The sidebar menu is hidden",
+        "test_data": "width=390px",
+        "covers": [
+          "AC-3"
+        ],
+        "kind": "normal"
+      },
+      {
+        "id": "TC-07",
+        "title": "The current item is bold",
+        "steps": [
+          "Open the Guides page",
+          "Compare the Guides item with its neighbours"
+        ],
+        "expected": "The Guides item is rendered in bold and the others are not",
+        "test_data": "",
+        "covers": [
+          "AC-4"
+        ],
+        "kind": "normal"
+      },
+      {
+        "id": "TC-08",
+        "title": "A reader without the admin role is refused the admin URL",
+        "steps": [
+          "Sign in as a reader",
+          "Open /admin directly"
+        ],
+        "expected": "The page shows: You do not have access to this page",
+        "test_data": "role=reader",
+        "covers": [
+          "AC-5"
+        ],
+        "kind": "wrong input"
+      },
+      {
+        "id": "TC-09",
+        "title": "A reader without the admin role is not shown the admin link",
+        "steps": [
+          "Sign in as a reader",
+          "Look at the sidebar"
+        ],
+        "expected": "No admin link is shown",
+        "test_data": "role=reader",
+        "covers": [
+          "AC-5"
+        ],
+        "kind": "normal"
+      },
+      {
+        "id": "TC-10",
+        "title": "An admin sees the admin link",
+        "steps": [
+          "Sign in as an admin",
+          "Look at the sidebar"
+        ],
+        "expected": "The admin link is shown",
+        "test_data": "role=admin",
+        "covers": [
+          "AC-5"
+        ],
+        "kind": "normal"
+      },
+      {
+        "id": "TC-11",
+        "title": "The API refuses an action whose button is hidden for this role",
+        "steps": [
+          "Sign in as a reader and confirm the admin button is not shown",
+          "Call the admin action's endpoint directly with that session",
+          "Call the same endpoint as an admin"
+        ],
+        "expected": "The reader's call is refused with 403 and the admin's succeeds",
+        "test_data": "role=reader",
+        "covers": [
+          "AC-5"
+        ],
+        "kind": "wrong input"
+      },
+      {
+        "id": "TC-12",
+        "title": "The menu can be used by keyboard alone with a visible focus ring",
+        "steps": [
+          "Press Tab from the top of the page through every menu item",
+          "Press Enter on one item",
+          "Open the menu on a phone and Tab through it"
+        ],
+        "expected": "Every item takes focus in order, shows a visible focus ring, and Enter opens it",
+        "test_data": "keys=Tab, Enter",
+        "covers": [
+          "AC-3"
+        ],
+        "kind": "unusual"
+      },
+      {
+        "id": "TC-13",
+        "title": "A role change takes effect without signing out",
+        "steps": [
+          "Sign in as an admin in one browser and as that admin's colleague in another",
+          "Change the colleague's role to reader",
+          "Reload an admin page in the colleague's open session"
+        ],
+        "expected": "The revoked role takes effect immediately: the admin page is refused in the existing session, without signing out and in again",
+        "test_data": "role=admin demoted to reader while signed in",
+        "covers": [
+          "AC-5"
+        ],
+        "kind": "unusual"
+      }
+    ]
+  },
+  "output": {
+    "schema_version": "1.0",
+    "tool": "review_tests",
+    "summary": "nothing to fix · 5 criteria · 13 tests",
+    "problems": [],
+    "add_tests": [],
+    "ask_the_po": [],
+    "notes": [
+      "Every criterion has the tests it needs.",
+      "Already covered: 6 things a senior tester checks for this kind of story.",
+      "100% of criteria have at least one test."
+    ]
+  }
+}

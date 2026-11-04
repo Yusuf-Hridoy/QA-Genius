@@ -1,0 +1,35 @@
+{
+  "additionalProperties": false,
+  "description": "A story to check, on its own.",
+  "properties": {
+    "context": {
+      "default": "",
+      "description": "Anything else that decides the answer: limits, rules, what the feature already does. Limits live here as often as in a criterion.",
+      "maxLength": 2000,
+      "title": "Context",
+      "type": "string"
+    },
+    "story": {
+      "description": "The user story or the bug, in the words the team wrote.",
+      "maxLength": 3000,
+      "title": "Story",
+      "type": "string"
+    },
+    "story_type": {
+      "default": "user story",
+      "description": "What kind of thing this is. It changes nothing in the check.",
+      "enum": [
+        "user story",
+        "bug",
+        "feature"
+      ],
+      "title": "Story Type",
+      "type": "string"
+    }
+  },
+  "required": [
+    "story"
+  ],
+  "title": "StoryIn",
+  "type": "object"
+}

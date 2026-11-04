@@ -1,0 +1,253 @@
+{
+  "tool": "review_tests",
+  "input": {
+    "story": "As a shopper, I want my Aurora Storefront account to lock quickly after too many wrong passwords so that my account stays safe.",
+    "context": "Aurora Storefront sign-in. The counter is per account.",
+    "criteria": [
+      {
+        "text": "The account locks after 5 failed sign-in attempts"
+      },
+      {
+        "text": "A locked account stays locked for 30 minutes"
+      }
+    ],
+    "test_cases": [
+      {
+        "id": "TC-01",
+        "title": "The account locks on the fifth wrong password",
+        "steps": [
+          "Open the Aurora Storefront sign-in page",
+          "Enter the right email and a wrong password five times"
+        ],
+        "expected": "The page shows: Account locked for 30 minutes",
+        "test_data": "attempts=5",
+        "covers": [
+          "AC-1"
+        ],
+        "kind": "at the limit"
+      },
+      {
+        "id": "TC-02",
+        "title": "A fourth wrong password does not lock the account",
+        "steps": [
+          "Open the Aurora Storefront sign-in page",
+          "Enter the right email and a wrong password four times",
+          "Enter the right password"
+        ],
+        "expected": "The shopper is signed in and no lock message is shown",
+        "test_data": "attempts=4",
+        "covers": [
+          "AC-1"
+        ],
+        "kind": "at the limit"
+      },
+      {
+        "id": "TC-03",
+        "title": "A locked account is still locked after 29 minutes",
+        "steps": [
+          "Lock the account with five wrong passwords",
+          "Wait 29 minutes",
+          "Enter the right password"
+        ],
+        "expected": "The page shows: Account locked for 30 minutes",
+        "test_data": "wait=29 minutes",
+        "covers": [
+          "AC-2"
+        ],
+        "kind": "at the limit"
+      },
+      {
+        "id": "TC-04",
+        "title": "A locked account opens again after 30 minutes",
+        "steps": [
+          "Lock the account with five wrong passwords",
+          "Wait 30 minutes",
+          "Enter the right password"
+        ],
+        "expected": "The shopper is signed in",
+        "test_data": "wait=30 minutes",
+        "covers": [
+          "AC-2"
+        ],
+        "kind": "at the limit"
+      },
+      {
+        "id": "TC-05",
+        "title": "An unknown email is refused without saying it is unknown",
+        "steps": [
+          "Enter an email no account uses",
+          "Enter any password"
+        ],
+        "expected": "The page shows: That email or password is wrong",
+        "test_data": "email=nobody@example.com",
+        "covers": [
+          "AC-1"
+        ],
+        "kind": "wrong input"
+      }
+    ]
+  },
+  "output": {
+    "schema_version": "1.0",
+    "tool": "review_tests",
+    "summary": "3 to fix · 2 criteria · 5 tests",
+    "problems": [
+      {
+        "id": "G-3f3f",
+        "kind": "gap",
+        "level": "medium",
+        "says": "The limit applies per account, even from different IPs and devices: Counting per network address stops nobody. Anyone can use a second phone or network.",
+        "fix": "Write a test for it.",
+        "criteria": [],
+        "tests": []
+      },
+      {
+        "id": "W-48e8",
+        "kind": "weak",
+        "level": "medium",
+        "says": "TC-04: expected result has no checkable outcome",
+        "fix": "Rewrite it so the expected result can only be true or false, and say the exact values it uses.",
+        "criteria": [],
+        "tests": [
+          "TC-04"
+        ]
+      },
+      {
+        "id": "G-1340",
+        "kind": "gap",
+        "level": "low",
+        "says": "The form submits with the Enter key: Most people press Enter to sign in and never touch the button.",
+        "fix": "Write a test for it.",
+        "criteria": [],
+        "tests": []
+      }
+    ],
+    "add_tests": [
+      {
+        "id": "TC-006",
+        "title": "Sign in with the email typed in capital letters",
+        "steps": [
+          "Open the sign-in page",
+          "Enter USER@EXAMPLE.COM and the correct password",
+          "Submit"
+        ],
+        "expected": "The user is signed in to the same account as user@example.com; no new account or error is created.",
+        "test_data": "email=USER@EXAMPLE.COM",
+        "covers": [
+          "AC-1"
+        ],
+        "kind": "unusual"
+      },
+      {
+        "id": "TC-007",
+        "title": "Unknown email and wrong password give the same message",
+        "steps": [
+          "Sign in as nobody@example.com with any password and note the message",
+          "Sign in as user@example.com with a wrong password and note the message",
+          "Compare the two messages and the two response times"
+        ],
+        "expected": "Both attempts show the identical message, for example 'Email or password is incorrect', and neither says which part was wrong.",
+        "test_data": "email=nobody@example.com / user@example.com, password=WrongPass123",
+        "covers": [
+          "AC-1"
+        ],
+        "kind": "wrong input"
+      },
+      {
+        "id": "TC-008",
+        "title": "Script-like text in the email field is escaped, not executed",
+        "steps": [
+          "Enter <script>alert(1)</script> in the email field",
+          "Enter any password and submit",
+          "Read the error message and view the page source"
+        ],
+        "expected": "Sign-in fails with the normal error; the text appears escaped as plain characters, no dialog opens and no server error page is shown.",
+        "test_data": "email=<script>alert(1)</script>, password=' OR '1'='1",
+        "covers": [
+          "AC-1"
+        ],
+        "kind": "wrong input"
+      },
+      {
+        "id": "TC-009",
+        "title": "The account locks on the stated attempt and not before it",
+        "steps": [
+          "Fail one time fewer than the limit, then sign in with the correct password",
+          "Fail exactly the limit number of times and read the message",
+          "Fail once more and read the message again"
+        ],
+        "expected": "The correct password still works one below the limit; the account locks exactly at the stated attempt, and the attempt after the limit is refused with the same lock message rather than a new error.",
+        "test_data": "limit from the criteria; try limit minus 1, limit, limit plus 1 wrong passwords",
+        "covers": [
+          "AC-1"
+        ],
+        "kind": "at the limit"
+      },
+      {
+        "id": "TC-010",
+        "title": "Failed attempts stop counting once the window has passed",
+        "steps": [
+          "Fail one time fewer than the limit",
+          "Wait until just past the stated window",
+          "Fail the same number of times again and then sign in with the correct password"
+        ],
+        "expected": "The account does not lock, because the first group of attempts fell out of the window; the correct password signs the user in.",
+        "test_data": "window from the criteria, waited out plus one minute",
+        "covers": [
+          "AC-1"
+        ],
+        "kind": "at the limit"
+      },
+      {
+        "id": "TC-011",
+        "title": "Sign in with a leading and trailing space in the email",
+        "steps": [
+          "Open the sign-in page",
+          "Paste '  user@example.com  ' into the email field",
+          "Enter the correct password and submit"
+        ],
+        "expected": "The user is signed in; the stored email is still user@example.com with no spaces.",
+        "test_data": "email='  user@example.com  '",
+        "covers": [
+          "AC-1"
+        ],
+        "kind": "unusual"
+      },
+      {
+        "id": "TC-012",
+        "title": "Boundary value at 6 attempts (AC-1)",
+        "steps": [
+          "Reach 6 failed sign-in attempts.",
+          "Check the result."
+        ],
+        "expected": "6 attempts is past the limit AC-1 states, so it is refused.",
+        "test_data": "6 attempts",
+        "covers": [
+          "AC-1"
+        ],
+        "kind": "at the limit"
+      },
+      {
+        "id": "TC-013",
+        "title": "Boundary value at 31 minutes (AC-2)",
+        "steps": [
+          "Wait 31 minutes.",
+          "Check the result."
+        ],
+        "expected": "31 minutes is past the 30 minutes it stays locked, so it is no longer locked: it works again.",
+        "test_data": "31 minutes",
+        "covers": [
+          "AC-2"
+        ],
+        "kind": "at the limit"
+      }
+    ],
+    "ask_the_po": [],
+    "notes": [
+      "Every criterion has the tests it needs.",
+      "Already covered: 1 thing a senior tester checks for this kind of story.",
+      "100% of criteria have at least one test.",
+      "8 ready tests in add_tests — send them back in test_cases when you have added them."
+    ]
+  }
+}

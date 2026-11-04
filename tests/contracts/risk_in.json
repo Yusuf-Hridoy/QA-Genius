@@ -1,0 +1,94 @@
+{
+  "additionalProperties": false,
+  "description": "One way the feature could fail, scored the way an FMEA scores it.",
+  "properties": {
+    "category": {
+      "default": "functional",
+      "description": "One of: security, performance, reliability, data, usability, accessibility, functional. Anything else is read as functional.",
+      "maxLength": 40,
+      "title": "Category",
+      "type": "string"
+    },
+    "cause": {
+      "default": "",
+      "description": "Why it would happen.",
+      "maxLength": 600,
+      "title": "Cause",
+      "type": "string"
+    },
+    "covered_by": {
+      "description": "The test ids you believe already reach this risk. The check reads the tests themselves and will disagree if the words do not.",
+      "items": {
+        "type": "string"
+      },
+      "maxItems": 300,
+      "title": "Covered By",
+      "type": "array"
+    },
+    "detectability": {
+      "default": 3,
+      "description": "How hard it is to notice, 1 to 5. 5 means nobody would.",
+      "maximum": 5,
+      "minimum": 1,
+      "title": "Detectability",
+      "type": "integer"
+    },
+    "effect": {
+      "default": "",
+      "description": "What the user suffers when it happens.",
+      "maxLength": 600,
+      "title": "Effect",
+      "type": "string"
+    },
+    "id": {
+      "default": "",
+      "description": "Your id for this risk, such as \"R1\".",
+      "maxLength": 40,
+      "title": "Id",
+      "type": "string"
+    },
+    "likelihood": {
+      "default": 3,
+      "description": "How likely it is, 1 to 5.",
+      "maximum": 5,
+      "minimum": 1,
+      "title": "Likelihood",
+      "type": "integer"
+    },
+    "related_criteria": {
+      "description": "The criterion ids this risk belongs to, such as [\"AC-2\"].",
+      "items": {
+        "type": "string"
+      },
+      "maxItems": 60,
+      "title": "Related Criteria",
+      "type": "array"
+    },
+    "severity": {
+      "default": 3,
+      "description": "How bad it is, 1 to 5.",
+      "maximum": 5,
+      "minimum": 1,
+      "title": "Severity",
+      "type": "integer"
+    },
+    "test_idea": {
+      "default": "",
+      "description": "One line saying what a test for this would do.",
+      "maxLength": 600,
+      "title": "Test Idea",
+      "type": "string"
+    },
+    "title": {
+      "description": "The failure, in one line.",
+      "maxLength": 300,
+      "title": "Title",
+      "type": "string"
+    }
+  },
+  "required": [
+    "title"
+  ],
+  "title": "RiskIn",
+  "type": "object"
+}

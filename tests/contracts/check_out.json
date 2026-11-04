@@ -1,0 +1,49 @@
+{
+  "additionalProperties": false,
+  "description": "One of the release checks.",
+  "properties": {
+    "details": {
+      "description": "The short lines underneath it.",
+      "items": {
+        "type": "string"
+      },
+      "title": "Details",
+      "type": "array"
+    },
+    "id": {
+      "description": "Which check this is.",
+      "title": "Id",
+      "type": "string"
+    },
+    "status": {
+      "description": "pass: fine. warn: look at it. fail: blocks the release. accepted: signed off in writing. not_checked: you sent nothing for it \u2014 this never means fine.",
+      "enum": [
+        "pass",
+        "warn",
+        "fail",
+        "accepted",
+        "not_checked"
+      ],
+      "title": "Status",
+      "type": "string"
+    },
+    "summary": {
+      "description": "What this check found, in one line.",
+      "title": "Summary",
+      "type": "string"
+    },
+    "title": {
+      "description": "Its name, for a human.",
+      "title": "Title",
+      "type": "string"
+    }
+  },
+  "required": [
+    "id",
+    "title",
+    "status",
+    "summary"
+  ],
+  "title": "CheckOut",
+  "type": "object"
+}

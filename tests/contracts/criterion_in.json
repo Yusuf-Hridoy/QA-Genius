@@ -1,0 +1,24 @@
+{
+  "additionalProperties": false,
+  "description": "One acceptance criterion: one rule the feature has to obey.",
+  "properties": {
+    "id": {
+      "default": "",
+      "description": "Your id for this criterion. Use the shape \"AC-1\" and it is kept exactly. Leave it out and ids are given in order: AC-1, AC-2, AC-3. Any other shape is renumbered to AC-1\u2026AC-n by position \u2014 the answer says so in notes, and the ids in your test cases' \"covers\" are renumbered to match.",
+      "maxLength": 40,
+      "title": "Id",
+      "type": "string"
+    },
+    "text": {
+      "description": "The rule in one sentence, with the real numbers in it. \"The account locks for 30 minutes after 5 wrong passwords\" \u2014 not \"the account locks quickly\".",
+      "maxLength": 1000,
+      "title": "Text",
+      "type": "string"
+    }
+  },
+  "required": [
+    "text"
+  ],
+  "title": "CriterionIn",
+  "type": "object"
+}

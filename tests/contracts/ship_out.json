@@ -1,0 +1,327 @@
+{
+  "$defs": {
+    "CheckOut": {
+      "additionalProperties": false,
+      "description": "One of the release checks.",
+      "properties": {
+        "details": {
+          "description": "The short lines underneath it.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Details",
+          "type": "array"
+        },
+        "id": {
+          "description": "Which check this is.",
+          "title": "Id",
+          "type": "string"
+        },
+        "status": {
+          "description": "pass: fine. warn: look at it. fail: blocks the release. accepted: signed off in writing. not_checked: you sent nothing for it \u2014 this never means fine.",
+          "enum": [
+            "pass",
+            "warn",
+            "fail",
+            "accepted",
+            "not_checked"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "summary": {
+          "description": "What this check found, in one line.",
+          "title": "Summary",
+          "type": "string"
+        },
+        "title": {
+          "description": "Its name, for a human.",
+          "title": "Title",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "title",
+        "status",
+        "summary"
+      ],
+      "title": "CheckOut",
+      "type": "object"
+    },
+    "GradeOut": {
+      "additionalProperties": false,
+      "description": "A letter for the release, and the arithmetic behind it.",
+      "properties": {
+        "letter": {
+          "description": "The grade, such as \"B+\" or \"F\".",
+          "title": "Letter",
+          "type": "string"
+        },
+        "lines": {
+          "description": "One line per check, saying what it scored and why.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Lines",
+          "type": "array"
+        },
+        "max": {
+          "description": "Points those checks were worth.",
+          "title": "Max",
+          "type": "integer"
+        },
+        "points": {
+          "description": "Points scored by the checks that ran.",
+          "title": "Points",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "letter",
+        "points",
+        "max"
+      ],
+      "title": "GradeOut",
+      "type": "object"
+    },
+    "Problem": {
+      "additionalProperties": false,
+      "description": "One thing that is wrong, and what to do about it.",
+      "properties": {
+        "criteria": {
+          "description": "The criterion ids this is about.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Criteria",
+          "type": "array"
+        },
+        "fix": {
+          "description": "What to do about it, as an instruction.",
+          "title": "Fix",
+          "type": "string"
+        },
+        "id": {
+          "description": "A stable id for this problem. The same problem keeps the same id between calls, so you can say which one you fixed.",
+          "title": "Id",
+          "type": "string"
+        },
+        "kind": {
+          "description": "limit: a number two places disagree about, or nobody decided. gap: something a senior tester always checks that no test does. copy: two tests that are the same test. weak: a test whose expected result cannot be judged true or false. depth: a criterion without enough tests, or without the kinds it needs. clarity: a word nobody can test. epic: the story is really several stories. missing: a criterion with no test at all.",
+          "enum": [
+            "limit",
+            "gap",
+            "copy",
+            "weak",
+            "depth",
+            "clarity",
+            "epic",
+            "missing"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "level": {
+          "description": "high: fix this before writing more. medium: fix it before release. low: worth a look.",
+          "enum": [
+            "high",
+            "medium",
+            "low"
+          ],
+          "title": "Level",
+          "type": "string"
+        },
+        "says": {
+          "description": "What is wrong, in one sentence.",
+          "title": "Says",
+          "type": "string"
+        },
+        "tests": {
+          "description": "The test ids this is about.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Tests",
+          "type": "array"
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "level",
+        "says",
+        "fix"
+      ],
+      "title": "Problem",
+      "type": "object"
+    },
+    "TestIn": {
+      "additionalProperties": false,
+      "description": "One test case.",
+      "properties": {
+        "covers": {
+          "description": "The criterion ids this test proves, such as [\"AC-1\", \"AC-3\"]. Use the same ids you sent in criteria. A criterion no test names is reported as having no tests.",
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 60,
+          "title": "Covers",
+          "type": "array"
+        },
+        "expected": {
+          "description": "What must be true afterwards, worded so it can only be true or false. \"The page shows: Locked for 30 minutes\" \u2014 not \"it works\".",
+          "maxLength": 1000,
+          "title": "Expected",
+          "type": "string"
+        },
+        "id": {
+          "description": "Your id for this test, such as \"TC-04\".",
+          "maxLength": 40,
+          "title": "Id",
+          "type": "string"
+        },
+        "kind": {
+          "default": "normal",
+          "description": "What kind of test this is. \"normal\" is the path that works; \"wrong input\" is bad data or no permission; \"at the limit\" uses the exact boundary value; \"unusual\" is everything rarer.",
+          "enum": [
+            "normal",
+            "wrong input",
+            "at the limit",
+            "unusual"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "steps": {
+          "description": "What the tester does, one action per step. At least one.",
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 50,
+          "minItems": 1,
+          "title": "Steps",
+          "type": "array"
+        },
+        "test_data": {
+          "default": "",
+          "description": "The exact values this test uses: the amount, the file size, the number of tries. Say \"$50.00\", not \"an order over the limit\".",
+          "maxLength": 1000,
+          "title": "Test Data",
+          "type": "string"
+        },
+        "title": {
+          "description": "What this test proves, in one line.",
+          "maxLength": 300,
+          "title": "Title",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "title",
+        "steps",
+        "expected"
+      ],
+      "title": "TestIn",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "The release answer: everything above, plus the decision itself.",
+  "properties": {
+    "add_tests": {
+      "description": "Ready-written tests for gaps nothing covered. They are already in the shape this tool takes back, so you can send them straight in.",
+      "items": {
+        "$ref": "#/$defs/TestIn"
+      },
+      "title": "Add Tests",
+      "type": "array"
+    },
+    "ask_the_po": {
+      "description": "Questions no tool can answer because nobody has decided yet. Show these to the user \u2014 do not guess the answers.",
+      "items": {
+        "type": "string"
+      },
+      "title": "Ask The Po",
+      "type": "array"
+    },
+    "checks": {
+      "description": "Every check, in a fixed order.",
+      "items": {
+        "$ref": "#/$defs/CheckOut"
+      },
+      "title": "Checks",
+      "type": "array"
+    },
+    "decision": {
+      "description": "ready: nothing to do. ready with known risks: it can go, and somebody should look at what is listed. not ready: a check failed.",
+      "enum": [
+        "ready",
+        "ready with known risks",
+        "not ready"
+      ],
+      "title": "Decision",
+      "type": "string"
+    },
+    "grade": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/GradeOut"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "The letter, or null when no check had anything to score."
+    },
+    "notes": {
+      "description": "Anything else worth knowing that is not a problem.",
+      "items": {
+        "type": "string"
+      },
+      "title": "Notes",
+      "type": "array"
+    },
+    "path_to_ready": {
+      "description": "What to do, in order, to turn this into ready.",
+      "items": {
+        "type": "string"
+      },
+      "title": "Path To Ready",
+      "type": "array"
+    },
+    "problems": {
+      "description": "Everything wrong, worst first. Fix every high one and call the tool again.",
+      "items": {
+        "$ref": "#/$defs/Problem"
+      },
+      "title": "Problems",
+      "type": "array"
+    },
+    "schema_version": {
+      "default": "1.0",
+      "description": "The shape of this answer. It changes only when fields do.",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "summary": {
+      "description": "One line for a human to read, such as \"6 to fix \u00b7 5 criteria \u00b7 14 tests\". Show it; do not parse it.",
+      "title": "Summary",
+      "type": "string"
+    },
+    "tool": {
+      "description": "Which tool answered.",
+      "title": "Tool",
+      "type": "string"
+    }
+  },
+  "required": [
+    "tool",
+    "summary",
+    "decision"
+  ],
+  "title": "ShipOut",
+  "type": "object"
+}

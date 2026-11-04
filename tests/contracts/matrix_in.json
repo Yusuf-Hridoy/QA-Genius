@@ -1,0 +1,45 @@
+{
+  "additionalProperties": false,
+  "description": "How much of a test matrix the planned runs actually cover.",
+  "properties": {
+    "covered_pairs": {
+      "default": 0,
+      "description": "How many of those pairs the runs reach.",
+      "minimum": 0,
+      "title": "Covered Pairs",
+      "type": "integer"
+    },
+    "factors": {
+      "description": "What varies between runs, such as [\"browser\", \"device\"].",
+      "items": {
+        "type": "string"
+      },
+      "maxItems": 40,
+      "title": "Factors",
+      "type": "array"
+    },
+    "manual_only": {
+      "default": 0,
+      "description": "How many runs nobody can automate.",
+      "minimum": 0,
+      "title": "Manual Only",
+      "type": "integer"
+    },
+    "runs": {
+      "default": 0,
+      "description": "How many runs are planned.",
+      "minimum": 0,
+      "title": "Runs",
+      "type": "integer"
+    },
+    "valid_pairs": {
+      "default": 0,
+      "description": "How many pairs of values are worth covering.",
+      "minimum": 0,
+      "title": "Valid Pairs",
+      "type": "integer"
+    }
+  },
+  "title": "MatrixIn",
+  "type": "object"
+}

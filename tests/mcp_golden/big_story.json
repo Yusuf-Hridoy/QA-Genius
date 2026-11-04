@@ -1,0 +1,49 @@
+{
+  "tool": "check_story",
+  "input": {
+    "story": "As a registered user, I want to manage my profile, change my password, set up two-factor authentication with an authenticator app, see and revoke my active sessions, link my Google or GitHub account, choose light or dark theme with auto-saving, upload an avatar up to 5 MB, and permanently delete my account, so that my account is accurate and secure.",
+    "context": "",
+    "story_type": "user story"
+  },
+  "output": {
+    "schema_version": "1.0",
+    "tool": "check_story",
+    "summary": "3 to fix (2 high) · 1 unclear word · reads as several stories",
+    "problems": [
+      {
+        "id": "E-ce88",
+        "kind": "epic",
+        "level": "high",
+        "says": "This story is really 7 features: Password, Two-factor, Sessions, OAuth, Preferences, Upload, Deletion",
+        "fix": "Split it into one story per feature, or accept that each part gets only a few tests.",
+        "criteria": [],
+        "tests": []
+      },
+      {
+        "id": "M-2709",
+        "kind": "missing",
+        "level": "high",
+        "says": "Nothing says what happens when it fails.",
+        "fix": "The story only describes the path where everything works. Say what the user sees when the input is invalid, the limit is reached or the save fails — that is the half the tests come from.",
+        "criteria": [],
+        "tests": []
+      },
+      {
+        "id": "C-86a8",
+        "kind": "clarity",
+        "level": "medium",
+        "says": "“secure” is not something anyone can test.",
+        "fix": "Say the rule: “sent over HTTPS, never written to a log” instead.",
+        "criteria": [],
+        "tests": []
+      }
+    ],
+    "add_tests": [],
+    "ask_the_po": [
+      "“secure”: what is the real number or rule here?"
+    ],
+    "notes": [
+      "Features found in the story: Password, Two-factor, Sessions, OAuth, Preferences, Upload, Deletion."
+    ]
+  }
+}

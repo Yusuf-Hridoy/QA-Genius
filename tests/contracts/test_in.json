@@ -1,0 +1,70 @@
+{
+  "additionalProperties": false,
+  "description": "One test case.",
+  "properties": {
+    "covers": {
+      "description": "The criterion ids this test proves, such as [\"AC-1\", \"AC-3\"]. Use the same ids you sent in criteria. A criterion no test names is reported as having no tests.",
+      "items": {
+        "type": "string"
+      },
+      "maxItems": 60,
+      "title": "Covers",
+      "type": "array"
+    },
+    "expected": {
+      "description": "What must be true afterwards, worded so it can only be true or false. \"The page shows: Locked for 30 minutes\" \u2014 not \"it works\".",
+      "maxLength": 1000,
+      "title": "Expected",
+      "type": "string"
+    },
+    "id": {
+      "description": "Your id for this test, such as \"TC-04\".",
+      "maxLength": 40,
+      "title": "Id",
+      "type": "string"
+    },
+    "kind": {
+      "default": "normal",
+      "description": "What kind of test this is. \"normal\" is the path that works; \"wrong input\" is bad data or no permission; \"at the limit\" uses the exact boundary value; \"unusual\" is everything rarer.",
+      "enum": [
+        "normal",
+        "wrong input",
+        "at the limit",
+        "unusual"
+      ],
+      "title": "Kind",
+      "type": "string"
+    },
+    "steps": {
+      "description": "What the tester does, one action per step. At least one.",
+      "items": {
+        "type": "string"
+      },
+      "maxItems": 50,
+      "minItems": 1,
+      "title": "Steps",
+      "type": "array"
+    },
+    "test_data": {
+      "default": "",
+      "description": "The exact values this test uses: the amount, the file size, the number of tries. Say \"$50.00\", not \"an order over the limit\".",
+      "maxLength": 1000,
+      "title": "Test Data",
+      "type": "string"
+    },
+    "title": {
+      "description": "What this test proves, in one line.",
+      "maxLength": 300,
+      "title": "Title",
+      "type": "string"
+    }
+  },
+  "required": [
+    "id",
+    "title",
+    "steps",
+    "expected"
+  ],
+  "title": "TestIn",
+  "type": "object"
+}

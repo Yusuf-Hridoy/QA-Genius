@@ -8,3 +8,4 @@ python-multipart
 httpx
 openpyxl
 defusedxml
+mcp-types==2.3.0

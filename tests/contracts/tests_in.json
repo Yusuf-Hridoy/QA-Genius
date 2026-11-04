@@ -1,0 +1,140 @@
+{
+  "$defs": {
+    "CriterionIn": {
+      "additionalProperties": false,
+      "description": "One acceptance criterion: one rule the feature has to obey.",
+      "properties": {
+        "id": {
+          "default": "",
+          "description": "Your id for this criterion. Use the shape \"AC-1\" and it is kept exactly. Leave it out and ids are given in order: AC-1, AC-2, AC-3. Any other shape is renumbered to AC-1\u2026AC-n by position \u2014 the answer says so in notes, and the ids in your test cases' \"covers\" are renumbered to match.",
+          "maxLength": 40,
+          "title": "Id",
+          "type": "string"
+        },
+        "text": {
+          "description": "The rule in one sentence, with the real numbers in it. \"The account locks for 30 minutes after 5 wrong passwords\" \u2014 not \"the account locks quickly\".",
+          "maxLength": 1000,
+          "title": "Text",
+          "type": "string"
+        }
+      },
+      "required": [
+        "text"
+      ],
+      "title": "CriterionIn",
+      "type": "object"
+    },
+    "TestIn": {
+      "additionalProperties": false,
+      "description": "One test case.",
+      "properties": {
+        "covers": {
+          "description": "The criterion ids this test proves, such as [\"AC-1\", \"AC-3\"]. Use the same ids you sent in criteria. A criterion no test names is reported as having no tests.",
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 60,
+          "title": "Covers",
+          "type": "array"
+        },
+        "expected": {
+          "description": "What must be true afterwards, worded so it can only be true or false. \"The page shows: Locked for 30 minutes\" \u2014 not \"it works\".",
+          "maxLength": 1000,
+          "title": "Expected",
+          "type": "string"
+        },
+        "id": {
+          "description": "Your id for this test, such as \"TC-04\".",
+          "maxLength": 40,
+          "title": "Id",
+          "type": "string"
+        },
+        "kind": {
+          "default": "normal",
+          "description": "What kind of test this is. \"normal\" is the path that works; \"wrong input\" is bad data or no permission; \"at the limit\" uses the exact boundary value; \"unusual\" is everything rarer.",
+          "enum": [
+            "normal",
+            "wrong input",
+            "at the limit",
+            "unusual"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "steps": {
+          "description": "What the tester does, one action per step. At least one.",
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 50,
+          "minItems": 1,
+          "title": "Steps",
+          "type": "array"
+        },
+        "test_data": {
+          "default": "",
+          "description": "The exact values this test uses: the amount, the file size, the number of tries. Say \"$50.00\", not \"an order over the limit\".",
+          "maxLength": 1000,
+          "title": "Test Data",
+          "type": "string"
+        },
+        "title": {
+          "description": "What this test proves, in one line.",
+          "maxLength": 300,
+          "title": "Title",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "title",
+        "steps",
+        "expected"
+      ],
+      "title": "TestIn",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "A story, its criteria and the tests written for them.",
+  "properties": {
+    "context": {
+      "default": "",
+      "description": "Anything else that decides the answer: limits, rules, what the feature already does.",
+      "maxLength": 2000,
+      "title": "Context",
+      "type": "string"
+    },
+    "criteria": {
+      "description": "The acceptance criteria, in order.",
+      "items": {
+        "$ref": "#/$defs/CriterionIn"
+      },
+      "maxItems": 60,
+      "title": "Criteria",
+      "type": "array"
+    },
+    "story": {
+      "description": "The user story or the bug, in the words the team wrote.",
+      "maxLength": 3000,
+      "title": "Story",
+      "type": "string"
+    },
+    "test_cases": {
+      "description": "The tests you wrote for those criteria.",
+      "items": {
+        "$ref": "#/$defs/TestIn"
+      },
+      "maxItems": 300,
+      "title": "Test Cases",
+      "type": "array"
+    }
+  },
+  "required": [
+    "story",
+    "criteria",
+    "test_cases"
+  ],
+  "title": "TestsIn",
+  "type": "object"
+}

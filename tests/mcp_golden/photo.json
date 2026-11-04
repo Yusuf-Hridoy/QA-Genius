@@ -1,0 +1,264 @@
+{
+  "tool": "review_tests",
+  "input": {
+    "story": "As a registered user, I want to upload a profile photo so that other users can recognise me.",
+    "context": "Profile page. Accepted formats: JPEG and PNG. Maximum size 2 MB. The photo is cropped to a square.",
+    "criteria": [
+      {
+        "text": "Given the user is on the profile page, When the user selects a JPEG photo under 2 megabytes And uploads the photo, Then the photo is cropped to a square And saved And shown on the profile"
+      },
+      {
+        "text": "Given the user is on the profile page, When the user selects a PNG photo under 2 megabytes And uploads the photo, Then the photo is cropped to a square And saved And shown on the profile"
+      },
+      {
+        "text": "Given the user is on the profile page, When the user selects a photo larger than 2 megabytes And uploads the photo, Then the upload is rejected with a message about the 2 MB limit"
+      },
+      {
+        "text": "When the user selects a file in a format other than JPEG or PNG, Then the upload is rejected with a message"
+      }
+    ],
+    "test_cases": [
+      {
+        "id": "TC-01",
+        "title": "A JPEG under the size limit is saved",
+        "steps": [
+          "Open the profile page",
+          "Select a 1.5 MB JPEG",
+          "Upload it"
+        ],
+        "expected": "The photo is cropped to a square and shown on the profile",
+        "test_data": "size=1.5 MB; format=JPEG",
+        "covers": [
+          "AC-1"
+        ],
+        "kind": "normal"
+      },
+      {
+        "id": "TC-02",
+        "title": "A PNG under the size limit is saved",
+        "steps": [
+          "Open the profile page",
+          "Select a 1.5 MB PNG",
+          "Upload it"
+        ],
+        "expected": "The photo is cropped to a square and shown on the profile",
+        "test_data": "size=1.5 MB; format=PNG",
+        "covers": [
+          "AC-2"
+        ],
+        "kind": "normal"
+      },
+      {
+        "id": "TC-03",
+        "title": "A photo over the size limit is refused",
+        "steps": [
+          "Open the profile page",
+          "Select a 2.5 MB JPEG",
+          "Upload it"
+        ],
+        "expected": "The page shows a message about the 2 MB limit",
+        "test_data": "size=2.5 MB",
+        "covers": [
+          "AC-3"
+        ],
+        "kind": "at the limit"
+      },
+      {
+        "id": "TC-04",
+        "title": "A file in another format is refused",
+        "steps": [
+          "Open the profile page",
+          "Select a GIF",
+          "Upload it"
+        ],
+        "expected": "The page shows: Use a JPEG or PNG image",
+        "test_data": "format=GIF",
+        "covers": [
+          "AC-4"
+        ],
+        "kind": "wrong input"
+      }
+    ]
+  },
+  "output": {
+    "schema_version": "1.0",
+    "tool": "review_tests",
+    "summary": "6 to fix (2 high) · 4 criteria · 4 tests",
+    "problems": [
+      {
+        "id": "L-00d1",
+        "kind": "limit",
+        "level": "high",
+        "says": "AC-1 says \"under 2 megabytes\" (so exactly 2 MB is refused) but AC-3 only refuses photos \"larger than 2 megabytes\" (so exactly 2 MB is accepted). Decide which is right.",
+        "fix": "Settle the number in the criterion, then make the test agree with it.",
+        "criteria": [],
+        "tests": []
+      },
+      {
+        "id": "L-8750",
+        "kind": "limit",
+        "level": "high",
+        "says": "The context says \"2 MB\" (so exactly 2 MB works) but AC-2 says \"under 2 megabytes\" (so exactly 2 MB doesn't). Decide which is right.",
+        "fix": "Settle the number in the criterion, then make the test agree with it.",
+        "criteria": [],
+        "tests": []
+      },
+      {
+        "id": "D-7e79",
+        "kind": "depth",
+        "level": "medium",
+        "says": "AC-1 has only one test, no test for wrong input, no test at the limits.",
+        "fix": "Add a second test, a test for wrong input, a test at the limit, using the exact value for AC-1.",
+        "criteria": [
+          "AC-1"
+        ],
+        "tests": [
+          "TC-01"
+        ]
+      },
+      {
+        "id": "D-5770",
+        "kind": "depth",
+        "level": "medium",
+        "says": "AC-2 has only one test, no test for wrong input, no test at the limits.",
+        "fix": "Add a second test, a test for wrong input, a test at the limit, using the exact value for AC-2.",
+        "criteria": [
+          "AC-2"
+        ],
+        "tests": [
+          "TC-02"
+        ]
+      },
+      {
+        "id": "D-6ac6",
+        "kind": "depth",
+        "level": "medium",
+        "says": "AC-3 has only one test, no test for wrong input.",
+        "fix": "Add a second test, a test for wrong input for AC-3.",
+        "criteria": [
+          "AC-3"
+        ],
+        "tests": [
+          "TC-03"
+        ]
+      },
+      {
+        "id": "D-1293",
+        "kind": "depth",
+        "level": "medium",
+        "says": "AC-4 has only one test.",
+        "fix": "Add a second test for AC-4.",
+        "criteria": [
+          "AC-4"
+        ],
+        "tests": [
+          "TC-04"
+        ]
+      }
+    ],
+    "add_tests": [
+      {
+        "id": "TC-005",
+        "title": "An executable renamed to .jpg is refused",
+        "steps": [
+          "Upload avatar.jpg, which is really a non-image file",
+          "Upload a text file renamed to photo.png",
+          "Upload a real JPEG to confirm the happy path still works"
+        ],
+        "expected": "Both disguised files are refused with a message about the file type, nothing is written to storage, and the real JPEG still uploads.",
+        "test_data": "avatar.jpg (non-image content), photo.png (text content), real.jpg",
+        "covers": [
+          "AC-1"
+        ],
+        "kind": "wrong input"
+      },
+      {
+        "id": "TC-006",
+        "title": "A 0-byte file is refused with a readable message",
+        "steps": [
+          "Upload empty.jpg",
+          "Read the message",
+          "Reload the profile page"
+        ],
+        "expected": "The upload is refused with a message saying the file is empty; no broken image placeholder is stored and the previous avatar is still shown.",
+        "test_data": "empty.jpg, 0 bytes",
+        "covers": [
+          "AC-1"
+        ],
+        "kind": "at the limit"
+      },
+      {
+        "id": "TC-007",
+        "title": "A small file with enormous pixel dimensions is handled, not crashed on",
+        "steps": [
+          "Upload the 20000 by 20000 pixel image",
+          "Watch the response and the server memory while it is processed",
+          "Reload the profile page"
+        ],
+        "expected": "Either the image is refused with a message about its dimensions or it is resized successfully; the request returns within the normal time and the server does not run out of memory.",
+        "test_data": "large.png, 20000 x 20000 pixels, well under the size limit",
+        "covers": [
+          "AC-1"
+        ],
+        "kind": "unusual"
+      },
+      {
+        "id": "TC-008",
+        "title": "An upload interrupted by a lost connection reports the failure",
+        "steps": [
+          "Start uploading an image and cut the network connection part way through",
+          "Restore the connection and read the page",
+          "Retry the upload"
+        ],
+        "expected": "The page shows a clear failure message and offers a retry, the old avatar is unchanged, and the retry completes normally.",
+        "test_data": "a file large enough to still be uploading when the connection is cut",
+        "covers": [
+          "AC-1"
+        ],
+        "kind": "wrong input"
+      },
+      {
+        "id": "TC-009",
+        "title": "Cancelling a running upload leaves the old avatar in place",
+        "steps": [
+          "Start uploading a large image and press Cancel while the progress bar is moving",
+          "Reload the profile page",
+          "Upload a small image to confirm the control still works"
+        ],
+        "expected": "The upload stops, the old avatar is still shown, no partial file appears in storage and the next upload succeeds.",
+        "test_data": "a file large enough to show a progress bar, cancelled part way",
+        "covers": [
+          "AC-1"
+        ],
+        "kind": "unusual"
+      },
+      {
+        "id": "TC-010",
+        "title": "Boundary values at 1.99 MB / 2.01 MB (AC-1)",
+        "steps": [
+          "Select a JPEG photo of 1.99 MB.",
+          "Upload the photo.",
+          "Select a JPEG photo of 2.01 MB.",
+          "Upload the photo.",
+          "Check the result."
+        ],
+        "expected": "At 1.99 MB: the photo is cropped to a square; saved; shown on the profile. At 2.01 MB: the upload is rejected with a message about the 2 MB limit (AC-3).",
+        "test_data": "1.99 MB, 2.01 MB (JPEG photo)",
+        "covers": [
+          "AC-1"
+        ],
+        "kind": "at the limit"
+      }
+    ],
+    "ask_the_po": [
+      "AC-1 says \"under 2 megabytes\" (so exactly 2 MB is refused) but AC-3 only refuses photos \"larger than 2 megabytes\" (so exactly 2 MB is accepted). Decide which is right.",
+      "The context says \"2 MB\" (so exactly 2 MB works) but AC-2 says \"under 2 megabytes\" (so exactly 2 MB doesn't). Decide which is right."
+    ],
+    "notes": [
+      "4 of 4 criteria need more tests — 4 have only one test, 3 have no test for wrong input.",
+      "Already covered: 1 thing a senior tester checks for this kind of story.",
+      "100% of criteria have at least one test.",
+      "6 ready tests in add_tests — send them back in test_cases when you have added them."
+    ]
+  }
+}

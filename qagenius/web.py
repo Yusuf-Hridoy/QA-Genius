@@ -97,14 +97,15 @@ from qagenius.shadow_qa.review import (
     checklist_block,
     is_principal,
     reason_for,
-    limit_conflicts,
     review_automation,
     review_risks,
-    review_test_cases,
     risk_titles,
-    with_context,
 )
-from qagenius.shadow_qa.story_rules import StoryNote, review_story
+from qagenius.shadow_qa.story_rules import StoryNote
+from qagenius.mcp_server import transport as mcp_transport
+from qagenius.services.release_decision import decide_release, release_grade
+from qagenius.services.story_review import review_story_text
+from qagenius.services.test_review import review_tests as review_tests_service
 from qagenius.story_text import (
     split_confidence,
     strip_confidence_deep,
@@ -116,7 +117,6 @@ from qagenius.acceptance import (
     Acceptance,
     read_all as read_acceptances,
 )
-from qagenius.ship_grade import grade_for
 from qagenius.ship_check import (
     ACCEPT_WORDS,
     ACCEPTABLE,
@@ -129,7 +129,6 @@ from qagenius.ship_check import (
     VERDICT_LABELS,
     ShipInputs,
     ShipReport,
-    compute_ship_report,
 )
 from qagenius.risk_radar import (
     MAX_RISKS,
@@ -303,6 +302,15 @@ def content_security_policy(nonce: str) -> str:
     return "; ".join((*_CSP_PARTS, f"script-src 'self' 'nonce-{nonce}'"))
 
 
+# The MCP door answers JSON to a server, never a document to a browser, so
+# the page policy above has nothing to say about it. It gets the policy that
+# fits an API instead: load nothing, frame nothing, run nothing. No CORS
+# header is sent anywhere in this app, here least of all — an MCP client
+# calls this from its own server, and a header inviting a web page to call
+# it would be a wider door than anybody asked for.
+API_CSP = "default-src 'none'; frame-ancestors 'none'; base-uri 'none'"
+
+
 @app.middleware("http")
 async def security_headers(request: Request, call_next):
     """The same headers on every response, including the error ones."""
@@ -311,9 +319,12 @@ async def security_headers(request: Request, call_next):
     response = await call_next(request)
     for name, value in SECURITY_HEADERS.items():
         response.headers.setdefault(name, value)
-    response.headers.setdefault(
-        "Content-Security-Policy", content_security_policy(nonce)
+    policy = (
+        API_CSP
+        if request.url.path == "/mcp"
+        else content_security_policy(nonce)
     )
+    response.headers.setdefault("Content-Security-Policy", policy)
     return response
 
 
@@ -378,6 +389,39 @@ templates.env.globals["syntax_words"] = SYNTAX_WORDS
 @app.get("/health")
 def health() -> str:
     return "ok"
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# The second door: QA-Genius as tools an AI agent can call
+# ──────────────────────────────────────────────────────────────────────────────
+
+
+@app.post("/mcp", include_in_schema=False)
+async def mcp_door(request: Request) -> Response:
+    """The MCP server. Off in production until QAG_MCP_ENABLED says otherwise.
+
+    A route, not a mounted sub-app, so /mcp is the address a client is given
+    and nothing redirects it. Why it is hand-written is in
+    docs/decisions/001-mcp-transport.md.
+    """
+    return await mcp_transport.handle(request)
+
+
+@app.get("/mcp", include_in_schema=False)
+def mcp_door_get() -> Response:
+    """A browser or an SSE client asking to listen.
+
+    This door is stateless and never pushes anything, so there is nothing to
+    open a stream for. 405 is the honest answer; a client that gets it falls
+    back to posting, which is all it ever needed to do.
+    """
+    if not mcp_transport.enabled():
+        return JSONResponse({"detail": "Not Found"}, status_code=404)
+    return JSONResponse(
+        {"detail": "POST JSON-RPC to this address. This server has no stream."},
+        status_code=405,
+        headers={"Allow": "POST"},
+    )
 
 
 # What a story id may be made of. The same sentence is in public/story_store.js
@@ -688,15 +732,6 @@ def _score_tone(score: int) -> str:
     return "warn" if score >= 45 else "bad"
 
 
-def _shadow_story(
-    story: str, criteria: list[str], context: str = ""
-) -> tuple[StoryNote | None, list[StoryNote]]:
-    """The Principal QA read of the story: the epic warning, then the rest."""
-    found = review_story(story, criteria, context)
-    epic = next((note for note in found if note.epic), None)
-    return epic, [note for note in found if not note.epic]
-
-
 def _story_reasons(
     epic: StoryNote | None,
     notes: list[StoryNote],
@@ -780,16 +815,17 @@ def _story_result_context(
         strip_markers(one) for one in result.generated_acceptance_criteria
     ]
     # Same click: the rules run on the result that just came back, no AI.
-    epic, shadow_notes = _shadow_story(story, criteria_text, context)
+    # One read of the story serves the card, the reasons and the stored data,
+    # so the three can never disagree about what the rules found.
+    shadow = review_story_text(story, context, criteria=criteria_text)
+    epic, shadow_notes = shadow.epic, shadow.notes
+    limit_notes = shadow.limit_notes
     return {
         "epic": epic,
         "shadow_notes": shadow_notes,
         # A limit two criteria disagree about, or none of them decides, is
         # worth saying here: it is cheaper to fix a criterion than a suite.
-        "limit_notes": limit_conflicts(
-            with_context(number_criteria(criteria_text), context),
-            [],
-        ),
+        "limit_notes": limit_notes,
         "result": result,
         "clarity_score": clarity,
         "score_tone": _score_tone(clarity),
@@ -806,27 +842,8 @@ def _story_result_context(
         "analysis_data": strip_confidence_deep(result.model_dump()),
         # The same notes as data. The Overview picks the one open question
         # worth answering next out of this; nothing here is recomputed.
-        "reason_cards": _story_reasons(
-            epic,
-            shadow_notes,
-            limit_conflicts(
-                with_context(
-                    number_criteria(criteria_text), context
-                ),
-                [],
-            ),
-            result,
-        ),
-        "notes_data": _story_notes_data(
-            epic,
-            shadow_notes,
-            limit_conflicts(
-                with_context(
-                    number_criteria(criteria_text), context
-                ),
-                [],
-            ),
-        ),
+        "reason_cards": _story_reasons(epic, shadow_notes, limit_notes, result),
+        "notes_data": _story_notes_data(epic, shadow_notes, limit_notes),
         # Criteria were drafted, so "no acceptance criteria" is no longer
         # true. Ship check drops the same lines.
         "missing_elements": without_criteria_lines(
@@ -1393,12 +1410,8 @@ def _with_principal_cases(
     story: str, criteria: list[Criterion], result: TestCaseList, context: str = ""
 ) -> tuple[TestCaseList, CaseReview]:
     """The AI's cases plus the ones it missed. Every count is then taken from this."""
-    review = review_test_cases(story, criteria, result, context)
-    merged = TestCaseList(
-        test_cases=list(result.test_cases) + list(review.added),
-        summary=result.summary,
-    )
-    return merged, review
+    reviewed = review_tests_service(story, context, criteria, result)
+    return reviewed.suite, reviewed.review
 
 
 def _test_cases_sample() -> tuple[TestCaseList, list[Criterion], str]:
@@ -2954,7 +2967,7 @@ def _ship_result(
             "min_reason": MIN_REASON,
             "max_reason": MAX_REASON,
             "max_owner": MAX_OWNER,
-            "grade": grade_for(report),
+            "grade": release_grade(report),
             "ship_data": _ship_data(report, story, is_example),
         },
     )
@@ -2962,7 +2975,7 @@ def _ship_result(
 
 def _ship_data(report: ShipReport, story: str, is_example: bool) -> dict:
     """The report as plain data, for a page that wants the facts not the layout."""
-    grade = grade_for(report)
+    grade = release_grade(report)
     return {
         "grade": (
             {
@@ -3101,7 +3114,7 @@ async def ship_report_route(request: Request) -> HTMLResponse:
     label, status_word = _ship_named(raw)
     return _ship_result(
         request,
-        compute_ship_report(inputs),
+        decide_release(inputs),
         _ship_story(raw),
         ignored,
         label=label,
@@ -3118,7 +3131,7 @@ def ship_example(request: Request) -> HTMLResponse:
     label, status_word = _ship_named(sample)
     return _ship_result(
         request,
-        compute_ship_report(inputs),
+        decide_release(inputs),
         _ship_story(sample),
         ignored,
         is_example=True,

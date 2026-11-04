@@ -1,0 +1,65 @@
+name: CI
+
+# The same three commands AGENTS.md asks for before every change, run on
+# somebody else's machine so "it passes locally" is never the last word.
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    name: ruff, pytest, node --test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      # Before pytest, not after: tests/test_js_unit.py runs the JavaScript
+      # tests from inside the Python suite and skips itself when node is
+      # missing. Installing node afterwards would turn that into a silent
+      # skip that still reports green.
+      - name: Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+          python -m pip install -e ".[dev]"
+
+      - name: ruff check .
+        run: ruff check .
+
+      - name: pytest -q
+        run: pytest -q
+
+      - name: node --test tests/js/*.test.mjs
+        # The app has no npm dependencies; this is the test runner only.
+        run: node --test tests/js/*.test.mjs
+
+      # The server runs on requirements.txt alone. If anything in qagenius/
+      # has quietly started importing a dev-only package, the site imports
+      # fine here and dies on deploy — so prove it one more time, with only
+      # the runtime dependencies installed.
+      - name: the app imports with runtime dependencies only
+        run: |
+          python -m venv /tmp/runtime-only
+          /tmp/runtime-only/bin/python -m pip install --upgrade pip
+          /tmp/runtime-only/bin/python -m pip install -r requirements.txt
+          /tmp/runtime-only/bin/python -c "from qagenius.web import app; print(app.title)"

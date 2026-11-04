@@ -13,12 +13,25 @@ dependencies = [
     "httpx",
     "openpyxl",
     "defusedxml",
+    # The MCP wire types, and nothing else of the SDK. We serve the protocol
+    # from our own route (docs/decisions/001-mcp-transport.md), so the full
+    # `mcp` package — and the cryptography, opentelemetry, httpx2 and
+    # sse-starlette it drags with it — would be weight on a serverless
+    # bundle for code the server never runs. The SDK's own docs say to
+    # depend on mcp_types when all you do is read and write the shapes.
+    # Pinned exactly: this is a wire protocol, and a minor release that
+    # changes a shape is a client that stops connecting.
+    "mcp-types==2.3.0",
 ]
 
 [project.optional-dependencies]
 dev = [
     "pytest",
     "ruff",
+    # The whole SDK, for one test: tests/test_mcp_transport.py drives our
+    # route with the SDK's own client, which is the closest thing to proof
+    # that a real MCP client can talk to it. The server never imports it.
+    "mcp==2.3.0",
     # Only scripts/ui_screenshots.py uses it; the app never imports it, so it
     # stays out of requirements.txt and off the deployed server.
     "playwright",

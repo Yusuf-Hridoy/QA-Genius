@@ -1,0 +1,36 @@
+{
+  "additionalProperties": false,
+  "description": "A letter for the release, and the arithmetic behind it.",
+  "properties": {
+    "letter": {
+      "description": "The grade, such as \"B+\" or \"F\".",
+      "title": "Letter",
+      "type": "string"
+    },
+    "lines": {
+      "description": "One line per check, saying what it scored and why.",
+      "items": {
+        "type": "string"
+      },
+      "title": "Lines",
+      "type": "array"
+    },
+    "max": {
+      "description": "Points those checks were worth.",
+      "title": "Max",
+      "type": "integer"
+    },
+    "points": {
+      "description": "Points scored by the checks that ran.",
+      "title": "Points",
+      "type": "integer"
+    }
+  },
+  "required": [
+    "letter",
+    "points",
+    "max"
+  ],
+  "title": "GradeOut",
+  "type": "object"
+}

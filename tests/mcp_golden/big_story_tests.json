@@ -1,0 +1,544 @@
+{
+  "tool": "review_tests",
+  "input": {
+    "story": "As a registered user, I want to manage my profile, change my password, set up two-factor authentication with an authenticator app, see and revoke my active sessions, link my Google or GitHub account, choose light or dark theme with auto-saving, upload an avatar up to 5 MB, and permanently delete my account, so that my account is accurate and secure.",
+    "context": "",
+    "criteria": [
+      {
+        "text": "The profile page shows the full name, email, phone number and bio"
+      },
+      {
+        "text": "Changing the password requires the current password"
+      },
+      {
+        "text": "Enabling two-factor shows a 6-digit verification code step"
+      },
+      {
+        "text": "An avatar must be a JPEG, PNG or WebP image under 5MB"
+      },
+      {
+        "text": "Active sessions list each device and can be revoked"
+      },
+      {
+        "text": "Deleting the account asks for the password again"
+      }
+    ],
+    "test_cases": [
+      {
+        "id": "TC-01",
+        "title": "The profile page shows every field",
+        "steps": [
+          "Open the profile page"
+        ],
+        "expected": "The page shows the full name, email, phone number and bio",
+        "test_data": "",
+        "covers": [
+          "AC-1"
+        ],
+        "kind": "normal"
+      },
+      {
+        "id": "TC-02",
+        "title": "Changing the password asks for the current one",
+        "steps": [
+          "Open the password form",
+          "Submit without the current password"
+        ],
+        "expected": "The form shows: Enter your current password",
+        "test_data": "",
+        "covers": [
+          "AC-2"
+        ],
+        "kind": "wrong input"
+      },
+      {
+        "id": "TC-03",
+        "title": "Enabling two-factor asks for a 6-digit code",
+        "steps": [
+          "Open security settings",
+          "Press Enable two-factor"
+        ],
+        "expected": "The page asks for a 6-digit verification code",
+        "test_data": "code_length=6",
+        "covers": [
+          "AC-3"
+        ],
+        "kind": "normal"
+      }
+    ]
+  },
+  "output": {
+    "schema_version": "1.0",
+    "tool": "review_tests",
+    "summary": "35 to fix (13 high) · 6 criteria · 3 tests",
+    "problems": [
+      {
+        "id": "G-e149",
+        "kind": "gap",
+        "level": "high",
+        "says": "Unlinking the last sign-in method is blocked: Removing the last way to sign in locks the owner out with one click.",
+        "fix": "Write a test for it.",
+        "criteria": [],
+        "tests": []
+      },
+      {
+        "id": "G-6dfa",
+        "kind": "gap",
+        "level": "high",
+        "says": "Length boundary: one below the minimum and exactly the minimum: One character out and you either refuse a good password or accept a short one.",
+        "fix": "Write a test for it.",
+        "criteria": [],
+        "tests": []
+      },
+      {
+        "id": "G-bae7",
+        "kind": "gap",
+        "level": "high",
+        "says": "Other sessions are signed out after the change: People change a password after a theft. If the thief stays signed in, it was pointless.",
+        "fix": "Write a test for it.",
+        "criteria": [],
+        "tests": []
+      },
+      {
+        "id": "G-f89f",
+        "kind": "gap",
+        "level": "high",
+        "says": "The password never appears in a URL, log or error message: A password in the web address is saved in history, in logs and in screenshots.",
+        "fix": "Write a test for it.",
+        "criteria": [],
+        "tests": []
+      },
+      {
+        "id": "G-b3e0",
+        "kind": "gap",
+        "level": "high",
+        "says": "HTML or script in the bio is shown as text: Other people see this text. If it is not escaped, their browser runs it.",
+        "fix": "Write a test for it.",
+        "criteria": [],
+        "tests": []
+      },
+      {
+        "id": "G-93af",
+        "kind": "gap",
+        "level": "high",
+        "says": "A revoked session's token is refused by the API immediately: If the list says signed out but the device still works, nothing was signed out.",
+        "fix": "Write a test for it.",
+        "criteria": [],
+        "tests": []
+      },
+      {
+        "id": "G-3bb9",
+        "kind": "gap",
+        "level": "high",
+        "says": "A wrong code is rejected: If a wrong code is ever accepted, the second step protects nobody.",
+        "fix": "Write a test for it.",
+        "criteria": [],
+        "tests": []
+      },
+      {
+        "id": "G-fe5c",
+        "kind": "gap",
+        "level": "high",
+        "says": "An expired code is rejected: A code that still works ten minutes later is just a password someone can read and reuse.",
+        "fix": "Write a test for it.",
+        "criteria": [],
+        "tests": []
+      },
+      {
+        "id": "G-9d17",
+        "kind": "gap",
+        "level": "high",
+        "says": "The same code cannot be used twice: If the same code works twice, anyone who sees it once can sign in again.",
+        "fix": "Write a test for it.",
+        "criteria": [],
+        "tests": []
+      },
+      {
+        "id": "G-88fa",
+        "kind": "gap",
+        "level": "high",
+        "says": "A recovery code works once and only once: People write backup codes on paper and photograph them. One that works twice is a spare key for life.",
+        "fix": "Write a test for it.",
+        "criteria": [],
+        "tests": []
+      },
+      {
+        "id": "M-0575",
+        "kind": "missing",
+        "level": "high",
+        "says": "AC-4 has no tests yet.",
+        "fix": "Write at least one test that covers AC-4.",
+        "criteria": [
+          "AC-4"
+        ],
+        "tests": []
+      },
+      {
+        "id": "M-a082",
+        "kind": "missing",
+        "level": "high",
+        "says": "AC-5 has no tests yet.",
+        "fix": "Write at least one test that covers AC-5.",
+        "criteria": [
+          "AC-5"
+        ],
+        "tests": []
+      },
+      {
+        "id": "M-9a93",
+        "kind": "missing",
+        "level": "high",
+        "says": "AC-6 has no tests yet.",
+        "fix": "Write at least one test that covers AC-6.",
+        "criteria": [
+          "AC-6"
+        ],
+        "tests": []
+      },
+      {
+        "id": "G-f619",
+        "kind": "gap",
+        "level": "medium",
+        "says": "An empty (0-byte) file: An empty file is under every size limit. It then breaks whatever tries to read it.",
+        "fix": "Write a test for it.",
+        "criteria": [],
+        "tests": []
+      },
+      {
+        "id": "G-a991",
+        "kind": "gap",
+        "level": "medium",
+        "says": "An image with very large dimensions: A small image file can open into a huge one. The server runs out of memory resizing it.",
+        "fix": "Write a test for it.",
+        "criteria": [],
+        "tests": []
+      },
+      {
+        "id": "G-d70a",
+        "kind": "gap",
+        "level": "medium",
+        "says": "The network drops during the upload: Uploads from a phone often stop half way. The page must say so, not look finished.",
+        "fix": "Write a test for it.",
+        "criteria": [],
+        "tests": []
+      },
+      {
+        "id": "G-b926",
+        "kind": "gap",
+        "level": "medium",
+        "says": "The user cancels at the provider's consent screen: Cancel is the most pressed button on that screen, and it usually lands on an error page.",
+        "fix": "Write a test for it.",
+        "criteria": [],
+        "tests": []
+      },
+      {
+        "id": "G-d7c9",
+        "kind": "gap",
+        "level": "medium",
+        "says": "A provider error or timeout is handled: That server belongs to someone else. When it is slow or fails, the user still needs somewhere to land.",
+        "fix": "Write a test for it.",
+        "criteria": [],
+        "tests": []
+      },
+      {
+        "id": "G-5c50",
+        "kind": "gap",
+        "level": "medium",
+        "says": "A new password equal to the old one is rejected: Saving the same password again looks like a change. The old, leaked one still works.",
+        "fix": "Write a test for it.",
+        "criteria": [],
+        "tests": []
+      },
+      {
+        "id": "G-8083",
+        "kind": "gap",
+        "level": "medium",
+        "says": "A confirmation that does not match blocks the save: A typo here, in text nobody checks, can lock the owner out of their own account.",
+        "fix": "Write a test for it.",
+        "criteria": [],
+        "tests": []
+      },
+      {
+        "id": "G-6714",
+        "kind": "gap",
+        "level": "medium",
+        "says": "Rapid toggles end on the last chosen value: Auto-save sends one request per click. The answers come back in any order.",
+        "fix": "Write a test for it.",
+        "criteria": [],
+        "tests": []
+      },
+      {
+        "id": "G-89b2",
+        "kind": "gap",
+        "level": "medium",
+        "says": "A failed save shows an error and puts the toggle back: If the save failed but the switch stays on, the user believes something that is not true.",
+        "fix": "Write a test for it.",
+        "criteria": [],
+        "tests": []
+      },
+      {
+        "id": "G-f3f1",
+        "kind": "gap",
+        "level": "medium",
+        "says": "The setting survives a reload and appears on another device: A setting saved only in this browser looks saved. It is gone on the next computer.",
+        "fix": "Write a test for it.",
+        "criteria": [],
+        "tests": []
+      },
+      {
+        "id": "G-fbe6",
+        "kind": "gap",
+        "level": "medium",
+        "says": "Each field at its limit and one character over: If only the page checks the length, the server saves a cut-off value or fails.",
+        "fix": "Write a test for it.",
+        "criteria": [],
+        "tests": []
+      },
+      {
+        "id": "G-9458",
+        "kind": "gap",
+        "level": "medium",
+        "says": "Phone numbers with +, spaces, and one that is too short: Everyone writes phone numbers differently. A strict field rejects real ones; a loose one keeps rubbish.",
+        "fix": "Write a test for it.",
+        "criteria": [],
+        "tests": []
+      },
+      {
+        "id": "G-fb71",
+        "kind": "gap",
+        "level": "medium",
+        "says": "The same profile edited in two tabs — the last save does not silently overwrite: People work in two tabs. Losing one tab's work without a word is lost data.",
+        "fix": "Write a test for it.",
+        "criteria": [],
+        "tests": []
+      },
+      {
+        "id": "W-7daa",
+        "kind": "weak",
+        "level": "medium",
+        "says": "TC-01: fewer than 2 steps",
+        "fix": "Rewrite it so the expected result can only be true or false, and say the exact values it uses.",
+        "criteria": [],
+        "tests": [
+          "TC-01"
+        ]
+      },
+      {
+        "id": "W-4648",
+        "kind": "weak",
+        "level": "medium",
+        "says": "TC-02: the steps enter data but no test data is given",
+        "fix": "Rewrite it so the expected result can only be true or false, and say the exact values it uses.",
+        "criteria": [],
+        "tests": [
+          "TC-02"
+        ]
+      },
+      {
+        "id": "D-721a",
+        "kind": "depth",
+        "level": "medium",
+        "says": "AC-1 has only one test.",
+        "fix": "Add a second test for AC-1.",
+        "criteria": [
+          "AC-1"
+        ],
+        "tests": [
+          "TC-01"
+        ]
+      },
+      {
+        "id": "D-b3de",
+        "kind": "depth",
+        "level": "medium",
+        "says": "AC-2 has only one test.",
+        "fix": "Add a second test for AC-2.",
+        "criteria": [
+          "AC-2"
+        ],
+        "tests": [
+          "TC-02"
+        ]
+      },
+      {
+        "id": "D-c9d6",
+        "kind": "depth",
+        "level": "medium",
+        "says": "AC-3 has only one test, no test for wrong input, no test at the limits.",
+        "fix": "Add a second test, a test for wrong input, a test at the limit, using the exact value for AC-3.",
+        "criteria": [
+          "AC-3"
+        ],
+        "tests": [
+          "TC-03"
+        ]
+      },
+      {
+        "id": "G-16f7",
+        "kind": "gap",
+        "level": "low",
+        "says": "Cancelling during the upload: People stop an upload half way. A half-written file left behind becomes a support ticket.",
+        "fix": "Write a test for it.",
+        "criteria": [],
+        "tests": []
+      },
+      {
+        "id": "G-227d",
+        "kind": "gap",
+        "level": "low",
+        "says": "The theme applies without a page reload and reads in both modes: People see the theme first. Needing a reload, or grey on grey, is the first thing they notice.",
+        "fix": "Write a test for it.",
+        "criteria": [],
+        "tests": []
+      },
+      {
+        "id": "G-56c7",
+        "kind": "gap",
+        "level": "low",
+        "says": "Leaving with unsaved changes warns first: Typing a long answer and losing it to one stray click is what people complain about.",
+        "fix": "Write a test for it.",
+        "criteria": [],
+        "tests": []
+      },
+      {
+        "id": "G-8c6c",
+        "kind": "gap",
+        "level": "low",
+        "says": "The session list shows the device and when it was last active: If every row looks the same, nobody knows which one to sign out.",
+        "fix": "Write a test for it.",
+        "criteria": [],
+        "tests": []
+      }
+    ],
+    "add_tests": [
+      {
+        "id": "TC-004",
+        "title": "Deleting the account asks for the password before it starts",
+        "steps": [
+          "Open the delete-account flow and reach the confirmation step",
+          "Submit it with a wrong password",
+          "Submit it again with the correct password"
+        ],
+        "expected": "The wrong password leaves the account untouched and shows an error; the correct password starts the deletion and the step is recorded.",
+        "test_data": "wrong=WrongPass123, correct=Harbour-Lantern-42",
+        "covers": [
+          "AC-6"
+        ],
+        "kind": "normal"
+      },
+      {
+        "id": "TC-005",
+        "title": "The deleted account's password no longer signs anyone in",
+        "steps": [
+          "Try to sign in with the deleted account's email and password",
+          "Try the password reset flow with the same email",
+          "Try to sign in with the provider that was linked to it"
+        ],
+        "expected": "All three are refused, the message is the same one an unknown email gets, and no session is created.",
+        "test_data": "email=user@example.com, password=Harbour-Lantern-42",
+        "covers": [
+          "AC-6"
+        ],
+        "kind": "wrong input"
+      },
+      {
+        "id": "TC-006",
+        "title": "Every session and API token of a deleted account stops working",
+        "steps": [
+          "Complete the deletion from browser A",
+          "Reload a protected page in browser B",
+          "Call a protected API endpoint with the captured token"
+        ],
+        "expected": "Browser B is sent to the sign-in page and the API answers 401 for the captured token; neither keeps working after the deletion.",
+        "test_data": "two browser sessions and one captured API token for user@example.com",
+        "covers": [
+          "AC-6"
+        ],
+        "kind": "normal"
+      },
+      {
+        "id": "TC-007",
+        "title": "A file at the size limit uploads and one byte over is refused",
+        "steps": [
+          "Upload an image of exactly the stated limit",
+          "Upload the same image with one extra byte",
+          "Upload a file a little under the limit"
+        ],
+        "expected": "The exact-limit file and the smaller file upload and appear; the one-byte-over file is refused with a message naming the limit, and the previous avatar is unchanged.",
+        "test_data": "three JPEG files: limit minus 1 KB, exactly the limit, limit plus 1 byte",
+        "covers": [
+          "AC-4"
+        ],
+        "kind": "at the limit"
+      },
+      {
+        "id": "TC-008",
+        "title": "An executable renamed to .jpg is refused",
+        "steps": [
+          "Upload avatar.jpg, which is really a non-image file",
+          "Upload a text file renamed to photo.png",
+          "Upload a real JPEG to confirm the happy path still works"
+        ],
+        "expected": "Both disguised files are refused with a message about the file type, nothing is written to storage, and the real JPEG still uploads.",
+        "test_data": "avatar.jpg (non-image content), photo.png (text content), real.jpg",
+        "covers": [
+          "AC-4"
+        ],
+        "kind": "wrong input"
+      },
+      {
+        "id": "TC-009",
+        "title": "Signing in with a provider whose email matches an existing password account",
+        "steps": [
+          "Sign out and press Continue with Google",
+          "Complete the provider sign-in with user@example.com",
+          "Open the account's sign-in methods afterwards"
+        ],
+        "expected": "The product follows one stated rule — either it asks for the password before linking, or it refuses — and never ends with two accounts for user@example.com or data from one account visible in the other.",
+        "test_data": "email=user@example.com on both the password account and the provider account",
+        "covers": [
+          "AC-6"
+        ],
+        "kind": "unusual"
+      },
+      {
+        "id": "TC-010",
+        "title": "Boundary values at 5 digits / 7 digits (AC-3)",
+        "steps": [
+          "Reach 5-digit.",
+          "Reach 7-digit.",
+          "Check the result."
+        ],
+        "expected": "At 5 digits: AC-3 still holds at 5 digits. 7 digits is past the limit AC-3 states, so it is refused.",
+        "test_data": "5 digits, 7 digits",
+        "covers": [
+          "AC-3"
+        ],
+        "kind": "at the limit"
+      },
+      {
+        "id": "TC-011",
+        "title": "Boundary values at 4.99 MB / 5 MB / 5.01 MB (AC-4)",
+        "steps": [
+          "Reach 4.99MB.",
+          "Reach 5MB.",
+          "Reach 5.01MB.",
+          "Check the result."
+        ],
+        "expected": "At 4.99 MB: AC-4 still holds at 4.99 MB. 5 MB is refused: AC-4 says \"under 5MB\". 5.01 MB is past the limit AC-4 states, so it is refused.",
+        "test_data": "4.99 MB, 5 MB, 5.01 MB",
+        "covers": [
+          "AC-4"
+        ],
+        "kind": "at the limit"
+      }
+    ],
+    "ask_the_po": [],
+    "notes": [
+      "6 of 6 criteria need more tests — 3 have no tests yet, 3 have only one test.",
+      "Already covered: 2 things a senior tester checks for this kind of story.",
+      "50% of criteria have at least one test.",
+      "8 ready tests in add_tests — send them back in test_cases when you have added them."
+    ]
+  }
+}
