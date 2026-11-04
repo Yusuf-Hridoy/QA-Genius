@@ -430,3 +430,110 @@ GOLDEN: dict[str, dict] = {
     "navbar": NAVBAR,
     "photo": PHOTO,
 }
+
+
+# ── the three later tools, on the same five stories ──────────────────────
+
+# Risks for the coupon run: one the tests reach, one they do not.
+COUPON_RISKS = {
+    "tool": "score_risks",
+    "input": {
+        "story": COUPON["input"]["story"],
+        "context": COUPON["input"]["context"],
+        "criteria": COUPON["input"]["criteria"],
+        "test_cases": COUPON["input"]["test_cases"],
+        "risks": [
+            {
+                "id": "R1",
+                "title": "The same coupon is applied twice at the same moment",
+                "effect": "The shop gives double the discount and loses the money",
+                "cause": "Two checkout requests race before either is recorded",
+                "category": "data",
+                "how_bad": 5,
+                "how_likely": 3,
+                "how_hard_to_notice": 4,
+                "linked_criteria": ["AC-1"],
+            },
+            {
+                "id": "R2",
+                "title": "A coupon on a cart under the minimum is accepted",
+                "effect": "Orders below $50 get a discount nobody meant to give",
+                "cause": "The minimum is checked on the page and not on the server",
+                "category": "functional",
+                "how_bad": 4,
+                "how_likely": 2,
+                "how_hard_to_notice": 2,
+                "linked_criteria": ["AC-2"],
+                "tested_by": ["TC-02"],
+            },
+            {
+                "id": "R3",
+                "title": "The discount is rounded the wrong way",
+                "effect": "Order totals are a cent out",
+                "cause": "Floating point arithmetic on money",
+                "category": "data",
+                "how_bad": 2,
+                "how_likely": 2,
+                "how_hard_to_notice": 3,
+            },
+        ],
+    },
+}
+
+# The standard browser/device/sign-in matrix, with the two combinations
+# Playwright cannot emulate ruled out.
+NAVBAR_MATRIX = {
+    "tool": "plan_matrix",
+    "input": {
+        "factors": [
+            {"name": "Browser", "options": ["Chrome", "Firefox", "Safari", "Edge"]},
+            {"name": "Device", "options": ["Desktop", "Tablet", "Phone"]},
+            {"name": "Signed in", "options": ["Yes", "No"]},
+        ],
+        "rules": [
+            {
+                "a": "Browser=Firefox",
+                "b": "Device=Phone",
+                "reason": "Playwright can't emulate Firefox on mobile devices.",
+            },
+            {
+                "a": "Browser=Firefox",
+                "b": "Device=Tablet",
+                "reason": "Playwright can't emulate Firefox on mobile devices.",
+            },
+        ],
+    },
+}
+
+# One spec file with every finding this tool exists to make: a leftover
+# `.only`, a password in the source, a fixed pause, and a test that checks
+# nothing at all.
+LOCKOUT_SPEC = """import { test, expect } from '@playwright/test';
+
+const PASSWORD = 'not-a-real-password';
+
+test.only('TC-01 the account locks on the fifth wrong password', async ({ page }) => {
+  await page.goto('/sign-in');
+  await page.waitForTimeout(3000);
+  await page.fill('#password', PASSWORD);
+  await expect(page.getByText('Account locked for 30 minutes')).toBeVisible();
+});
+
+test('TC-02 a fourth wrong password does not lock the account', async ({ page }) => {
+  await page.goto('/sign-in');
+  await page.click('div > div > span.btn.primary > a');
+});
+"""
+
+LOCKOUT_CODE = {
+    "tool": "check_code",
+    "input": {
+        "framework": "playwright-ts",
+        "files": [{"path": "tests/lockout.spec.ts", "content": LOCKOUT_SPEC}],
+        "test_cases": LOCKOUT["input"]["test_cases"][:3],
+    },
+}
+
+GOLDEN["coupon_risks"] = COUPON_RISKS
+GOLDEN["navbar_matrix"] = NAVBAR_MATRIX
+GOLDEN["lockout_code"] = LOCKOUT_CODE

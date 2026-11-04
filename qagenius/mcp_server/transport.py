@@ -162,6 +162,22 @@ class RateLimit:
 limiter = RateLimit()
 
 
+# Where a report link points. Vercel puts the real host in the forwarded
+# header and rewrites Host; either way this is the deployment the caller
+# reached, never an address the caller chose: a link is something a person
+# clicks, and the host is checked again before it goes into one.
+SITE_URL = "QAG_SITE_HOST"
+
+
+def report_host(request: Request) -> str:
+    """The host to build this answer's report link on."""
+    for name in ("x-forwarded-host", "host"):
+        found = str(request.headers.get(name) or "").strip()
+        if found:
+            return found
+    return os.environ.get(SITE_URL, "").strip()
+
+
 def caller(request: Request) -> str:
     """The address this call came from, as well as we can know it."""
     forwarded = request.headers.get("x-forwarded-for", "")
@@ -334,10 +350,10 @@ def _ready(name: str, arguments: dict) -> tuple[server.Spec, BaseModel]:
     return spec, read_arguments(spec.input_model, arguments)
 
 
-def call_tool(name: str, arguments: dict) -> CallToolResult:
+def call_tool(name: str, arguments: dict, host: str = "") -> CallToolResult:
     """Run one tool, start to finish. The in-process way in, used by tests."""
     spec, payload = _ready(name, arguments if isinstance(arguments, dict) else {})
-    answer = spec.run(payload)
+    answer = spec.run(payload, host)
     return CallToolResult(
         content=[TextContent(type="text", text=server.text_summary(answer))],
         structuredContent=answer.model_dump(mode="json"),
@@ -429,13 +445,13 @@ async def handle(request: Request) -> Response:
             _result(request_id, ListToolsResult(tools=server.definitions()))
         )
     if method == "tools/call":
-        return _answer(await _call(request_id, params))
+        return _answer(await _call(request_id, params, report_host(request)))
     return _answer(
         _error(request_id, METHOD_NOT_FOUND, f"This server does not do {method!r}.")
     )
 
 
-async def _call(request_id, params: dict) -> dict:
+async def _call(request_id, params: dict, host: str = "") -> dict:
     """tools/call, with every way it can go wrong already decided."""
     name = str(params.get("name") or "")
     arguments = params.get("arguments")
@@ -462,7 +478,7 @@ async def _call(request_id, params: dict) -> dict:
         # true.
         with anyio.fail_after(TIME_BUDGET_SECONDS):
             answer = await anyio.to_thread.run_sync(
-                spec.run, payload, abandon_on_cancel=True
+                spec.run, payload, host, abandon_on_cancel=True
             )
     except TimeoutError:
         _log(name, started, _counts(arguments), "timeout")

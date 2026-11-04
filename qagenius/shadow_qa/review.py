@@ -23,6 +23,7 @@ from qagenius.shadow_qa.boundaries import (
     MONEY_ANY,
     Boundary,
     case_text,
+    case_values,
     find_boundaries,
     missing_values,
     over_in,
@@ -30,6 +31,7 @@ from qagenius.shadow_qa.boundaries import (
     states,
     states_value,
     value_quantity,
+    without_quoted,
 )
 from qagenius.say_numbers import family_of, say_amount
 from qagenius.shadow_qa.detect import PackHit, detect_hits, mentions, story_text
@@ -1464,12 +1466,15 @@ def trigger_disagreements(cases: list[TestCase]) -> list[str]:
 def _case_parts(case: TestCase) -> list[str]:
     """Everything of a case a value it is testing could be written in.
 
-    Never the title: it names the rule rather than the run.
+    Never the title: it names the rule rather than the run. The quoted
+    messages come out of the steps and the expected result, because a
+    message that quotes a limit is the product talking, not the value this
+    test is built on.
     """
     return [
-        *(case.steps or []),
+        *(without_quoted(step) for step in (case.steps or [])),
         str(case.test_data or ""),
-        str(case.expected_result or ""),
+        without_quoted(str(case.expected_result or "")),
     ]
 
 
@@ -1631,6 +1636,32 @@ def _said_as(unit: str, amount: float) -> str:
     return say_amount(unit, amount)
 
 
+def _expected_for(case: TestCase, value: str) -> str:
+    """What the expected result says about this one value.
+
+    Read a sentence at a time. "The 2.01 MB photo is rejected. The 2 MB
+    photo is accepted and saved." answers twice, and only one of those
+    answers belongs to the value being asked about; reading the whole
+    thing at once gives whichever verdict happens to come first.
+
+    The quoted messages are out of it, so "Refused with 'needs an order of
+    at least $50'" is a sentence about no value at all rather than a
+    sentence about fifty dollars.
+    """
+    said = without_quoted(str(case.expected_result or ""))
+    for one in _sentences([said]):
+        numbers = scan(one)
+        if (
+            states(value, numbers)
+            and not over_in(value, one, numbers)
+            and not _quotes_the_limit(one, value)
+            and (found := _expects_in(one))
+        ):
+            return found
+    # No sentence of it names the value, so the whole answer is the answer.
+    return _expects_in(said)
+
+
 def limit_conflicts(criteria: list[Criterion], cases: list[TestCase]) -> list[str]:
     """Where the limit value itself is argued about: by a test, or by the criteria.
 
@@ -1664,12 +1695,12 @@ def limit_conflicts(criteria: list[Criterion], cases: list[TestCase]) -> list[st
         if len(notes) >= MAX_QUALITY_NOTES:
             break
         covers = _covered_ids(case) & known
-        # The title is a label, not data. "Discount on an order over $50" is
-        # the name of a test whose cart is $75, and reading the $50 out of it
-        # is how a sound case was called wrong about a limit it never used.
-        said = _sentences(
-            [*(case.steps or []), str(case.test_data or ""), case.expected_result]
-        )
+        # Where this test's own value is written, best source first: the
+        # data a tester types, then the steps, then the title. The expected
+        # result is read for the verdict below and never for the value --
+        # "Refused with 'needs an order of at least $50'" is a $40 cart
+        # being turned away, not a test of what happens at exactly $50.
+        said = _sentences(case_values(case))
         # Every sentence is read for its numbers once, however many limits
         # there are to compare it against.
         scanned = [(one, scan(one)) for one in said if _A_NUMBER_IN.search(one)]
@@ -1700,7 +1731,7 @@ def limit_conflicts(criteria: list[Criterion], cases: list[TestCase]) -> list[st
             if not verdict:
                 # The value is in "Data to use" and the answer is in the
                 # expected result: two sentences, one test.
-                verdict = _expects_in(str(case.expected_result or ""))
+                verdict = _expected_for(case, rule.value)
             if not verdict:
                 break
             if rule.value in open_values:
@@ -1749,6 +1780,34 @@ def _looks_like_input(case: TestCase) -> bool:
     return any(verb in text for verb in verbs)
 
 
+def _plain_line(text: object) -> str:
+    """One line with its spacing and case taken off, for comparing two of them."""
+    return " ".join(str(text or "").lower().split())
+
+
+def _run_of(case: TestCase) -> tuple[tuple[str, ...], str]:
+    """What this case actually does, and with what: the steps and the data."""
+    return (
+        tuple(_plain_line(step) for step in (case.steps or [])),
+        _plain_line(case.test_data),
+    )
+
+
+def _same_run(left: TestCase, right: TestCase) -> bool:
+    """Do these two cases do the same thing with the same data?
+
+    Two titles can be worded far enough apart to pass the title check and
+    still be one test written twice. Someone renaming the copy is the
+    commonest way a duplicate survives review, so the run itself is
+    compared as well as the name.
+    """
+    steps, data = _run_of(left)
+    # A pair of cases with no steps at all is not a pair of copies; it is
+    # two cases nobody has written yet, and the "fewer than 2 steps" note
+    # above has already said so.
+    return bool(steps) and (steps, data) == _run_of(right)
+
+
 def _quality_notes(cases: list[TestCase]) -> list[str]:
     notes: list[str] = []
     for index, case in enumerate(cases):
@@ -1762,6 +1821,14 @@ def _quality_notes(cases: list[TestCase]) -> list[str]:
             continue
         if not str(case.test_data or "").strip() and _looks_like_input(case):
             notes.append(f"{case.id}: the steps enter data but no test data is given")
+            continue
+        # The same run with the same data is a copy however it is named,
+        # and that is the more certain of the two, so it is checked first.
+        twin = next(
+            (other for other in cases[:index] if _same_run(case, other)), None
+        )
+        if twin is not None:
+            notes.append(f"{case.id}: same steps and test data as {twin.id}")
             continue
         twin = next(
             (
@@ -2097,8 +2164,13 @@ def _selector_findings(file: ProjectFile) -> list[Finding]:
     return findings
 
 
-def review_automation(script: AutomationScript, files: list[ProjectFile]) -> list[Finding]:
-    """What a senior tester would send back on this project. Only ever adds."""
+def review_files(files: list[ProjectFile]) -> list[Finding]:
+    """What a senior tester would send back on these files. Only ever adds.
+
+    The files are the whole of it. The generated project has an
+    AutomationScript around them and code an agent sends over MCP does not,
+    so the review itself only ever knew about the files.
+    """
     findings: list[Finding] = []
     # Read every file first: the check a test calls may live in another one.
     checking = _checking_methods(files)
@@ -2109,6 +2181,11 @@ def review_automation(script: AutomationScript, files: list[ProjectFile]) -> lis
         findings.extend(_selector_findings(file))
     findings.sort(key=lambda one: (one.file, one.line, one.message))
     return findings
+
+
+def review_automation(script: AutomationScript, files: list[ProjectFile]) -> list[Finding]:
+    """What a senior tester would send back on this project. Only ever adds."""
+    return review_files(files)
 
 
 # ──────────────────────────────────────────────────────────────────────────────

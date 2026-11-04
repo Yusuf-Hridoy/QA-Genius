@@ -577,14 +577,72 @@ def quantities(text: str) -> list[tuple[str, float]]:
     return said
 
 
+# Text inside quotes is a message the product shows, not data the test
+# uses. "Refused with 'This coupon needs an order of at least $50.'" is a
+# test about a $40 cart, and reading the $50 out of the message is how a
+# sound test was reported as deciding what happens at exactly $50.
+#
+# A straight single quote is only an opening one when no word runs into
+# it, so "the user's cart has 5 items" keeps its apostrophe and its five.
+# A quote with no partner is left alone: blanking to the end of the line
+# would take real data with it.
+_QUOTED_TEXT = re.compile(
+    r'"[^"\n]*"'
+    r"|“[^”\n]*”"
+    r"|(?<![\w])'[^'\n]*'(?![\w])"
+    r"|(?<![\w])‘[^’\n]*’(?![\w])"
+)
+_HAS_DIGIT = re.compile(r"\d")
+
+
+def without_quoted(text: str) -> str:
+    """One line with every quoted message blanked out.
+
+    The blanks keep the length of what they replace, so anything that
+    looks at where a number sits in the sentence still reads it in the
+    same place.
+    """
+    return _QUOTED_TEXT.sub(
+        lambda found: " " * len(found.group(0)), str(text or "")
+    )
+
+
+def case_values(case: TestCase) -> list[str]:
+    """The lines a test's own value is written in, best source first.
+
+    Test data is what a tester types, so it wins outright. The steps come
+    next: they describe the run. The title is the last resort — it names
+    the rule rather than the run, so it is only read when nothing else has
+    a number in it at all.
+
+    The expected result is not a source. It is where the product's own
+    messages live, and a message that quotes the limit is not a test that
+    uses it. Callers that need to know what a case *expects* read the
+    expected result for that, and never for the value.
+    """
+    data = str(case.test_data or "")
+    if _HAS_DIGIT.search(data):
+        return [data]
+    steps = [without_quoted(step) for step in (case.steps or [])]
+    if any(_HAS_DIGIT.search(step) for step in steps):
+        return steps
+    title = str(case.title or "")
+    return [title] if _HAS_DIGIT.search(title) else []
+
+
 def case_text(case: TestCase) -> str:
-    """Everything of a case a boundary value could be written in."""
+    """Everything of a case a boundary value could be written in.
+
+    The steps and the expected result go in with their quoted messages
+    blanked out: a suite does not cover the $50 boundary by printing
+    "needs an order of at least $50" at a shopper.
+    """
     return " ".join(
         [
             str(case.title or ""),
             str(case.pre_conditions or ""),
-            " ".join(case.steps or []),
-            str(case.expected_result or ""),
+            " ".join(without_quoted(step) for step in (case.steps or [])),
+            without_quoted(str(case.expected_result or "")),
             str(case.test_data or ""),
             " ".join(case.tags or []),
         ]

@@ -114,10 +114,24 @@
       "title": "Criteria",
       "type": "array"
     },
+    "previous_report_link": {
+      "default": "",
+      "description": "The report_link this tool gave you last time, if there was one. Send it and the answer says which problems you have fixed since and which are still here. Leave it out on the first call.",
+      "maxLength": 200000,
+      "title": "Previous Report Link",
+      "type": "string"
+    },
     "story": {
       "description": "The user story or the bug, in the words the team wrote.",
       "maxLength": 3000,
       "title": "Story",
+      "type": "string"
+    },
+    "story_label": {
+      "default": "",
+      "description": "The team's own id for this story, such as \"AUR-14\". It is shown at the top of the report page so a reader can match the report to the ticket. Letters, numbers, - and _ only.",
+      "maxLength": 24,
+      "title": "Story Label",
       "type": "string"
     },
     "test_cases": {

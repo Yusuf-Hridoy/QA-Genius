@@ -1,0 +1,180 @@
+{
+  "tool": "plan_matrix",
+  "input": {
+    "factors": [
+      {
+        "name": "Browser",
+        "options": [
+          "Chrome",
+          "Firefox",
+          "Safari",
+          "Edge"
+        ]
+      },
+      {
+        "name": "Device",
+        "options": [
+          "Desktop",
+          "Tablet",
+          "Phone"
+        ]
+      },
+      {
+        "name": "Signed in",
+        "options": [
+          "Yes",
+          "No"
+        ]
+      }
+    ],
+    "rules": [
+      {
+        "a": "Browser=Firefox",
+        "b": "Device=Phone",
+        "reason": "Playwright can't emulate Firefox on mobile devices."
+      },
+      {
+        "a": "Browser=Firefox",
+        "b": "Device=Tablet",
+        "reason": "Playwright can't emulate Firefox on mobile devices."
+      }
+    ]
+  },
+  "output": {
+    "schema_version": "1.0",
+    "tool": "plan_matrix",
+    "summary": "24 combinations → 11 runs, 24 of 24 pairs.",
+    "problems": [],
+    "add_tests": [],
+    "ask_the_po": [],
+    "notes": [
+      "Every one of the 24 possible pairs is covered by 11 runs.",
+      "2 pairs your rules forbid were left out.",
+      "2 of the runs cannot be driven by Playwright and have to be done by hand."
+    ],
+    "report_link": "",
+    "report_note": "",
+    "fixed_since_last_check": [],
+    "still_open": [],
+    "runs": [
+      {
+        "values": {
+          "Browser": "Chrome",
+          "Device": "Desktop",
+          "Signed in": "Yes"
+        },
+        "new_pairs": 3,
+        "manual_only": false,
+        "manual_reason": ""
+      },
+      {
+        "values": {
+          "Browser": "Chrome",
+          "Device": "Tablet",
+          "Signed in": "No"
+        },
+        "new_pairs": 3,
+        "manual_only": false,
+        "manual_reason": ""
+      },
+      {
+        "values": {
+          "Browser": "Chrome",
+          "Device": "Phone",
+          "Signed in": "Yes"
+        },
+        "new_pairs": 2,
+        "manual_only": false,
+        "manual_reason": ""
+      },
+      {
+        "values": {
+          "Browser": "Firefox",
+          "Device": "Desktop",
+          "Signed in": "No"
+        },
+        "new_pairs": 3,
+        "manual_only": false,
+        "manual_reason": ""
+      },
+      {
+        "values": {
+          "Browser": "Firefox",
+          "Device": "Desktop",
+          "Signed in": "Yes"
+        },
+        "new_pairs": 1,
+        "manual_only": false,
+        "manual_reason": ""
+      },
+      {
+        "values": {
+          "Browser": "Safari",
+          "Device": "Desktop",
+          "Signed in": "Yes"
+        },
+        "new_pairs": 2,
+        "manual_only": false,
+        "manual_reason": ""
+      },
+      {
+        "values": {
+          "Browser": "Safari",
+          "Device": "Tablet",
+          "Signed in": "Yes"
+        },
+        "new_pairs": 2,
+        "manual_only": false,
+        "manual_reason": ""
+      },
+      {
+        "values": {
+          "Browser": "Safari",
+          "Device": "Phone",
+          "Signed in": "No"
+        },
+        "new_pairs": 3,
+        "manual_only": false,
+        "manual_reason": ""
+      },
+      {
+        "values": {
+          "Browser": "Edge",
+          "Device": "Desktop",
+          "Signed in": "Yes"
+        },
+        "new_pairs": 2,
+        "manual_only": false,
+        "manual_reason": ""
+      },
+      {
+        "values": {
+          "Browser": "Edge",
+          "Device": "Tablet",
+          "Signed in": "No"
+        },
+        "new_pairs": 2,
+        "manual_only": true,
+        "manual_reason": "Playwright has no device profile for this browser and device together, so this run is done by hand."
+      },
+      {
+        "values": {
+          "Browser": "Edge",
+          "Device": "Phone",
+          "Signed in": "Yes"
+        },
+        "new_pairs": 1,
+        "manual_only": true,
+        "manual_reason": "Playwright has no device profile for this browser and device together, so this run is done by hand."
+      }
+    ],
+    "combinations": 24,
+    "pairs_possible": 24,
+    "pairs_covered": 24,
+    "impossible_pairs": [
+      "Browser=Firefox + Device=Tablet",
+      "Browser=Firefox + Device=Phone"
+    ],
+    "manual_only": 2
+  }
+}

@@ -16,29 +16,36 @@
       "title": "Cause",
       "type": "string"
     },
-    "covered_by": {
-      "description": "The test ids you believe already reach this risk. The check reads the tests themselves and will disagree if the words do not.",
-      "items": {
-        "type": "string"
-      },
-      "maxItems": 300,
-      "title": "Covered By",
-      "type": "array"
-    },
-    "detectability": {
-      "default": 3,
-      "description": "How hard it is to notice, 1 to 5. 5 means nobody would.",
-      "maximum": 5,
-      "minimum": 1,
-      "title": "Detectability",
-      "type": "integer"
-    },
     "effect": {
       "default": "",
       "description": "What the user suffers when it happens.",
       "maxLength": 600,
       "title": "Effect",
       "type": "string"
+    },
+    "how_bad": {
+      "default": 3,
+      "description": "How bad it is if it happens, 1 to 5. 5 is the worst.",
+      "maximum": 5,
+      "minimum": 1,
+      "title": "How Bad",
+      "type": "integer"
+    },
+    "how_hard_to_notice": {
+      "default": 3,
+      "description": "How hard it would be to notice, 1 to 5. 5 means it could happen and nobody would find out.",
+      "maximum": 5,
+      "minimum": 1,
+      "title": "How Hard To Notice",
+      "type": "integer"
+    },
+    "how_likely": {
+      "default": 3,
+      "description": "How likely it is to happen, 1 to 5. 5 is near certain.",
+      "maximum": 5,
+      "minimum": 1,
+      "title": "How Likely",
+      "type": "integer"
     },
     "id": {
       "default": "",
@@ -47,30 +54,14 @@
       "title": "Id",
       "type": "string"
     },
-    "likelihood": {
-      "default": 3,
-      "description": "How likely it is, 1 to 5.",
-      "maximum": 5,
-      "minimum": 1,
-      "title": "Likelihood",
-      "type": "integer"
-    },
-    "related_criteria": {
+    "linked_criteria": {
       "description": "The criterion ids this risk belongs to, such as [\"AC-2\"].",
       "items": {
         "type": "string"
       },
       "maxItems": 60,
-      "title": "Related Criteria",
+      "title": "Linked Criteria",
       "type": "array"
-    },
-    "severity": {
-      "default": 3,
-      "description": "How bad it is, 1 to 5.",
-      "maximum": 5,
-      "minimum": 1,
-      "title": "Severity",
-      "type": "integer"
     },
     "test_idea": {
       "default": "",
@@ -78,6 +69,15 @@
       "maxLength": 600,
       "title": "Test Idea",
       "type": "string"
+    },
+    "tested_by": {
+      "description": "The test ids you believe already reach this risk. The check reads those tests and will disagree if their words do not match what the risk says goes wrong.",
+      "items": {
+        "type": "string"
+      },
+      "maxItems": 300,
+      "title": "Tested By",
+      "type": "array"
     },
     "title": {
       "description": "The failure, in one line.",

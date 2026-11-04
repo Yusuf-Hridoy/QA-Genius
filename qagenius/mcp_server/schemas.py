@@ -25,6 +25,20 @@ STORY_MAX = 3000
 CONTEXT_MAX = 2000
 MAX_CRITERIA = 60
 MAX_TESTS = 300
+MAX_RISKS = 200
+MAX_FACTORS = 8
+MAX_OPTIONS = 8
+MAX_MATRIX_RULES = 40
+MAX_PINNED = 40
+MAX_CODE_FILES = 30
+# 200 KB over all the files. One file may be the whole of it.
+MAX_CODE_BYTES = 200 * 1024
+# What the three risk scores multiply up to at worst: 5 × 5 × 5.
+MAX_SCORE = 125
+# A report link long enough to hold a real round, and no longer.
+PREVIOUS_LINK_MAX = 200_000
+# The same shape the website allows for a story id.
+LABEL_MAX = 24
 
 TestKind = Literal["normal", "wrong input", "at the limit", "unusual"]
 ProblemKind = Literal[
@@ -73,6 +87,34 @@ class Strict(BaseModel):
     """
 
     model_config = ConfigDict(extra="forbid")
+
+
+class ToolIn(Strict):
+    """What every tool takes, whatever else it takes.
+
+    One field, and it is how an agent gets told what it has fixed. There is
+    nowhere on this server to remember the last answer, so the last answer
+    comes back in with the next question.
+    """
+
+    previous_report_link: str = Field(
+        default="",
+        description=(
+            "The report_link this tool gave you last time, if there was one. "
+            "Send it and the answer says which problems you have fixed since "
+            "and which are still here. Leave it out on the first call."
+        ),
+        max_length=PREVIOUS_LINK_MAX,
+    )
+    story_label: str = Field(
+        default="",
+        description=(
+            'The team\'s own id for this story, such as "AUR-14". It is shown '
+            "at the top of the report page so a reader can match the report "
+            "to the ticket. Letters, numbers, - and _ only."
+        ),
+        max_length=LABEL_MAX,
+    )
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -155,7 +197,7 @@ class TestIn(Strict):
     )
 
 
-class StoryIn(Strict):
+class StoryIn(ToolIn):
     """A story to check, on its own."""
 
     story: str = Field(
@@ -176,7 +218,7 @@ class StoryIn(Strict):
     )
 
 
-class TestsIn(Strict):
+class TestsIn(ToolIn):
     """A story, its criteria and the tests written for them."""
 
     __test__ = False
@@ -224,28 +266,38 @@ class RiskIn(Strict):
     cause: str = Field(
         default="", description="Why it would happen.", max_length=600
     )
-    severity: int = Field(
-        default=3, description="How bad it is, 1 to 5.", ge=1, le=5
-    )
-    likelihood: int = Field(
-        default=3, description="How likely it is, 1 to 5.", ge=1, le=5
-    )
-    detectability: int = Field(
+    how_bad: int = Field(
         default=3,
-        description="How hard it is to notice, 1 to 5. 5 means nobody would.",
+        description="How bad it is if it happens, 1 to 5. 5 is the worst.",
         ge=1,
         le=5,
     )
-    related_criteria: list[str] = Field(
+    how_likely: int = Field(
+        default=3,
+        description="How likely it is to happen, 1 to 5. 5 is near certain.",
+        ge=1,
+        le=5,
+    )
+    how_hard_to_notice: int = Field(
+        default=3,
+        description=(
+            "How hard it would be to notice, 1 to 5. 5 means it could happen "
+            "and nobody would find out."
+        ),
+        ge=1,
+        le=5,
+    )
+    linked_criteria: list[str] = Field(
         default_factory=list,
         description='The criterion ids this risk belongs to, such as ["AC-2"].',
         max_length=MAX_CRITERIA,
     )
-    covered_by: list[str] = Field(
+    tested_by: list[str] = Field(
         default_factory=list,
         description=(
             "The test ids you believe already reach this risk. The check "
-            "reads the tests themselves and will disagree if the words do not."
+            "reads those tests and will disagree if their words do not match "
+            "what the risk says goes wrong."
         ),
         max_length=MAX_TESTS,
     )
@@ -253,6 +305,126 @@ class RiskIn(Strict):
         default="",
         description="One line saying what a test for this would do.",
         max_length=600,
+    )
+
+
+class RisksIn(ToolIn):
+    """A story, its criteria, its tests and the risks somebody scored."""
+
+    story: str = Field(
+        description="The user story or the bug, in the words the team wrote.",
+        max_length=STORY_MAX,
+    )
+    context: str = Field(
+        default="",
+        description="Anything else that decides the answer: limits, rules.",
+        max_length=CONTEXT_MAX,
+    )
+    criteria: list[CriterionIn] = Field(
+        description="The acceptance criteria, in order.", max_length=MAX_CRITERIA
+    )
+    test_cases: list[TestIn] = Field(
+        description="The tests written for those criteria.", max_length=MAX_TESTS
+    )
+    risks: list[RiskIn] = Field(
+        description=(
+            "The risks you wrote and scored. Write them yourself — this tool "
+            "checks them, it does not invent them."
+        ),
+        max_length=MAX_RISKS,
+    )
+
+
+class FactorIn(Strict):
+    """One thing that varies between test runs, and what it can be."""
+
+    name: str = Field(
+        description='What varies, such as "Browser" or "Device".', max_length=40
+    )
+    options: list[str] = Field(
+        description=(
+            'Every value it can take, such as ["Chrome", "Firefox", "Safari"]. '
+            "At least two."
+        ),
+        min_length=2,
+        max_length=MAX_OPTIONS,
+    )
+
+
+class MatrixRuleIn(Strict):
+    """Two values that can never happen together."""
+
+    a: str = Field(
+        description='One side, written "Factor=option", such as "Browser=Firefox".',
+        max_length=90,
+    )
+    b: str = Field(
+        description='The other side, such as "Device=Phone".', max_length=90
+    )
+    reason: str = Field(
+        default="",
+        description="Why they cannot go together, in one line.",
+        max_length=300,
+    )
+
+
+class MatrixPlanIn(ToolIn):
+    """What varies between runs, and what cannot go with what."""
+
+    factors: list[FactorIn] = Field(
+        description="What varies between runs. At least two.",
+        min_length=2,
+        max_length=MAX_FACTORS,
+    )
+    rules: list[MatrixRuleIn] = Field(
+        default_factory=list,
+        description="Pairs of values that can never happen together.",
+        max_length=MAX_MATRIX_RULES,
+    )
+    pinned: list[dict[str, str]] = Field(
+        default_factory=list,
+        description=(
+            "Runs that must be in the plan whatever the arithmetic says, each "
+            'written {"Browser": "Chrome", "Device": "Phone"}.'
+        ),
+        max_length=MAX_PINNED,
+    )
+
+
+class CodeFileIn(Strict):
+    """One file of automation code."""
+
+    path: str = Field(
+        description='Where the file lives, such as "tests/checkout.spec.ts".',
+        max_length=400,
+    )
+    content: str = Field(
+        description="The whole file, exactly as it is written.",
+        max_length=MAX_CODE_BYTES,
+    )
+
+
+class CodeIn(ToolIn):
+    """Automation code to read. Nothing in it is ever run."""
+
+    framework: Literal[
+        "playwright-ts",
+        "playwright-js",
+        "playwright-py",
+        "cypress",
+        "selenium-py",
+        "selenium-java",
+    ] = Field(description="What the tests are written with.")
+    files: list[CodeFileIn] = Field(
+        description="The files to check.", min_length=1, max_length=MAX_CODE_FILES
+    )
+    test_cases: list[TestIn] = Field(
+        default_factory=list,
+        description=(
+            "The tests this code is supposed to cover. Send them and the "
+            "answer says which test case ids the code never names."
+        ),
+        max_length=MAX_TESTS,
     )
 
 
@@ -276,7 +448,7 @@ class MatrixIn(Strict):
     )
 
 
-class ShipIn(Strict):
+class ShipIn(ToolIn):
     """Everything the release decision is made from."""
 
     story: str = Field(
@@ -300,7 +472,7 @@ class ShipIn(Strict):
             "The risks, if you scored any. Leave it out and the risk check "
             'comes back "not done yet" — never "fine".'
         ),
-        max_length=200,
+        max_length=MAX_RISKS,
     )
     matrix_summary: MatrixIn | None = Field(
         default=None,
@@ -315,7 +487,7 @@ class ShipIn(Strict):
             "Risk ids the team has accepted in writing. An accepted risk is "
             "still shown, with its id, but it no longer counts as untested."
         ),
-        max_length=200,
+        max_length=MAX_RISKS,
     )
 
 
@@ -399,6 +571,35 @@ class ToolOut(Strict):
         default_factory=list,
         description="Anything else worth knowing that is not a problem.",
     )
+    report_link: str = Field(
+        default="",
+        description=(
+            "A page showing this answer, for the person you are helping. "
+            "Everything it needs is after the # — nothing is stored on the "
+            "server and the server never sees it. Give the user this link."
+        ),
+    )
+    report_note: str = Field(
+        default="",
+        description=(
+            "Set only when the answer was too big to pack the inputs into "
+            "the link, so the page shows the findings without them."
+        ),
+    )
+    fixed_since_last_check: list[str] = Field(
+        default_factory=list,
+        description=(
+            "Problem ids from `previous_report_link` that are gone now. Send "
+            "the link you were given last time and this fills in."
+        ),
+    )
+    still_open: list[str] = Field(
+        default_factory=list,
+        description=(
+            "Problem ids from `previous_report_link` that are still here. "
+            "Empty when no previous link was sent."
+        ),
+    )
 
 
 class GradeOut(Strict):
@@ -431,6 +632,140 @@ class CheckOut(Strict):
     )
 
 
+class RiskOut(Strict):
+    """One risk, scored and checked for tests."""
+
+    id: str = Field(description="The risk's id.")
+    title: str = Field(description="The failure, in one line.")
+    category: str = Field(description="What kind of failure it is.")
+    score: int = Field(
+        description=(
+            "How bad × how likely × how hard to notice. Out of 125."
+        )
+    )
+    max_score: int = Field(
+        default=MAX_SCORE, description="What the score is out of."
+    )
+    level: Level = Field(
+        description=(
+            "high: write a test for it or accept it in writing. medium: "
+            "worth a test. low: note it and move on."
+        )
+    )
+    coverage: Literal["tested", "probably tested", "no test"] = Field(
+        description=(
+            'tested: a test names this risk or does what it describes. '
+            '"probably tested": a test was claimed but its words do not '
+            "match what goes wrong. no test: nothing reaches it."
+        )
+    )
+    tested_by: list[str] = Field(
+        default_factory=list, description="The test ids that reach it."
+    )
+
+
+class RisksOut(ToolOut):
+    """The risk answer: everything above, plus the risks themselves."""
+
+    risks: list[RiskOut] = Field(
+        default_factory=list, description="Every risk, worst first."
+    )
+    untested_high: list[str] = Field(
+        default_factory=list,
+        description=(
+            "The ids of high risks no test reaches. Write a test for each or "
+            "say in writing why not."
+        ),
+    )
+
+
+class RunOut(Strict):
+    """One planned test run."""
+
+    values: dict[str, str] = Field(
+        description='What this run uses, {"Browser": "Chrome", "Device": "Phone"}.'
+    )
+    new_pairs: int = Field(
+        description=(
+            "How many pairs of values this run is the first to cover. The "
+            "numbers add up to pairs_covered."
+        )
+    )
+    manual_only: bool = Field(
+        default=False, description="True when Playwright cannot drive this run."
+    )
+    manual_reason: str = Field(
+        default="", description="Why it has to be done by hand."
+    )
+
+
+class MatrixOut(ToolOut):
+    """The matrix answer: the runs, and what they cover."""
+
+    runs: list[RunOut] = Field(
+        default_factory=list, description="The runs to do, in order."
+    )
+    combinations: int = Field(
+        default=0, description="How many combinations there are in all."
+    )
+    pairs_possible: int = Field(
+        default=0, description="How many pairs of values are worth covering."
+    )
+    pairs_covered: int = Field(
+        default=0,
+        description=(
+            "How many of them these runs reach. Always equal to "
+            "pairs_possible — that is what the plan is for."
+        ),
+    )
+    impossible_pairs: list[str] = Field(
+        default_factory=list,
+        description='Pairs your rules forbid, written "Browser=Firefox + Device=Phone".',
+    )
+    manual_only: int = Field(
+        default=0, description="How many runs nobody can automate."
+    )
+
+
+class CodeFindingOut(Strict):
+    """One thing found in one file."""
+
+    file: str = Field(description="Which file.")
+    line: int = Field(description="Which line. 0 when it is about the whole file.")
+    level: Literal["error", "warning"] = Field(
+        description="error: this will not run or will not catch anything. "
+        "warning: it runs, and it will hurt later."
+    )
+    says: str = Field(description="What is wrong, in one line.")
+
+
+class CodeOut(ToolOut):
+    """The code answer: what each file is, and what is wrong with it."""
+
+    language: str = Field(
+        default="", description="What these files are written in."
+    )
+    syntax: dict[str, str] = Field(
+        default_factory=dict,
+        description=(
+            "file → what its syntax check actually proved. Python is parsed "
+            "for real; TypeScript and JavaScript get a quick check that "
+            "brackets and quotes match, which is not a full compile."
+        ),
+    )
+    findings: list[CodeFindingOut] = Field(
+        default_factory=list, description="Everything found, file by file."
+    )
+    traced: list[str] = Field(
+        default_factory=list,
+        description="Test case ids the code names.",
+    )
+    untraced: list[str] = Field(
+        default_factory=list,
+        description="Test case ids you sent that no file names.",
+    )
+
+
 class ShipOut(ToolOut):
     """The release answer: everything above, plus the decision itself."""
 
@@ -460,11 +795,23 @@ CONTRACTS: dict[str, type[BaseModel]] = {
     "story_in": StoryIn,
     "tests_in": TestsIn,
     "risk_in": RiskIn,
+    "risks_in": RisksIn,
+    "factor_in": FactorIn,
+    "matrix_rule_in": MatrixRuleIn,
+    "matrix_plan_in": MatrixPlanIn,
+    "code_file_in": CodeFileIn,
+    "code_in": CodeIn,
     "matrix_in": MatrixIn,
     "ship_in": ShipIn,
     "problem": Problem,
     "tool_out": ToolOut,
     "grade_out": GradeOut,
     "check_out": CheckOut,
+    "risk_out": RiskOut,
+    "risks_out": RisksOut,
+    "run_out": RunOut,
+    "matrix_out": MatrixOut,
+    "code_finding_out": CodeFindingOut,
+    "code_out": CodeOut,
     "ship_out": ShipOut,
 }

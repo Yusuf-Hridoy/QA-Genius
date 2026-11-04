@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block title %}Report — QA-Genius{% endblock %}
+{% block top_title %}Report{% endblock %}
+{% block content %}
+{# Everything on this page comes out of location.hash, in the browser.
+   The server has never seen this report: a fragment is not sent with the
+   request, so there is nothing here to store and nothing to leak. The page
+   arrives empty and report.js fills it. #}
+<div id="report-root" class="report-root">
+  <div class="card">
+    <p class="muted">Reading the report from the link…</p>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}<script src="/report.js" defer></script>{% endblock %}

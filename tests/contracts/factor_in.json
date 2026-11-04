@@ -1,0 +1,28 @@
+{
+  "additionalProperties": false,
+  "description": "One thing that varies between test runs, and what it can be.",
+  "properties": {
+    "name": {
+      "description": "What varies, such as \"Browser\" or \"Device\".",
+      "maxLength": 40,
+      "title": "Name",
+      "type": "string"
+    },
+    "options": {
+      "description": "Every value it can take, such as [\"Chrome\", \"Firefox\", \"Safari\"]. At least two.",
+      "items": {
+        "type": "string"
+      },
+      "maxItems": 8,
+      "minItems": 2,
+      "title": "Options",
+      "type": "array"
+    }
+  },
+  "required": [
+    "name",
+    "options"
+  ],
+  "title": "FactorIn",
+  "type": "object"
+}

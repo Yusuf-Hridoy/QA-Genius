@@ -1,0 +1,160 @@
+{
+  "tool": "check_code",
+  "input": {
+    "framework": "playwright-ts",
+    "files": [
+      {
+        "path": "tests/lockout.spec.ts",
+        "content": "import { test, expect } from '@playwright/test';\n\nconst PASSWORD = 'not-a-real-password';\n\ntest.only('TC-01 the account locks on the fifth wrong password', async ({ page }) => {\n  await page.goto('/sign-in');\n  await page.waitForTimeout(3000);\n  await page.fill('#password', PASSWORD);\n  await expect(page.getByText('Account locked for 30 minutes')).toBeVisible();\n});\n\ntest('TC-02 a fourth wrong password does not lock the account', async ({ page }) => {\n  await page.goto('/sign-in');\n  await page.click('div > div > span.btn.primary > a');\n});\n"
+      }
+    ],
+    "test_cases": [
+      {
+        "id": "TC-01",
+        "title": "The account locks on the fifth wrong password",
+        "steps": [
+          "Open the Aurora Storefront sign-in page",
+          "Enter the right email and a wrong password five times"
+        ],
+        "expected": "The page shows: Account locked for 30 minutes",
+        "test_data": "attempts=5",
+        "covers": [
+          "AC-1"
+        ],
+        "kind": "at the limit"
+      },
+      {
+        "id": "TC-02",
+        "title": "A fourth wrong password does not lock the account",
+        "steps": [
+          "Open the Aurora Storefront sign-in page",
+          "Enter the right email and a wrong password four times",
+          "Enter the right password"
+        ],
+        "expected": "The shopper is signed in and no lock message is shown",
+        "test_data": "attempts=4",
+        "covers": [
+          "AC-1"
+        ],
+        "kind": "at the limit"
+      },
+      {
+        "id": "TC-03",
+        "title": "A locked account is still locked after 29 minutes",
+        "steps": [
+          "Lock the account with five wrong passwords",
+          "Wait 29 minutes",
+          "Enter the right password"
+        ],
+        "expected": "The page shows: Account locked for 30 minutes",
+        "test_data": "wait=29 minutes",
+        "covers": [
+          "AC-2"
+        ],
+        "kind": "at the limit"
+      }
+    ]
+  },
+  "output": {
+    "schema_version": "1.0",
+    "tool": "check_code",
+    "summary": "5 to fix (3 high) · 1 file · 2 of 3 test cases found",
+    "problems": [
+      {
+        "id": "G-811a",
+        "kind": "gap",
+        "level": "high",
+        "says": "tests/lockout.spec.ts:5 — Senior tester: `.only` leaves the rest of the suite unrun in CI",
+        "fix": "Fix it in the file and call check_code again.",
+        "criteria": [],
+        "tests": []
+      },
+      {
+        "id": "W-c3f8",
+        "kind": "weak",
+        "level": "high",
+        "says": "tests/lockout.spec.ts:12 — Senior tester: this test never asserts anything",
+        "fix": "Fix it in the file and call check_code again.",
+        "criteria": [],
+        "tests": []
+      },
+      {
+        "id": "M-cda1",
+        "kind": "missing",
+        "level": "high",
+        "says": "No file names these test cases: TC-03.",
+        "fix": "Put the test case id in the test name or a comment, so the code and the suite can be matched up.",
+        "criteria": [],
+        "tests": [
+          "TC-03"
+        ]
+      },
+      {
+        "id": "W-b2d8",
+        "kind": "weak",
+        "level": "medium",
+        "says": "tests/lockout.spec.ts:3 — Senior tester: `PASSWORD` is a hard-coded secret: read it from an environment variable",
+        "fix": "Fix it in the file and call check_code again.",
+        "criteria": [],
+        "tests": []
+      },
+      {
+        "id": "W-2333",
+        "kind": "weak",
+        "level": "medium",
+        "says": "tests/lockout.spec.ts:7 — Fixed pause (waitForTimeout) — it makes tests slow and flaky. Wait for the thing you need instead.",
+        "fix": "Fix it in the file and call check_code again.",
+        "criteria": [],
+        "tests": []
+      }
+    ],
+    "add_tests": [],
+    "ask_the_po": [],
+    "notes": [
+      "Read as TypeScript.",
+      "Quick check only on tests/lockout.spec.ts: brackets and quotes match, which is not a full compile.",
+      "Nothing in these files was run. Every answer comes from reading them."
+    ],
+    "report_link": "",
+    "report_note": "",
+    "fixed_since_last_check": [],
+    "still_open": [],
+    "language": "TypeScript",
+    "syntax": {
+      "tests/lockout.spec.ts": "quick check: brackets and quotes match, not a full compile"
+    },
+    "findings": [
+      {
+        "file": "tests/lockout.spec.ts",
+        "line": 3,
+        "level": "warning",
+        "says": "Senior tester: `PASSWORD` is a hard-coded secret: read it from an environment variable"
+      },
+      {
+        "file": "tests/lockout.spec.ts",
+        "line": 5,
+        "level": "error",
+        "says": "Senior tester: `.only` leaves the rest of the suite unrun in CI"
+      },
+      {
+        "file": "tests/lockout.spec.ts",
+        "line": 7,
+        "level": "warning",
+        "says": "Fixed pause (waitForTimeout) — it makes tests slow and flaky. Wait for the thing you need instead."
+      },
+      {
+        "file": "tests/lockout.spec.ts",
+        "line": 12,
+        "level": "error",
+        "says": "Senior tester: this test never asserts anything"
+      }
+    ],
+    "traced": [
+      "TC-01",
+      "TC-02"
+    ],
+    "untraced": [
+      "TC-03"
+    ]
+  }
+}

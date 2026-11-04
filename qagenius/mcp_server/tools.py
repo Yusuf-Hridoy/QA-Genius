@@ -1,4 +1,4 @@
-"""The three tools, as plain functions over the service layer.
+"""The six tools, as plain functions over the service layer.
 
 Nothing here calls an AI, reads a key, stores anything or reaches the
 network. Each one takes an input model and returns an output model, so the
@@ -7,12 +7,26 @@ same input gives byte-identical output every time it is called.
 
 from __future__ import annotations
 
+import re
+
 from qagenius.acceptance import Acceptance
-from qagenius.mcp_server import adapters
+from qagenius.automation_checks import ProjectFile
+from qagenius.mcp_server import adapters, report_link
 from qagenius.mcp_server.schemas import (
+    MAX_SCORE,
     CheckOut,
+    CodeFindingOut,
+    CodeIn,
+    CodeOut,
     GradeOut,
+    MatrixOut,
+    MatrixPlanIn,
+    MatrixRuleIn,
     Problem,
+    RiskOut,
+    RisksIn,
+    RisksOut,
+    RunOut,
     ShipIn,
     ShipOut,
     StoryIn,
@@ -20,7 +34,11 @@ from qagenius.mcp_server.schemas import (
     ToolOut,
     problem_id,
 )
+from qagenius.pairwise import Factor, Rule
+from qagenius.services.code_review import review_code, syntax_words
+from qagenius.services.matrix_plan import plan_matrix as plan_matrix_service
 from qagenius.services.release_decision import decide_release, release_grade
+from qagenius.services.risk_review import coverage_word, review_risk_list
 from qagenius.services.story_review import review_story_text
 from qagenius.services.test_review import review_tests as review_tests_service
 from qagenius.ship_check import ShipInputs
@@ -36,6 +54,50 @@ DECISION_WORDS = {
 # A risk id sent as accepted needs a written reason to count, and the agent
 # did not send one. This is that reason: honest about where it came from.
 ACCEPTED_REASON = "Accepted by the calling agent through the MCP door."
+
+
+def finish(answer, payload, host: str, extra: dict | None = None):
+    """Give an answer its report link and say what changed since last time.
+
+    Every tool ends here, so the six of them cannot drift about what a
+    report link holds or how a round is counted. What goes in the link is
+    the answer plus whatever the page needs to draw it — never more.
+    """
+    now = [problem.id for problem in answer.problems]
+    rounds = report_link.compare(getattr(payload, "previous_report_link", ""), now)
+    answer.fixed_since_last_check = rounds.fixed
+    answer.still_open = rounds.still_open
+
+    packed = answer.model_dump(mode="json")
+    packed.pop("report_link", None)
+    packed.pop("report_note", None)
+    # What each fixed problem used to say. The agent gets the ids; the page
+    # a person opens gets the sentences, because "L-ff63 · Fixed" on its
+    # own is a row nobody can check.
+    if rounds.fixed_said:
+        packed["fixed_said"] = rounds.fixed_said
+    label = str(getattr(payload, "story_label", "") or "").strip()
+    if label:
+        packed["story_label"] = label
+    packed.update(extra or {})
+    link, note = report_link.link_for(host, packed)
+    answer.report_link = link
+    answer.report_note = note
+    return answer
+
+
+def _shown(payload) -> dict:
+    """The inputs a report page needs to show the findings in context."""
+    kept: dict = {}
+    for name in ("story", "context"):
+        value = getattr(payload, name, "")
+        if value:
+            kept[name] = value
+    for name in ("criteria", "test_cases", "risks"):
+        value = getattr(payload, name, None)
+        if value:
+            kept[name] = [one.model_dump(mode="json") for one in value]
+    return kept
 
 
 def _problem(
@@ -88,7 +150,7 @@ def _to_fix(problems: list[Problem]) -> str:
 # ──────────────────────────────────────────────────────────────────────────────
 
 
-def check_story(payload: StoryIn) -> ToolOut:
+def check_story(payload: StoryIn, host: str = "") -> ToolOut:
     """Read a story before anyone writes a test. Code only, no AI."""
     review = review_story_text(payload.story, payload.context, payload.story_type)
 
@@ -141,13 +203,18 @@ def check_story(payload: StoryIn) -> ToolOut:
             "reads as several stories" if review.epic else "reads as one story",
         ]
     )
-    return ToolOut(
-        tool="check_story",
-        summary=summary,
-        problems=problems,
-        add_tests=[],
-        ask_the_po=_story_questions(review),
-        notes=_story_notes(review),
+    return finish(
+        ToolOut(
+            tool="check_story",
+            summary=summary,
+            problems=problems,
+            add_tests=[],
+            ask_the_po=_story_questions(review),
+            notes=_story_notes(review),
+        ),
+        payload,
+        host,
+        _shown(payload),
     )
 
 
@@ -177,7 +244,7 @@ def _story_notes(review) -> list[str]:
 # ──────────────────────────────────────────────────────────────────────────────
 
 
-def review_tests(payload: TestsIn) -> ToolOut:
+def review_tests(payload: TestsIn, host: str = "") -> ToolOut:
     """The senior tester's review of a suite. Code only, no AI."""
     naming = adapters.naming_from(payload.criteria)
     criteria = naming.criteria
@@ -247,13 +314,18 @@ def review_tests(payload: TestsIn) -> ToolOut:
             _count(len(payload.test_cases), "test"),
         ]
     )
-    return ToolOut(
-        tool="review_tests",
-        summary=summary,
-        problems=problems,
-        add_tests=[adapters.test_out(case) for case in reviewed.added],
-        ask_the_po=list(reviewed.review.conflicts),
-        notes=_test_notes(reviewed, naming),
+    return finish(
+        ToolOut(
+            tool="review_tests",
+            summary=summary,
+            problems=problems,
+            add_tests=[adapters.test_out(case) for case in reviewed.added],
+            ask_the_po=list(reviewed.review.conflicts),
+            notes=_test_notes(reviewed, naming),
+        ),
+        payload,
+        host,
+        _shown(payload),
     )
 
 
@@ -326,7 +398,7 @@ def _test_notes(reviewed, naming=None) -> list[str]:
 # ──────────────────────────────────────────────────────────────────────────────
 
 
-def ship_check(payload: ShipIn) -> ShipOut:
+def ship_check(payload: ShipIn, host: str = "") -> ShipOut:
     """The release decision. Code only, no AI."""
     naming = adapters.naming_from(payload.criteria)
     criteria = naming.criteria
@@ -365,7 +437,7 @@ def ship_check(payload: ShipIn) -> ShipOut:
         )
 
     problems = _worst_first(problems)
-    return ShipOut(
+    answer = ShipOut(
         tool="ship_check",
         summary=" · ".join(
             [
@@ -405,6 +477,7 @@ def ship_check(payload: ShipIn) -> ShipOut:
         ],
         path_to_ready=_path_to_ready(report),
     )
+    return finish(answer, payload, host, _shown(payload))
 
 
 # Which kind of problem each failing check is, in the words of the output.
@@ -507,3 +580,364 @@ def _path_to_ready(report) -> list[str]:
             continue
         steps.append(item.instruction or f"Fix {item.title}: {item.summary}")
     return steps
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# score_risks
+# ──────────────────────────────────────────────────────────────────────────────
+
+# How a classic risk nobody wrote down is worded as a problem.
+MISSING_RISK_FIX = (
+    "Add it to your risks with your own scores, then call score_risks again."
+)
+
+
+def score_risks(payload: RisksIn, host: str = "") -> RisksOut:
+    """Score a set of risks and say which ones no test reaches. No AI."""
+    naming = adapters.naming_from(payload.criteria)
+    suite = adapters.suite_from(payload.test_cases, naming)
+    reviewed = review_risk_list(
+        payload.story,
+        payload.context,
+        naming.criteria,
+        list(suite.test_cases),
+        adapters.risks_from(payload.risks),
+    )
+
+    problems: list[Problem] = []
+    for scored in reviewed.untested_high:
+        problems.append(
+            _problem(
+                "gap",
+                "high",
+                f"{scored.risk.id} {scored.risk.title}: "
+                f"{coverage_word(scored.coverage)} "
+                f"(score {scored.rpn} of {MAX_SCORE}).",
+                "Write a test that does what this risk describes, or say in "
+                "writing why you are accepting it.",
+                criteria=[str(one) for one in scored.risk.related_criteria],
+            )
+        )
+    for scored in reviewed.untested_medium:
+        problems.append(
+            _problem(
+                "gap",
+                "medium",
+                f"{scored.risk.id} {scored.risk.title}: "
+                f"{coverage_word(scored.coverage)} "
+                f"(score {scored.rpn} of {MAX_SCORE}).",
+                "Worth a test before release.",
+                criteria=[str(one) for one in scored.risk.related_criteria],
+            )
+        )
+    for risk in reviewed.missing:
+        problems.append(
+            _problem(
+                "missing",
+                "medium",
+                "Nobody wrote down a classic risk for this kind of feature: "
+                f"{risk.title} — {risk.effect}",
+                MISSING_RISK_FIX,
+            )
+        )
+
+    problems = _worst_first(problems)
+    counts = reviewed.report.counts
+    answer = RisksOut(
+        tool="score_risks",
+        summary=" · ".join(
+            [
+                _to_fix(problems),
+                _count(counts["total"], "risk"),
+                f"{counts['untested_high']} high without a test",
+            ]
+        ),
+        problems=problems,
+        add_tests=[
+            adapters.test_out(case) for case in _tests_for_risks(payload, naming, reviewed)
+        ],
+        ask_the_po=_risk_questions(reviewed),
+        notes=_risk_notes(reviewed, naming),
+        risks=[
+            RiskOut(
+                id=str(scored.risk.id or ""),
+                title=str(scored.risk.title or ""),
+                category=str(scored.risk.category or ""),
+                score=scored.rpn,
+                max_score=MAX_SCORE,
+                level=scored.level,
+                coverage=coverage_word(scored.coverage),
+                tested_by=[str(row[0]) for row in scored.covered_tests],
+            )
+            for scored in reviewed.report.risks
+        ],
+        untested_high=[str(one.risk.id or "") for one in reviewed.untested_high],
+    )
+    return finish(answer, payload, host, _shown(payload))
+
+
+def _tests_for_risks(payload: RisksIn, naming, reviewed) -> list:
+    """Ready tests for the gaps, when a high risk has nothing reaching it.
+
+    The senior tester's own suite review writes them: a risk with no test
+    is a gap in the suite, and the suite is where the gap gets filled.
+    """
+    if not reviewed.untested_high:
+        return []
+    asked = review_tests_service(
+        payload.story,
+        payload.context,
+        naming.criteria,
+        adapters.suite_from(payload.test_cases, naming),
+    )
+    return list(asked.added)
+
+
+def _risk_questions(reviewed) -> list[str]:
+    return [
+        f"{scored.risk.id} {scored.risk.title} is a high risk with no test. "
+        "Is the team accepting it, and who owns that?"
+        for scored in reviewed.untested_high
+    ]
+
+
+def _risk_notes(reviewed, naming) -> list[str]:
+    notes = [naming.note()] if naming.note() else []
+    counts = reviewed.report.counts
+    notes.append(
+        " · ".join(f"{name}: {counts[name]}" for name in ("high", "medium", "low"))
+    )
+    weak = [one for one in reviewed.report.risks if one.coverage == "weak"]
+    if weak:
+        names = ", ".join(str(one.risk.id or "") for one in weak)
+        notes.append(
+            f"Only probably tested: {names}. A test was named for each, but its "
+            "words do not say what the risk says goes wrong."
+        )
+    notes.append(
+        f"A score is how bad × how likely × how hard to notice, out of {MAX_SCORE}."
+    )
+    return notes
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# plan_matrix
+# ──────────────────────────────────────────────────────────────────────────────
+
+_SIDE = re.compile(r"^\s*(?P<factor>[^=]+?)\s*=\s*(?P<option>.+?)\s*$")
+
+
+def _rule_from(rule: MatrixRuleIn) -> Rule | None:
+    """One "Browser=Firefox" / "Device=Phone" pair as the engine's Rule."""
+    left, right = _SIDE.match(rule.a or ""), _SIDE.match(rule.b or "")
+    if left is None or right is None:
+        return None
+    return Rule(
+        if_factor=left.group("factor"),
+        if_value=left.group("option"),
+        then_factor=right.group("factor"),
+        then_value=right.group("option"),
+        reason=str(rule.reason or ""),
+        source="ai",
+    )
+
+
+def plan_matrix(payload: MatrixPlanIn, host: str = "") -> MatrixOut:
+    """Plan the fewest runs that still cover every allowed pair. No AI."""
+    factors = [
+        Factor(name=str(one.name or ""), values=tuple(str(x) for x in one.options))
+        for one in payload.factors
+    ]
+    rules: list[Rule] = []
+    problems: list[Problem] = []
+    for rule in payload.rules:
+        made = _rule_from(rule)
+        if made is None:
+            problems.append(
+                _problem(
+                    "clarity",
+                    "high",
+                    f"A rule is not readable: {rule.a!r} with {rule.b!r}.",
+                    'Write each side as "Factor=option", such as "Browser=Firefox".',
+                )
+            )
+            continue
+        rules.append(made)
+
+    plan = None
+    if not problems:
+        plan = plan_matrix_service(factors, rules, [dict(one) for one in payload.pinned])
+        for line in plan.problems:
+            problems.append(
+                _problem(
+                    "clarity",
+                    "high",
+                    line,
+                    "Fix the factors or the rules and call plan_matrix again.",
+                )
+            )
+
+    ok = plan is not None and not plan.problems
+    answer = MatrixOut(
+        tool="plan_matrix",
+        summary=plan.summary if ok else _to_fix(_worst_first(problems)),
+        problems=_worst_first(problems),
+        ask_the_po=[],
+        notes=_matrix_notes(plan) if ok else [],
+        runs=(
+            [
+                RunOut(
+                    values=dict(run.values),
+                    new_pairs=run.new_pairs,
+                    manual_only=run.manual_only,
+                    manual_reason=run.manual_reason,
+                )
+                for run in plan.runs
+            ]
+            if ok
+            else []
+        ),
+        combinations=plan.combinations if ok else 0,
+        pairs_possible=plan.pairs_possible if ok else 0,
+        pairs_covered=plan.pairs_covered if ok else 0,
+        impossible_pairs=(
+            [
+                f"{pair[0]}={pair[1]} + {pair[2]}={pair[3]}"
+                for pair in plan.impossible_pairs
+            ]
+            if ok
+            else []
+        ),
+        manual_only=plan.manual_only if ok else 0,
+    )
+    return finish(
+        answer, payload, host, {"matrix_input": payload.model_dump(mode="json")}
+    )
+
+
+def _matrix_notes(plan) -> list[str]:
+    notes = [
+        f"Every one of the {plan.pairs_possible} possible pairs is covered by "
+        f"{len(plan.runs)} runs."
+    ]
+    if plan.impossible_pairs:
+        notes.append(
+            f"{len(plan.impossible_pairs)} pairs your rules forbid were left out."
+        )
+    if plan.manual_only:
+        notes.append(
+            f"{plan.manual_only} of the runs cannot be driven by Playwright and "
+            "have to be done by hand."
+        )
+    return notes
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# check_code
+# ──────────────────────────────────────────────────────────────────────────────
+
+# An error stops the suite being worth running; a warning is what hurts
+# three months later.
+CODE_LEVELS = {"error": "high", "warning": "medium"}
+CODE_KINDS = (
+    ("`.only`", "gap"),
+    ("hard-coded secret", "weak"),
+    ("expect", "weak"),
+    ("wait", "weak"),
+)
+
+
+def _code_kind(message: str) -> str:
+    said = str(message or "").lower()
+    for word, kind in CODE_KINDS:
+        if word.lower() in said:
+            return kind
+    return "weak"
+
+
+def check_code(payload: CodeIn, host: str = "") -> CodeOut:
+    """Read automation code and say what a senior tester would send back.
+
+    Nothing in the files is ever run.
+    """
+    files = [
+        ProjectFile(name=str(one.path or ""), code=str(one.content or ""))
+        for one in payload.files
+    ]
+    wanted = [str(one.id or "") for one in payload.test_cases if str(one.id or "")]
+    reviewed = review_code(payload.framework, files, wanted)
+
+    problems: list[Problem] = []
+    for finding in reviewed.findings:
+        where = f"{finding.file}:{finding.line}" if finding.line else finding.file
+        problems.append(
+            _problem(
+                _code_kind(finding.message),
+                CODE_LEVELS.get(finding.level, "medium"),
+                f"{where} — {finding.message}",
+                "Fix it in the file and call check_code again.",
+            )
+        )
+    if reviewed.missing:
+        problems.append(
+            _problem(
+                "missing",
+                "high",
+                "No file names these test cases: " + ", ".join(reviewed.missing) + ".",
+                "Put the test case id in the test name or a comment, so the code "
+                "and the suite can be matched up.",
+                tests=list(reviewed.missing),
+            )
+        )
+
+    problems = _worst_first(problems)
+    answer = CodeOut(
+        tool="check_code",
+        summary=" · ".join(
+            [
+                _to_fix(problems),
+                _count(len(files), "file"),
+                (
+                    f"{len(reviewed.traced)} of {len(wanted)} test cases found"
+                    if wanted
+                    else "no test case ids sent"
+                ),
+            ]
+        ),
+        problems=problems,
+        ask_the_po=[],
+        notes=_code_notes(reviewed),
+        language=reviewed.language,
+        syntax={name: syntax_words(status) for name, status in reviewed.syntax.items()},
+        findings=[
+            CodeFindingOut(
+                file=finding.file,
+                line=finding.line,
+                level=finding.level,
+                says=finding.message,
+            )
+            for finding in reviewed.findings
+        ],
+        traced=list(reviewed.traced),
+        untraced=list(reviewed.missing),
+    )
+    return finish(
+        answer, payload, host, {"code_files": [one.path for one in payload.files]}
+    )
+
+
+def _code_notes(reviewed) -> list[str]:
+    notes = []
+    if reviewed.language:
+        notes.append(f"Read as {reviewed.language}.")
+    quick = [
+        name for name, status in reviewed.syntax.items() if status == "basic check passed"
+    ]
+    if quick:
+        notes.append(
+            "Quick check only on "
+            + ", ".join(quick)
+            + ": brackets and quotes match, which is not a full compile."
+        )
+    notes.append("Nothing in these files was run. Every answer comes from reading them.")
+    return notes

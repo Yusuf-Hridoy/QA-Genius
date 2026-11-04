@@ -424,13 +424,18 @@ def _wait_findings(file: ProjectFile) -> list[Finding]:
     return findings
 
 
-def check_project(script: AutomationScript, selected_ids: list[str]) -> CheckReport:
-    """Traceability, syntax and fixed waits. Code works all of this out, never the AI."""
-    files = project_files(script)
+def check_files(files: list[ProjectFile], selected_ids: list[str]) -> CheckReport:
+    """Traceability, syntax and fixed waits over any set of files.
+
+    The same checks the generated project gets, for code that arrived some
+    other way — an agent sending its own repository over MCP, say. Nothing
+    in here knows or cares where the files came from.
+    """
+    files = list(files or [])
     all_code = "\n".join(file.code for file in files)
 
     wanted: list[str] = []
-    for selected_id in selected_ids:
+    for selected_id in selected_ids or []:
         if selected_id and selected_id not in wanted:
             wanted.append(selected_id)
     traced = [one for one in wanted if _is_traced(one, all_code)]
@@ -451,6 +456,17 @@ def check_project(script: AutomationScript, selected_ids: list[str]) -> CheckRep
         findings.extend(errors)
         findings.extend(_wait_findings(file))
 
+    return CheckReport(
+        files=files, traced=traced, missing=missing, syntax=syntax, findings=findings
+    )
+
+
+def check_project(script: AutomationScript, selected_ids: list[str]) -> CheckReport:
+    """Traceability, syntax and fixed waits. Code works all of this out, never the AI."""
+    files = project_files(script)
+    report = check_files(files, selected_ids)
+    findings = list(report.findings)
+
     # pip cannot read a package.json. Say so rather than shipping it quietly.
     if is_python_framework(script) and any(file.name == "package.json" for file in files):
         findings.append(
@@ -458,5 +474,9 @@ def check_project(script: AutomationScript, selected_ids: list[str]) -> CheckRep
         )
 
     return CheckReport(
-        files=files, traced=traced, missing=missing, syntax=syntax, findings=findings
+        files=report.files,
+        traced=report.traced,
+        missing=report.missing,
+        syntax=report.syntax,
+        findings=findings,
     )

@@ -1,0 +1,37 @@
+{
+  "additionalProperties": false,
+  "description": "One planned test run.",
+  "properties": {
+    "manual_only": {
+      "default": false,
+      "description": "True when Playwright cannot drive this run.",
+      "title": "Manual Only",
+      "type": "boolean"
+    },
+    "manual_reason": {
+      "default": "",
+      "description": "Why it has to be done by hand.",
+      "title": "Manual Reason",
+      "type": "string"
+    },
+    "new_pairs": {
+      "description": "How many pairs of values this run is the first to cover. The numbers add up to pairs_covered.",
+      "title": "New Pairs",
+      "type": "integer"
+    },
+    "values": {
+      "additionalProperties": {
+        "type": "string"
+      },
+      "description": "What this run uses, {\"Browser\": \"Chrome\", \"Device\": \"Phone\"}.",
+      "title": "Values",
+      "type": "object"
+    }
+  },
+  "required": [
+    "values",
+    "new_pairs"
+  ],
+  "title": "RunOut",
+  "type": "object"
+}

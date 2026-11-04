@@ -205,11 +205,11 @@ def risks_from(items: list[RiskIn]) -> RiskAnalysis | None:
                 category=str(item.category or "functional"),
                 effect=str(item.effect or ""),
                 cause=str(item.cause or ""),
-                severity=item.severity,
-                likelihood=item.likelihood,
-                detectability=item.detectability,
-                related_criteria=[str(one) for one in item.related_criteria],
-                covered_by=[str(one) for one in item.covered_by],
+                severity=item.how_bad,
+                likelihood=item.how_likely,
+                detectability=item.how_hard_to_notice,
+                related_criteria=[str(one) for one in item.linked_criteria],
+                covered_by=[str(one) for one in item.tested_by],
                 test_idea=str(item.test_idea or ""),
             )
         )

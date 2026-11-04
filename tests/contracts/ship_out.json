@@ -264,6 +264,14 @@
       "title": "Decision",
       "type": "string"
     },
+    "fixed_since_last_check": {
+      "description": "Problem ids from `previous_report_link` that are gone now. Send the link you were given last time and this fills in.",
+      "items": {
+        "type": "string"
+      },
+      "title": "Fixed Since Last Check",
+      "type": "array"
+    },
     "grade": {
       "anyOf": [
         {
@@ -300,11 +308,31 @@
       "title": "Problems",
       "type": "array"
     },
+    "report_link": {
+      "default": "",
+      "description": "A page showing this answer, for the person you are helping. Everything it needs is after the # \u2014 nothing is stored on the server and the server never sees it. Give the user this link.",
+      "title": "Report Link",
+      "type": "string"
+    },
+    "report_note": {
+      "default": "",
+      "description": "Set only when the answer was too big to pack the inputs into the link, so the page shows the findings without them.",
+      "title": "Report Note",
+      "type": "string"
+    },
     "schema_version": {
       "default": "1.0",
       "description": "The shape of this answer. It changes only when fields do.",
       "title": "Schema Version",
       "type": "string"
+    },
+    "still_open": {
+      "description": "Problem ids from `previous_report_link` that are still here. Empty when no previous link was sent.",
+      "items": {
+        "type": "string"
+      },
+      "title": "Still Open",
+      "type": "array"
     },
     "summary": {
       "description": "One line for a human to read, such as \"6 to fix \u00b7 5 criteria \u00b7 14 tests\". Show it; do not parse it.",

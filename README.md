@@ -97,6 +97,36 @@ Every desk shows what it was built from — **Not built yet**, **Old — your wo
 
 ---
 
+## Use QA-Genius from Claude
+
+QA-Genius has a second door: an **MCP server** at `/mcp`. Connect it once
+and Claude — in Claude Code, the Claude app, Cowork or on a phone — can
+call the same checks the website runs.
+
+**Claude writes the criteria, the tests, the risks and the code.
+QA-Genius checks them.** No AI call, no API key, nothing stored: every
+tool is plain Python, so the same input always gives the same answer.
+
+```
+claude mcp add --transport http qa-genius https://qa-genius-ashy.vercel.app/mcp
+```
+
+Then ask Claude to "check this story with QA-Genius". It calls
+`check_story`, writes the criteria and tests, calls `review_tests` until
+no high problems come back, scores the risks, plans the matrix, checks any
+automation, finishes with `ship_check`, and hands you a report link.
+
+The link holds the whole report after the `#`, which a browser never
+sends — so there is no row in a database to go stale, and deleting the
+link deletes the report.
+
+→ **[docs/mcp.md](docs/mcp.md)** — the six tools, the limits, the errors,
+what is and is not kept, and how to switch `/mcp` on in production.
+→ **[integrations/claude/qa-genius/](integrations/claude/qa-genius/)** — a
+skill that teaches Claude when to reach for it.
+
+---
+
 ## Your key, your data
 
 - **Bring your own AI key.** The key drawer lists **Google Gemini (free)**, **Groq (free)**, **OpenAI (GPT)**, **xAI (Grok)**, **Mistral**, **Anthropic (Claude)** and **OpenRouter**. Add more than one — if one is busy or refused, the next one answers.

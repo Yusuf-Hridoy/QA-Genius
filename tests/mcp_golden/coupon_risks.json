@@ -1,0 +1,335 @@
+{
+  "tool": "score_risks",
+  "input": {
+    "story": "As a shopper, I want to apply a discount coupon at checkout so that I pay less for my order.",
+    "context": "Aurora Storefront checkout. Coupons give a percentage off the order total, up to a maximum discount of $30. A coupon works only on orders of at least $50. Each coupon can be used once per account and has an expiry date. Only one coupon per order. Guests can use coupons too.",
+    "criteria": [
+      {
+        "text": "Given a shopper has items worth more than $50 in the cart When they enter a valid coupon code Then the discount is applied to the order total And the new total is shown before payment"
+      },
+      {
+        "text": "Given a shopper has items worth less than $50 in the cart When they enter a valid coupon code Then the coupon is refused with the message \"This coupon needs an order of at least $50.\""
+      },
+      {
+        "text": "Given a coupon gives 20% off When the order total is $200 Then the discount is $30, not $40"
+      },
+      {
+        "text": "Given a coupon has already been used by this account When the shopper enters it Then it is refused with \"You have already used this coupon.\""
+      },
+      {
+        "text": "Given a coupon has expired When the shopper enters it Then it is refused with \"This coupon has expired.\""
+      }
+    ],
+    "test_cases": [
+      {
+        "id": "TC-01",
+        "title": "A valid coupon on a cart over the minimum",
+        "steps": [
+          "Put $60.00 of items in the cart",
+          "Enter a valid coupon code"
+        ],
+        "expected": "The order total drops by the discount and the new total is shown",
+        "test_data": "cart_total=$60.00",
+        "covers": [
+          "AC-1"
+        ],
+        "kind": "normal"
+      },
+      {
+        "id": "TC-02",
+        "title": "A valid coupon on a cart under the minimum",
+        "steps": [
+          "Put $40.00 of items in the cart",
+          "Enter a valid coupon code"
+        ],
+        "expected": "The page shows: This coupon needs an order of at least $50.",
+        "test_data": "cart_total=$40.00",
+        "covers": [
+          "AC-2"
+        ],
+        "kind": "wrong input"
+      },
+      {
+        "id": "TC-03",
+        "title": "The discount stops at the cap",
+        "steps": [
+          "Put $200.00 of items in the cart",
+          "Enter a coupon for 20% off"
+        ],
+        "expected": "The discount is $30.00, not $40.00",
+        "test_data": "cart_total=$200.00; coupon=20%",
+        "covers": [
+          "AC-3"
+        ],
+        "kind": "at the limit"
+      },
+      {
+        "id": "TC-04",
+        "title": "A coupon the account has already used",
+        "steps": [
+          "Enter a coupon this account used last week"
+        ],
+        "expected": "The page shows: You have already used this coupon.",
+        "test_data": "coupon=SPRING20",
+        "covers": [
+          "AC-4"
+        ],
+        "kind": "wrong input"
+      },
+      {
+        "id": "TC-05",
+        "title": "An expired coupon",
+        "steps": [
+          "Enter a coupon whose expiry date has passed"
+        ],
+        "expected": "The page shows: This coupon has expired.",
+        "test_data": "coupon=WINTER10",
+        "covers": [
+          "AC-5"
+        ],
+        "kind": "wrong input"
+      }
+    ],
+    "risks": [
+      {
+        "id": "R1",
+        "title": "The same coupon is applied twice at the same moment",
+        "effect": "The shop gives double the discount and loses the money",
+        "cause": "Two checkout requests race before either is recorded",
+        "category": "data",
+        "how_bad": 5,
+        "how_likely": 3,
+        "how_hard_to_notice": 4,
+        "linked_criteria": [
+          "AC-1"
+        ]
+      },
+      {
+        "id": "R2",
+        "title": "A coupon on a cart under the minimum is accepted",
+        "effect": "Orders below $50 get a discount nobody meant to give",
+        "cause": "The minimum is checked on the page and not on the server",
+        "category": "functional",
+        "how_bad": 4,
+        "how_likely": 2,
+        "how_hard_to_notice": 2,
+        "linked_criteria": [
+          "AC-2"
+        ],
+        "tested_by": [
+          "TC-02"
+        ]
+      },
+      {
+        "id": "R3",
+        "title": "The discount is rounded the wrong way",
+        "effect": "Order totals are a cent out",
+        "cause": "Floating point arithmetic on money",
+        "category": "data",
+        "how_bad": 2,
+        "how_likely": 2,
+        "how_hard_to_notice": 3
+      }
+    ]
+  },
+  "output": {
+    "schema_version": "1.0",
+    "tool": "score_risks",
+    "summary": "2 to fix (1 high) · 3 risks · 1 high without a test",
+    "problems": [
+      {
+        "id": "G-6a5f",
+        "kind": "gap",
+        "level": "high",
+        "says": "R1 The same coupon is applied twice at the same moment: no test (score 60 of 125).",
+        "fix": "Write a test that does what this risk describes, or say in writing why you are accepting it.",
+        "criteria": [
+          "AC-1"
+        ],
+        "tests": []
+      },
+      {
+        "id": "M-7bbf",
+        "kind": "missing",
+        "level": "medium",
+        "says": "Nobody wrote down a classic risk for this kind of feature: A guest reuses a once-per-account coupon — One coupon is used as many times as the shopper has patience for.",
+        "fix": "Add it to your risks with your own scores, then call score_risks again.",
+        "criteria": [],
+        "tests": []
+      }
+    ],
+    "add_tests": [
+      {
+        "id": "TC-006",
+        "title": "A discount worth more than the cart leaves a sensible total",
+        "steps": [
+          "Put one cheap item in the cart",
+          "Apply the coupon",
+          "Read the total and open the payment step"
+        ],
+        "expected": "The total is zero or the smallest amount the shop allows, never below zero, and payment asks for the same amount the cart shows.",
+        "test_data": "cart of $5.00 with a coupon worth $30",
+        "covers": [
+          "AC-1"
+        ],
+        "kind": "at the limit"
+      },
+      {
+        "id": "TC-007",
+        "title": "15% of $59.99 is the same number in the cart, at payment and on the receipt",
+        "steps": [
+          "Apply the coupon and write down the discount and the total",
+          "Go to the payment step and write down the amount asked for",
+          "Finish the order and open the receipt"
+        ],
+        "expected": "The discount is the same amount in all three places, to the cent, and the three totals agree.",
+        "test_data": "cart=59.99, coupon=15%",
+        "covers": [
+          "AC-1"
+        ],
+        "kind": "at the limit"
+      },
+      {
+        "id": "TC-008",
+        "title": "Two tabs applying one single-use coupon end with one discounted order",
+        "steps": [
+          "Fill a cart in each tab and apply the same coupon in both",
+          "Press pay in the first tab, then within a second press pay in the second",
+          "Open the order list and the coupon's usage record"
+        ],
+        "expected": "Exactly one order carries the discount; the other is refused with a message about the coupon being used, and the coupon is recorded as used once.",
+        "test_data": "coupon ONCE50, two tabs, same account",
+        "covers": [
+          "AC-1"
+        ],
+        "kind": "unusual"
+      },
+      {
+        "id": "TC-009",
+        "title": "A guest who already used the coupon is refused the second time",
+        "steps": [
+          "Start a new guest checkout with shopper@example.com",
+          "Enter the same coupon",
+          "Read the message and the total"
+        ],
+        "expected": "The coupon is refused with the same message a signed-in shopper would see, and the total has no discount.",
+        "test_data": "email shopper@example.com used twice as a guest",
+        "covers": [
+          "AC-1"
+        ],
+        "kind": "wrong input"
+      },
+      {
+        "id": "TC-010",
+        "title": "A code that doesn't exist is refused and the total does not change",
+        "steps": [
+          "Write down the total before anything is entered",
+          "Enter FAKE123 and apply it",
+          "Read the message and the total",
+          "Enter SAVE2O, with the letter O instead of a zero, and apply it",
+          "Read the message and the total again"
+        ],
+        "expected": "Both codes are refused with a message that says the code is not recognised; the total is the same as it was before each attempt, and no discount line appears.",
+        "test_data": "FAKE123 (no such code), SAVE2O (SAVE20 with a letter O)",
+        "covers": [
+          "AC-1"
+        ],
+        "kind": "wrong input"
+      },
+      {
+        "id": "TC-011",
+        "title": "A pasted code with spaces and small letters still works",
+        "steps": [
+          "Open the cart and paste ' save20 ' into the coupon box, spaces and all",
+          "Apply it",
+          "Look at the total and the message"
+        ],
+        "expected": "The coupon is accepted, the discount is taken off the total, and no message about a wrong code is shown.",
+        "test_data": "code typed as ' save20 ' (two spaces, small letters)",
+        "covers": [
+          "AC-1"
+        ],
+        "kind": "unusual"
+      },
+      {
+        "id": "TC-012",
+        "title": "Boundary values at $49.99 / $50.01 (AC-1)",
+        "steps": [
+          "Enter a valid coupon code.",
+          "Enter a valid coupon code.",
+          "Check the result."
+        ],
+        "expected": "At $49.99: the coupon is refused with the message \"This coupon needs an order of at least $50.\" (AC-2). At $50.01: the discount is applied to the order total; the new total is shown before payment.",
+        "test_data": "$49.99, $50.01 (valid coupon code)",
+        "covers": [
+          "AC-1"
+        ],
+        "kind": "at the limit"
+      },
+      {
+        "id": "TC-013",
+        "title": "Boundary values at $149.99 / $150.00 / $150.01 (AC-3)",
+        "steps": [
+          "The order total is $200.",
+          "The order total is $200.",
+          "The order total is $200.",
+          "Check the result."
+        ],
+        "expected": "At $149.99: 20% is $29.998, so the discount is $30.00 after rounding to the cent — check the shop rounds this way (it could also be $29.99). At $150.00: 20% is exactly $30.00 — the cap. At $150.01: 20% is $30.002, so the cap applies and the discount stays $30.00.",
+        "test_data": "$149.99, $150.00, $150.01",
+        "covers": [
+          "AC-3"
+        ],
+        "kind": "at the limit"
+      }
+    ],
+    "ask_the_po": [
+      "R1 The same coupon is applied twice at the same moment is a high risk with no test. Is the team accepting it, and who owns that?"
+    ],
+    "notes": [
+      "high: 1 · medium: 0 · low: 2",
+      "A score is how bad × how likely × how hard to notice, out of 125."
+    ],
+    "report_link": "",
+    "report_note": "",
+    "fixed_since_last_check": [],
+    "still_open": [],
+    "risks": [
+      {
+        "id": "R1",
+        "title": "The same coupon is applied twice at the same moment",
+        "category": "data",
+        "score": 60,
+        "max_score": 125,
+        "level": "high",
+        "coverage": "no test",
+        "tested_by": []
+      },
+      {
+        "id": "R2",
+        "title": "A coupon on a cart under the minimum is accepted",
+        "category": "functional",
+        "score": 16,
+        "max_score": 125,
+        "level": "low",
+        "coverage": "tested",
+        "tested_by": [
+          "TC-02"
+        ]
+      },
+      {
+        "id": "R3",
+        "title": "The discount is rounded the wrong way",
+        "category": "data",
+        "score": 12,
+        "max_score": 125,
+        "level": "low",
+        "coverage": "no test",
+        "tested_by": []
+      }
+    ],
+    "untested_high": [
+      "R1"
+    ]
+  }
+}

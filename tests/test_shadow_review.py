@@ -24,6 +24,7 @@ from qagenius.automation_checks import ProjectFile
 from qagenius.models import FailureMode, RiskAnalysis
 from qagenius.risk_radar import score_risks
 from qagenius.shadow_qa.review import (
+    DUPLICATE_TITLE_MATCH,
     MAX_ADDED,
     MAX_ADDED_RISKS,
     MAX_QUALITY_NOTES,
@@ -40,6 +41,7 @@ from qagenius.shadow_qa.review import (
     review_test_cases,
     risk_titles,
 )
+from qagenius.test_case_diff import title_score
 from qagenius.test_cases import number_criteria
 
 PROFILE = number_criteria(PROFILE_CRITERIA)
@@ -291,10 +293,75 @@ def test_a_case_that_types_data_without_test_data_is_noted():
 
 
 def test_near_duplicate_titles_are_noted():
-    first = case(case_id="TC-001", title="Account locks after five wrong passwords")
-    second = case(case_id="TC-002", title="Account locks after five wrong passwords")
+    """Two names this alike are one test, even when the runs differ."""
+    first = case(
+        case_id="TC-001",
+        title="Account locks after five wrong passwords",
+        steps=["Open the sign-in page", "Enter a wrong password five times"],
+        test_data="attempts=5",
+    )
+    second = case(
+        case_id="TC-002",
+        title="Account locks after five wrong passwords",
+        steps=["Go to sign-in", "Submit the form with a bad password 5 times"],
+        test_data="tries=5",
+    )
     review = review_test_cases(LOCKOUT_STORY, LOCKOUT, suite(first, second))
     assert "TC-002: near-duplicate of TC-001" in review.quality
+
+
+def test_the_same_run_with_the_same_data_is_a_copy_however_it_is_named():
+    """Renaming the copy is the commonest way a duplicate survives review."""
+    first = case(
+        case_id="TC-001",
+        title="Account locks after five wrong passwords",
+        steps=["Open the sign-in page", "Enter a wrong password five times"],
+        test_data="attempts=5",
+    )
+    renamed = case(
+        case_id="TC-002",
+        title="Repeated sign-in failures disable the shopper's account",
+        steps=["Open the sign-in page", "Enter a wrong password five times"],
+        test_data="attempts=5",
+    )
+    # The titles are far enough apart that the name check alone lets it by.
+    assert title_score(first.title, renamed.title) < DUPLICATE_TITLE_MATCH
+    review = review_test_cases(LOCKOUT_STORY, LOCKOUT, suite(first, renamed))
+    assert "TC-002: same steps and test data as TC-001" in review.quality
+
+
+def test_the_same_steps_with_different_data_are_two_tests():
+    """One run at $40 and the same run at $60 is the pair you want."""
+    first = case(
+        case_id="TC-001",
+        title="A coupon on a small cart",
+        steps=["Put items in the cart", "Enter a valid coupon code"],
+        test_data="cart_total=40.00",
+    )
+    second = case(
+        case_id="TC-002",
+        title="A coupon on a large cart",
+        steps=["Put items in the cart", "Enter a valid coupon code"],
+        test_data="cart_total=60.00",
+    )
+    review = review_test_cases(LOCKOUT_STORY, LOCKOUT, suite(first, second))
+    assert not any("same steps and test data" in one for one in review.quality)
+
+
+def test_spacing_and_capitals_do_not_hide_a_copy():
+    first = case(
+        case_id="TC-001",
+        steps=["Open the sign-in page", "Enter a wrong password"],
+        test_data="attempts=5",
+    )
+    sloppy = case(
+        case_id="TC-002",
+        title="A quite differently worded account lockout check",
+        steps=["open the  Sign-in page ", "ENTER a wrong password"],
+        test_data="Attempts=5",
+    )
+    review = review_test_cases(LOCKOUT_STORY, LOCKOUT, suite(first, sloppy))
+    assert "TC-002: same steps and test data as TC-001" in review.quality
 
 
 def test_there_are_never_more_than_six_quality_notes():

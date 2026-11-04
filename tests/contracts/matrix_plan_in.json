@@ -1,0 +1,117 @@
+{
+  "$defs": {
+    "FactorIn": {
+      "additionalProperties": false,
+      "description": "One thing that varies between test runs, and what it can be.",
+      "properties": {
+        "name": {
+          "description": "What varies, such as \"Browser\" or \"Device\".",
+          "maxLength": 40,
+          "title": "Name",
+          "type": "string"
+        },
+        "options": {
+          "description": "Every value it can take, such as [\"Chrome\", \"Firefox\", \"Safari\"]. At least two.",
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 8,
+          "minItems": 2,
+          "title": "Options",
+          "type": "array"
+        }
+      },
+      "required": [
+        "name",
+        "options"
+      ],
+      "title": "FactorIn",
+      "type": "object"
+    },
+    "MatrixRuleIn": {
+      "additionalProperties": false,
+      "description": "Two values that can never happen together.",
+      "properties": {
+        "a": {
+          "description": "One side, written \"Factor=option\", such as \"Browser=Firefox\".",
+          "maxLength": 90,
+          "title": "A",
+          "type": "string"
+        },
+        "b": {
+          "description": "The other side, such as \"Device=Phone\".",
+          "maxLength": 90,
+          "title": "B",
+          "type": "string"
+        },
+        "reason": {
+          "default": "",
+          "description": "Why they cannot go together, in one line.",
+          "maxLength": 300,
+          "title": "Reason",
+          "type": "string"
+        }
+      },
+      "required": [
+        "a",
+        "b"
+      ],
+      "title": "MatrixRuleIn",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "What varies between runs, and what cannot go with what.",
+  "properties": {
+    "factors": {
+      "description": "What varies between runs. At least two.",
+      "items": {
+        "$ref": "#/$defs/FactorIn"
+      },
+      "maxItems": 8,
+      "minItems": 2,
+      "title": "Factors",
+      "type": "array"
+    },
+    "pinned": {
+      "description": "Runs that must be in the plan whatever the arithmetic says, each written {\"Browser\": \"Chrome\", \"Device\": \"Phone\"}.",
+      "items": {
+        "additionalProperties": {
+          "type": "string"
+        },
+        "type": "object"
+      },
+      "maxItems": 40,
+      "title": "Pinned",
+      "type": "array"
+    },
+    "previous_report_link": {
+      "default": "",
+      "description": "The report_link this tool gave you last time, if there was one. Send it and the answer says which problems you have fixed since and which are still here. Leave it out on the first call.",
+      "maxLength": 200000,
+      "title": "Previous Report Link",
+      "type": "string"
+    },
+    "rules": {
+      "description": "Pairs of values that can never happen together.",
+      "items": {
+        "$ref": "#/$defs/MatrixRuleIn"
+      },
+      "maxItems": 40,
+      "title": "Rules",
+      "type": "array"
+    },
+    "story_label": {
+      "default": "",
+      "description": "The team's own id for this story, such as \"AUR-14\". It is shown at the top of the report page so a reader can match the report to the ticket. Letters, numbers, - and _ only.",
+      "maxLength": 24,
+      "title": "Story Label",
+      "type": "string"
+    }
+  },
+  "required": [
+    "factors"
+  ],
+  "title": "MatrixPlanIn",
+  "type": "object"
+}

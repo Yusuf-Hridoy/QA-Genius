@@ -372,6 +372,10 @@
       "Already covered: 2 things a senior tester checks for this kind of story.",
       "100% of criteria have at least one test.",
       "8 ready tests in add_tests — send them back in test_cases when you have added them."
-    ]
+    ],
+    "report_link": "",
+    "report_note": "",
+    "fixed_since_last_check": [],
+    "still_open": []
   }
 }

@@ -219,6 +219,10 @@
       "Every criterion has the tests it needs.",
       "Already covered: 6 things a senior tester checks for this kind of story.",
       "100% of criteria have at least one test."
-    ]
+    ],
+    "report_link": "",
+    "report_note": "",
+    "fixed_since_last_check": [],
+    "still_open": []
   }
 }

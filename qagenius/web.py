@@ -407,6 +407,17 @@ async def mcp_door(request: Request) -> Response:
     return await mcp_transport.handle(request)
 
 
+@app.get("/report", response_class=HTMLResponse)
+def report_page(request: Request) -> HTMLResponse:
+    """A report Claude made, read out of the link in the browser.
+
+    The page is empty on purpose. Everything it shows lives after the `#`,
+    which a browser never sends, so this server has not seen the report it
+    is about to draw and has nothing to store or to forget.
+    """
+    return templates.TemplateResponse(request, "report.html", {"active": ""})
+
+
 @app.get("/mcp", include_in_schema=False)
 def mcp_door_get() -> Response:
     """A browser or an SSE client asking to listen.

@@ -44,6 +44,10 @@
     ],
     "notes": [
       "Features found in the story: Password, Two-factor, Sessions, OAuth, Preferences, Upload, Deletion."
-    ]
+    ],
+    "report_link": "",
+    "report_note": "",
+    "fixed_since_last_check": [],
+    "still_open": []
   }
 }

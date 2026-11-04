@@ -131,6 +131,98 @@ def test_the_lockout_run_reports_no_limit_problem_at_all():
     assert [one for one in answer("lockout")["problems"] if one["kind"] == "limit"] == []
 
 
+# ── the three later tools, on the same stories ───────────────────────────
+
+
+def test_a_risk_a_test_really_reaches_is_not_called_untested():
+    # R2 names TC-02, and TC-02's words are about the thing R2 says goes
+    # wrong. A tool that cried wolf here would be ignored on R1 too.
+    found = answer("coupon_risks")
+    by_id = {one["id"]: one for one in found["risks"]}
+    assert by_id["R2"]["coverage"] == "tested"
+    assert "R2" not in found["untested_high"]
+
+
+def test_the_risk_nothing_reaches_is_the_one_reported_high():
+    found = answer("coupon_risks")
+    assert found["untested_high"] == ["R1"]
+    high = [one for one in found["problems"] if one["level"] == "high"]
+    assert len(high) == 1
+    assert "R1" in high[0]["says"]
+    assert found["ask_the_po"], "a high risk with no test is the PO's call"
+
+
+def test_every_risk_is_scored_out_of_a_hundred_and_twenty_five():
+    for risk in answer("coupon_risks")["risks"]:
+        assert 1 <= risk["score"] <= 125
+        assert risk["max_score"] == 125
+        assert risk["coverage"] in ("tested", "probably tested", "no test")
+
+
+def test_the_matrix_covers_every_pair_it_is_allowed_to():
+    found = answer("navbar_matrix")
+    assert found["pairs_covered"] == found["pairs_possible"]
+    assert found["pairs_covered"] > 0
+    assert found["problems"] == []
+
+
+def test_the_matrix_runs_are_fewer_than_the_combinations():
+    # The whole point: 24 combinations do not need 24 runs.
+    found = answer("navbar_matrix")
+    assert len(found["runs"]) < found["combinations"]
+
+
+def test_every_new_pair_count_adds_up_to_what_is_covered():
+    found = answer("navbar_matrix")
+    assert sum(one["new_pairs"] for one in found["runs"]) == found["pairs_covered"]
+
+
+def test_the_pairs_the_rules_forbid_are_named_not_hidden():
+    found = answer("navbar_matrix")
+    assert "Browser=Firefox + Device=Phone" in found["impossible_pairs"]
+
+
+def test_a_run_playwright_cannot_drive_says_why():
+    found = answer("navbar_matrix")
+    manual = [one for one in found["runs"] if one["manual_only"]]
+    assert manual
+    assert all(one["manual_reason"] for one in manual)
+
+
+def test_the_leftover_only_is_the_worst_thing_in_the_code():
+    found = answer("lockout_code")
+    only = [one for one in found["findings"] if ".only" in one["says"]]
+    assert only and only[0]["level"] == "error"
+
+
+def test_a_test_that_checks_nothing_is_reported():
+    said = [one["says"] for one in answer("lockout_code")["findings"]]
+    assert any("never asserts anything" in one for one in said)
+
+
+def test_a_password_in_the_source_is_reported():
+    said = [one["says"] for one in answer("lockout_code")["findings"]]
+    assert any("hard-coded secret" in one for one in said)
+
+
+def test_a_fixed_pause_is_reported():
+    said = [one["says"] for one in answer("lockout_code")["findings"]]
+    assert any("Fixed pause" in one for one in said)
+
+
+def test_a_test_case_the_code_never_names_is_reported():
+    found = answer("lockout_code")
+    assert found["untraced"] == ["TC-03"]
+    assert any(one["kind"] == "missing" for one in found["problems"])
+
+
+def test_the_quick_syntax_check_says_it_is_not_a_compile():
+    # A reader who thinks "passed" means "compiles" has been misled.
+    syntax = answer("lockout_code")["syntax"]
+    assert all("not a full compile" in one for one in syntax.values())
+    assert any("Nothing in these files was run" in one for one in answer("lockout_code")["notes"])
+
+
 # ── every answer is shaped the way the contract says ─────────────────────
 
 

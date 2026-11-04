@@ -1,0 +1,307 @@
+{
+  "$defs": {
+    "CodeFindingOut": {
+      "additionalProperties": false,
+      "description": "One thing found in one file.",
+      "properties": {
+        "file": {
+          "description": "Which file.",
+          "title": "File",
+          "type": "string"
+        },
+        "level": {
+          "description": "error: this will not run or will not catch anything. warning: it runs, and it will hurt later.",
+          "enum": [
+            "error",
+            "warning"
+          ],
+          "title": "Level",
+          "type": "string"
+        },
+        "line": {
+          "description": "Which line. 0 when it is about the whole file.",
+          "title": "Line",
+          "type": "integer"
+        },
+        "says": {
+          "description": "What is wrong, in one line.",
+          "title": "Says",
+          "type": "string"
+        }
+      },
+      "required": [
+        "file",
+        "line",
+        "level",
+        "says"
+      ],
+      "title": "CodeFindingOut",
+      "type": "object"
+    },
+    "Problem": {
+      "additionalProperties": false,
+      "description": "One thing that is wrong, and what to do about it.",
+      "properties": {
+        "criteria": {
+          "description": "The criterion ids this is about.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Criteria",
+          "type": "array"
+        },
+        "fix": {
+          "description": "What to do about it, as an instruction.",
+          "title": "Fix",
+          "type": "string"
+        },
+        "id": {
+          "description": "A stable id for this problem. The same problem keeps the same id between calls, so you can say which one you fixed.",
+          "title": "Id",
+          "type": "string"
+        },
+        "kind": {
+          "description": "limit: a number two places disagree about, or nobody decided. gap: something a senior tester always checks that no test does. copy: two tests that are the same test. weak: a test whose expected result cannot be judged true or false. depth: a criterion without enough tests, or without the kinds it needs. clarity: a word nobody can test. epic: the story is really several stories. missing: a criterion with no test at all.",
+          "enum": [
+            "limit",
+            "gap",
+            "copy",
+            "weak",
+            "depth",
+            "clarity",
+            "epic",
+            "missing"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "level": {
+          "description": "high: fix this before writing more. medium: fix it before release. low: worth a look.",
+          "enum": [
+            "high",
+            "medium",
+            "low"
+          ],
+          "title": "Level",
+          "type": "string"
+        },
+        "says": {
+          "description": "What is wrong, in one sentence.",
+          "title": "Says",
+          "type": "string"
+        },
+        "tests": {
+          "description": "The test ids this is about.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Tests",
+          "type": "array"
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "level",
+        "says",
+        "fix"
+      ],
+      "title": "Problem",
+      "type": "object"
+    },
+    "TestIn": {
+      "additionalProperties": false,
+      "description": "One test case.",
+      "properties": {
+        "covers": {
+          "description": "The criterion ids this test proves, such as [\"AC-1\", \"AC-3\"]. Use the same ids you sent in criteria. A criterion no test names is reported as having no tests.",
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 60,
+          "title": "Covers",
+          "type": "array"
+        },
+        "expected": {
+          "description": "What must be true afterwards, worded so it can only be true or false. \"The page shows: Locked for 30 minutes\" \u2014 not \"it works\".",
+          "maxLength": 1000,
+          "title": "Expected",
+          "type": "string"
+        },
+        "id": {
+          "description": "Your id for this test, such as \"TC-04\".",
+          "maxLength": 40,
+          "title": "Id",
+          "type": "string"
+        },
+        "kind": {
+          "default": "normal",
+          "description": "What kind of test this is. \"normal\" is the path that works; \"wrong input\" is bad data or no permission; \"at the limit\" uses the exact boundary value; \"unusual\" is everything rarer.",
+          "enum": [
+            "normal",
+            "wrong input",
+            "at the limit",
+            "unusual"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "steps": {
+          "description": "What the tester does, one action per step. At least one.",
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 50,
+          "minItems": 1,
+          "title": "Steps",
+          "type": "array"
+        },
+        "test_data": {
+          "default": "",
+          "description": "The exact values this test uses: the amount, the file size, the number of tries. Say \"$50.00\", not \"an order over the limit\".",
+          "maxLength": 1000,
+          "title": "Test Data",
+          "type": "string"
+        },
+        "title": {
+          "description": "What this test proves, in one line.",
+          "maxLength": 300,
+          "title": "Title",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "title",
+        "steps",
+        "expected"
+      ],
+      "title": "TestIn",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "The code answer: what each file is, and what is wrong with it.",
+  "properties": {
+    "add_tests": {
+      "description": "Ready-written tests for gaps nothing covered. They are already in the shape this tool takes back, so you can send them straight in.",
+      "items": {
+        "$ref": "#/$defs/TestIn"
+      },
+      "title": "Add Tests",
+      "type": "array"
+    },
+    "ask_the_po": {
+      "description": "Questions no tool can answer because nobody has decided yet. Show these to the user \u2014 do not guess the answers.",
+      "items": {
+        "type": "string"
+      },
+      "title": "Ask The Po",
+      "type": "array"
+    },
+    "findings": {
+      "description": "Everything found, file by file.",
+      "items": {
+        "$ref": "#/$defs/CodeFindingOut"
+      },
+      "title": "Findings",
+      "type": "array"
+    },
+    "fixed_since_last_check": {
+      "description": "Problem ids from `previous_report_link` that are gone now. Send the link you were given last time and this fills in.",
+      "items": {
+        "type": "string"
+      },
+      "title": "Fixed Since Last Check",
+      "type": "array"
+    },
+    "language": {
+      "default": "",
+      "description": "What these files are written in.",
+      "title": "Language",
+      "type": "string"
+    },
+    "notes": {
+      "description": "Anything else worth knowing that is not a problem.",
+      "items": {
+        "type": "string"
+      },
+      "title": "Notes",
+      "type": "array"
+    },
+    "problems": {
+      "description": "Everything wrong, worst first. Fix every high one and call the tool again.",
+      "items": {
+        "$ref": "#/$defs/Problem"
+      },
+      "title": "Problems",
+      "type": "array"
+    },
+    "report_link": {
+      "default": "",
+      "description": "A page showing this answer, for the person you are helping. Everything it needs is after the # \u2014 nothing is stored on the server and the server never sees it. Give the user this link.",
+      "title": "Report Link",
+      "type": "string"
+    },
+    "report_note": {
+      "default": "",
+      "description": "Set only when the answer was too big to pack the inputs into the link, so the page shows the findings without them.",
+      "title": "Report Note",
+      "type": "string"
+    },
+    "schema_version": {
+      "default": "1.0",
+      "description": "The shape of this answer. It changes only when fields do.",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "still_open": {
+      "description": "Problem ids from `previous_report_link` that are still here. Empty when no previous link was sent.",
+      "items": {
+        "type": "string"
+      },
+      "title": "Still Open",
+      "type": "array"
+    },
+    "summary": {
+      "description": "One line for a human to read, such as \"6 to fix \u00b7 5 criteria \u00b7 14 tests\". Show it; do not parse it.",
+      "title": "Summary",
+      "type": "string"
+    },
+    "syntax": {
+      "additionalProperties": {
+        "type": "string"
+      },
+      "description": "file \u2192 what its syntax check actually proved. Python is parsed for real; TypeScript and JavaScript get a quick check that brackets and quotes match, which is not a full compile.",
+      "title": "Syntax",
+      "type": "object"
+    },
+    "tool": {
+      "description": "Which tool answered.",
+      "title": "Tool",
+      "type": "string"
+    },
+    "traced": {
+      "description": "Test case ids the code names.",
+      "items": {
+        "type": "string"
+      },
+      "title": "Traced",
+      "type": "array"
+    },
+    "untraced": {
+      "description": "Test case ids you sent that no file names.",
+      "items": {
+        "type": "string"
+      },
+      "title": "Untraced",
+      "type": "array"
+    }
+  },
+  "required": [
+    "tool",
+    "summary"
+  ],
+  "title": "CodeOut",
+  "type": "object"
+}

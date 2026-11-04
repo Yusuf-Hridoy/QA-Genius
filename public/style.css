@@ -2147,3 +2147,58 @@ svg.next-mark{color:var(--ok-line)}
    be a trip to another page and a list the reader had to search. */
 .risk-written{margin:0 0 12px}
 .risk-written-link{white-space:nowrap;font-weight:600}
+
+/* ------------------------------------------------------------- /report */
+/* A report Claude made, drawn from the link. Everything here is built by
+   public/report.js out of data that came from somewhere else, so the page
+   has to look deliberate while holding whatever it is handed: a story of
+   three words or thirty, no risks, no matrix, nothing fixed yet. */
+.report-root{display:flex;flex-direction:column;gap:16px}
+
+.report-head{margin-bottom:0}
+.report-story{display:-webkit-box;-webkit-box-orient:vertical;overflow:hidden;
+  -webkit-line-clamp:3}
+.report-nothing-stored{margin-top:6px}
+
+/* The grade beside the decision. The ship page's is a button that opens the
+   arithmetic; this one has nowhere to open to, so it is the same ring
+   standing still. */
+.grade-circle-static{width:78px;height:78px;border-radius:50%;
+  display:flex;align-items:center;justify-content:center;
+  border:2px solid currentColor;background:rgba(255,255,255,.22)}
+:root[data-theme="dark"] .grade-circle-static{background:rgba(255,255,255,.06)}
+
+/* One row per problem: a mark, what it says, what to do, and its id. */
+.report-rows{list-style:none;margin:0;padding:0;display:flex;
+  flex-direction:column;gap:10px}
+.report-row{display:flex;gap:10px;align-items:flex-start;
+  padding:10px 12px;border:1px solid var(--border);border-radius:var(--r-md);
+  background:var(--card-2)}
+.report-row-body{min-width:0;flex:1}
+.report-says{margin:0;font-weight:500;overflow-wrap:anywhere}
+.report-fix{margin:3px 0 0;overflow-wrap:anywhere}
+.report-meta{margin:5px 0 0;color:var(--muted)}
+
+.report-mark{flex:0 0 auto;width:22px;height:22px;border-radius:50%;
+  display:flex;align-items:center;justify-content:center;
+  font-size:13px;font-weight:700;line-height:1}
+.report-mark-fixed{background:var(--ok-bg);color:var(--ok-fg)}
+.report-mark-open{background:var(--warn-bg);color:var(--warn-fg)}
+.report-mark-warn{background:var(--info-bg);color:var(--info-fg)}
+.report-fixed .report-says{color:var(--text-2);font-weight:400}
+
+.report-asks{margin:6px 0 0;padding-left:18px;display:flex;
+  flex-direction:column;gap:5px}
+.report-asks li{overflow-wrap:anywhere}
+.note-ask{margin-top:14px}
+
+.report-actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:4px}
+.report-broken p{max-width:60ch}
+
+@media (max-width:620px){
+  .report-actions .btn{width:100%;justify-content:center}
+  .report-row{padding:10px}
+}
+.report-subhead{margin:16px 0 8px;font-family:var(--font-serif);font-size:17px;
+  font-weight:500;color:var(--text-2)}
+.report-subhead:first-of-type{margin-top:12px}

@@ -87,29 +87,36 @@
           "title": "Cause",
           "type": "string"
         },
-        "covered_by": {
-          "description": "The test ids you believe already reach this risk. The check reads the tests themselves and will disagree if the words do not.",
-          "items": {
-            "type": "string"
-          },
-          "maxItems": 300,
-          "title": "Covered By",
-          "type": "array"
-        },
-        "detectability": {
-          "default": 3,
-          "description": "How hard it is to notice, 1 to 5. 5 means nobody would.",
-          "maximum": 5,
-          "minimum": 1,
-          "title": "Detectability",
-          "type": "integer"
-        },
         "effect": {
           "default": "",
           "description": "What the user suffers when it happens.",
           "maxLength": 600,
           "title": "Effect",
           "type": "string"
+        },
+        "how_bad": {
+          "default": 3,
+          "description": "How bad it is if it happens, 1 to 5. 5 is the worst.",
+          "maximum": 5,
+          "minimum": 1,
+          "title": "How Bad",
+          "type": "integer"
+        },
+        "how_hard_to_notice": {
+          "default": 3,
+          "description": "How hard it would be to notice, 1 to 5. 5 means it could happen and nobody would find out.",
+          "maximum": 5,
+          "minimum": 1,
+          "title": "How Hard To Notice",
+          "type": "integer"
+        },
+        "how_likely": {
+          "default": 3,
+          "description": "How likely it is to happen, 1 to 5. 5 is near certain.",
+          "maximum": 5,
+          "minimum": 1,
+          "title": "How Likely",
+          "type": "integer"
         },
         "id": {
           "default": "",
@@ -118,30 +125,14 @@
           "title": "Id",
           "type": "string"
         },
-        "likelihood": {
-          "default": 3,
-          "description": "How likely it is, 1 to 5.",
-          "maximum": 5,
-          "minimum": 1,
-          "title": "Likelihood",
-          "type": "integer"
-        },
-        "related_criteria": {
+        "linked_criteria": {
           "description": "The criterion ids this risk belongs to, such as [\"AC-2\"].",
           "items": {
             "type": "string"
           },
           "maxItems": 60,
-          "title": "Related Criteria",
+          "title": "Linked Criteria",
           "type": "array"
-        },
-        "severity": {
-          "default": 3,
-          "description": "How bad it is, 1 to 5.",
-          "maximum": 5,
-          "minimum": 1,
-          "title": "Severity",
-          "type": "integer"
         },
         "test_idea": {
           "default": "",
@@ -149,6 +140,15 @@
           "maxLength": 600,
           "title": "Test Idea",
           "type": "string"
+        },
+        "tested_by": {
+          "description": "The test ids you believe already reach this risk. The check reads those tests and will disagree if their words do not match what the risk says goes wrong.",
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 300,
+          "title": "Tested By",
+          "type": "array"
         },
         "title": {
           "description": "The failure, in one line.",
@@ -274,6 +274,13 @@
       "default": null,
       "description": "The test matrix, if you planned one. Leave it out and the matrix check comes back \"not done yet\"."
     },
+    "previous_report_link": {
+      "default": "",
+      "description": "The report_link this tool gave you last time, if there was one. Send it and the answer says which problems you have fixed since and which are still here. Leave it out on the first call.",
+      "maxLength": 200000,
+      "title": "Previous Report Link",
+      "type": "string"
+    },
     "risks": {
       "description": "The risks, if you scored any. Leave it out and the risk check comes back \"not done yet\" \u2014 never \"fine\".",
       "items": {
@@ -287,6 +294,13 @@
       "description": "The user story or the bug, in the words the team wrote.",
       "maxLength": 3000,
       "title": "Story",
+      "type": "string"
+    },
+    "story_label": {
+      "default": "",
+      "description": "The team's own id for this story, such as \"AUR-14\". It is shown at the top of the report page so a reader can match the report to the ticket. Letters, numbers, - and _ only.",
+      "maxLength": 24,
+      "title": "Story Label",
       "type": "string"
     },
     "test_cases": {

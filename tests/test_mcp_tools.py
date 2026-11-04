@@ -309,9 +309,9 @@ def test_sending_risks_makes_the_risk_check_run():
                     "category": "data",
                     "effect": "The shopper pays twice",
                     "cause": "The Pay button sends two requests",
-                    "severity": 5,
-                    "likelihood": 3,
-                    "detectability": 4,
+                    "how_bad": 5,
+                    "how_likely": 3,
+                    "how_hard_to_notice": 4,
                 }
             ]
         )
@@ -327,9 +327,9 @@ def test_an_accepted_risk_stops_counting_as_untested():
         "category": "data",
         "effect": "The shopper pays twice",
         "cause": "The Pay button sends two requests",
-        "severity": 5,
-        "likelihood": 5,
-        "detectability": 5,
+        "how_bad": 5,
+        "how_likely": 5,
+        "how_hard_to_notice": 5,
     }
     before = tools.ship_check(_ship_in(risks=[risk]))
     after = tools.ship_check(_ship_in(risks=[risk], accepted=["R1"]))

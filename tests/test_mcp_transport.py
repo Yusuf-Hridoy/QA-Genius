@@ -11,29 +11,17 @@ import json
 import os
 import time
 
-import anyio
 import pytest
 from fastapi.testclient import TestClient
 
 from qagenius.mcp_server import transport
-from qagenius.mcp_server.schemas import MAX_CRITERIA, MAX_TESTS
+from qagenius.mcp_server.schemas import MAX_CRITERIA, MAX_RISKS, MAX_TESTS
 from qagenius.mcp_server.transport import RateLimit, field_path, spoken_version
 from qagenius.web import app
 
 HEADERS = {"Content-Type": "application/json", "Accept": "application/json"}
 STORY = "As a shopper I want the cart to update quickly so that I can check out"
 
-# The server runs on mcp_types alone; the whole SDK is a dev dependency, for
-# the one test that drives our route with the SDK's own client. An install
-# of requirements.txt only skips that test rather than failing on it.
-try:  # pragma: no cover - whether this works is the point
-    import httpx2
-    from mcp import ClientSession
-    from mcp.client.streamable_http import streamable_http_client
-
-    HAS_SDK = True
-except ImportError:  # pragma: no cover
-    HAS_SDK = False
 
 
 @pytest.fixture(autouse=True)
@@ -65,97 +53,6 @@ def tool_call(client, name, arguments, request_id=1):
 def said(response) -> str:
     """The text of a tool error, which is where a tool says no."""
     return response.json()["result"]["content"][0]["text"]
-
-
-# ──────────────────────────────────────────────────────────────────────────────
-# Driven by the SDK's own client
-# ──────────────────────────────────────────────────────────────────────────────
-
-
-def _with_sdk_client(work):
-    """Run `work(session)` against this app using the real MCP client."""
-
-    async def main():
-        http = httpx2.AsyncClient(
-            transport=httpx2.ASGITransport(app=app), base_url="http://qa.test"
-        )
-        async with http:
-            async with streamable_http_client(
-                "http://qa.test/mcp", http_client=http
-            ) as (reader, writer):
-                async with ClientSession(reader, writer) as session:
-                    return await work(session)
-
-    return anyio.run(main)
-
-
-@pytest.mark.skipif(not HAS_SDK, reason="the mcp SDK is a dev dependency")
-def test_a_real_mcp_client_can_shake_hands_list_and_call(monkeypatch):
-    monkeypatch.setenv("QAG_MCP_ENABLED", "1")
-
-    async def work(session):
-        start = await session.initialize()
-        tools = (await session.list_tools()).tools
-        answers = {}
-        answers["check_story"] = await session.call_tool(
-            "check_story", {"story": STORY}
-        )
-        answers["review_tests"] = await session.call_tool(
-            "review_tests",
-            {
-                "story": STORY,
-                "criteria": [{"text": "The cart total updates within 2 seconds"}],
-                "test_cases": [
-                    {
-                        "id": "TC-1",
-                        "title": "The total updates",
-                        "steps": ["Add an item", "Read the total"],
-                        "expected": "The total shows the new amount within 2 seconds",
-                        "covers": ["AC-1"],
-                    }
-                ],
-            },
-        )
-        answers["ship_check"] = await session.call_tool(
-            "ship_check",
-            {
-                "story": STORY,
-                "criteria": [{"text": "The cart total updates within 2 seconds"}],
-                "test_cases": [
-                    {
-                        "id": "TC-1",
-                        "title": "The total updates",
-                        "steps": ["Add an item", "Read the total"],
-                        "expected": "The total shows the new amount within 2 seconds",
-                        "covers": ["AC-1"],
-                    }
-                ],
-            },
-        )
-        return start, tools, answers
-
-    start, tools, answers = _with_sdk_client(work)
-
-    assert start.server_info.name == "QA-Genius"
-    assert start.server_info.version
-    assert "never tell the user a check passed" in (start.instructions or "").lower()
-
-    assert [tool.name for tool in tools] == [
-        "check_story",
-        "review_tests",
-        "ship_check",
-    ]
-    for tool in tools:
-        assert tool.annotations.read_only_hint is True
-        assert tool.annotations.idempotent_hint is True
-        assert tool.annotations.open_world_hint is False
-        assert tool.description and tool.input_schema and tool.output_schema
-
-    for name, answer in answers.items():
-        assert answer.is_error is False, name
-        assert answer.structured_content["tool"] == name
-        assert answer.content[0].text
-    assert answers["ship_check"].structured_content["decision"]
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -200,11 +97,14 @@ def test_ping_answers_an_empty_result(client):
     assert rpc(client, "ping").json() == {"jsonrpc": "2.0", "id": 1, "result": {}}
 
 
-def test_tools_list_names_three_read_only_tools(client):
+def test_tools_list_names_six_read_only_tools(client):
     tools = rpc(client, "tools/list", {}).json()["result"]["tools"]
     assert [tool["name"] for tool in tools] == [
         "check_story",
         "review_tests",
+        "score_risks",
+        "plan_matrix",
+        "check_code",
         "ship_check",
     ]
     for tool in tools:
@@ -371,7 +271,7 @@ def test_a_call_with_no_tool_name_says_name_is_required(client):
 def test_our_own_bug_answers_a_reference_and_never_a_stack_trace(
     client, monkeypatch, caplog
 ):
-    def explode(_payload):
+    def explode(_payload, _host=""):
         raise RuntimeError("the story was: a secret the log must never hold")
 
     monkeypatch.setattr(transport.server.BY_NAME["check_story"], "run", explode)
@@ -387,7 +287,7 @@ def test_our_own_bug_answers_a_reference_and_never_a_stack_trace(
 
 
 def test_a_call_that_runs_over_the_budget_is_cut_off(client, monkeypatch):
-    def forever(_payload):
+    def forever(_payload, _host=""):
         time.sleep(transport.TIME_BUDGET_SECONDS + 1)
 
     monkeypatch.setattr(transport, "TIME_BUDGET_SECONDS", 0.05)
@@ -588,16 +488,72 @@ def test_ship_check_is_byte_identical_twice(client):
     assert json.dumps(first, sort_keys=True) == json.dumps(second, sort_keys=True)
 
 
-@pytest.mark.parametrize("name", ["check_story", "review_tests", "ship_check"])
+# Every tool, in the order tools/list gives them.
+TOOL_NAMES = (
+    "check_story",
+    "review_tests",
+    "score_risks",
+    "plan_matrix",
+    "check_code",
+    "ship_check",
+)
+
+# A file big enough to be a real one: 30 files is the published limit.
+_SPEC = """import { test, expect } from '@playwright/test';
+
+test('TC-%03d something worth checking', async ({ page }) => {
+  await page.goto('/cart');
+  await expect(page.getByText('Total')).toBeVisible();
+});
+"""
+
+
+def _at_the_limits(name: str) -> dict:
+    """One call at whatever this tool's published limits are."""
+    big = _big_call()
+    if name == "check_story":
+        return {"story": big["story"], "context": big["context"]}
+    if name == "score_risks":
+        return {
+            **big,
+            "risks": [
+                {
+                    "id": f"R{n}",
+                    "title": f"Failure number {n} in the checkout path",
+                    "effect": "The shopper is charged the wrong amount",
+                    "cause": "Two requests race before either is recorded",
+                    "category": "data",
+                    "how_bad": 4,
+                    "how_likely": 3,
+                    "how_hard_to_notice": 4,
+                }
+                for n in range(1, MAX_RISKS + 1)
+            ],
+        }
+    if name == "plan_matrix":
+        return {
+            "factors": [
+                {"name": f"Factor {n}", "options": [f"Option {m}" for m in range(8)]}
+                for n in range(8)
+            ]
+        }
+    if name == "check_code":
+        return {
+            "framework": "playwright-ts",
+            "files": [
+                {"path": f"tests/spec-{n:02d}.spec.ts", "content": _SPEC % n}
+                for n in range(30)
+            ],
+            "test_cases": big["test_cases"],
+        }
+    return big
+
+
+@pytest.mark.parametrize("name", list(TOOL_NAMES))
 def test_every_tool_answers_inside_300ms_at_the_published_limits(name):
     from qagenius.mcp_server.transport import call_tool
 
-    arguments = _big_call()
-    if name == "check_story":
-        arguments = {
-            "story": arguments["story"],
-            "context": arguments["context"],
-        }
+    arguments = _at_the_limits(name)
     call_tool(name, arguments)  # warm the rule packs, which are cached
     started = time.monotonic()
     call_tool(name, arguments)

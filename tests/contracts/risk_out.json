@@ -1,0 +1,70 @@
+{
+  "additionalProperties": false,
+  "description": "One risk, scored and checked for tests.",
+  "properties": {
+    "category": {
+      "description": "What kind of failure it is.",
+      "title": "Category",
+      "type": "string"
+    },
+    "coverage": {
+      "description": "tested: a test names this risk or does what it describes. \"probably tested\": a test was claimed but its words do not match what goes wrong. no test: nothing reaches it.",
+      "enum": [
+        "tested",
+        "probably tested",
+        "no test"
+      ],
+      "title": "Coverage",
+      "type": "string"
+    },
+    "id": {
+      "description": "The risk's id.",
+      "title": "Id",
+      "type": "string"
+    },
+    "level": {
+      "description": "high: write a test for it or accept it in writing. medium: worth a test. low: note it and move on.",
+      "enum": [
+        "high",
+        "medium",
+        "low"
+      ],
+      "title": "Level",
+      "type": "string"
+    },
+    "max_score": {
+      "default": 125,
+      "description": "What the score is out of.",
+      "title": "Max Score",
+      "type": "integer"
+    },
+    "score": {
+      "description": "How bad \u00d7 how likely \u00d7 how hard to notice. Out of 125.",
+      "title": "Score",
+      "type": "integer"
+    },
+    "tested_by": {
+      "description": "The test ids that reach it.",
+      "items": {
+        "type": "string"
+      },
+      "title": "Tested By",
+      "type": "array"
+    },
+    "title": {
+      "description": "The failure, in one line.",
+      "title": "Title",
+      "type": "string"
+    }
+  },
+  "required": [
+    "id",
+    "title",
+    "category",
+    "score",
+    "level",
+    "coverage"
+  ],
+  "title": "RiskOut",
+  "type": "object"
+}

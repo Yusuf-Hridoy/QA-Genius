@@ -1,0 +1,31 @@
+{
+  "additionalProperties": false,
+  "description": "Two values that can never happen together.",
+  "properties": {
+    "a": {
+      "description": "One side, written \"Factor=option\", such as \"Browser=Firefox\".",
+      "maxLength": 90,
+      "title": "A",
+      "type": "string"
+    },
+    "b": {
+      "description": "The other side, such as \"Device=Phone\".",
+      "maxLength": 90,
+      "title": "B",
+      "type": "string"
+    },
+    "reason": {
+      "default": "",
+      "description": "Why they cannot go together, in one line.",
+      "maxLength": 300,
+      "title": "Reason",
+      "type": "string"
+    }
+  },
+  "required": [
+    "a",
+    "b"
+  ],
+  "title": "MatrixRuleIn",
+  "type": "object"
+}

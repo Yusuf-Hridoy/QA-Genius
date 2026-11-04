@@ -53,6 +53,12 @@ jobs:
         # The app has no npm dependencies; this is the test runner only.
         run: node --test tests/js/*.test.mjs
 
+      # The tests above call the tools in process. This one starts the app
+      # and talks to it over HTTP, in order, the way Claude Code does —
+      # the only check that would notice the door itself being broken.
+      - name: MCP client smoke test
+        run: python scripts/mcp_smoke.py
+
       # The server runs on requirements.txt alone. If anything in qagenius/
       # has quietly started importing a dev-only package, the site imports
       # fine here and dies on deploy — so prove it one more time, with only

@@ -1,0 +1,38 @@
+{
+  "additionalProperties": false,
+  "description": "One thing found in one file.",
+  "properties": {
+    "file": {
+      "description": "Which file.",
+      "title": "File",
+      "type": "string"
+    },
+    "level": {
+      "description": "error: this will not run or will not catch anything. warning: it runs, and it will hurt later.",
+      "enum": [
+        "error",
+        "warning"
+      ],
+      "title": "Level",
+      "type": "string"
+    },
+    "line": {
+      "description": "Which line. 0 when it is about the whole file.",
+      "title": "Line",
+      "type": "integer"
+    },
+    "says": {
+      "description": "What is wrong, in one line.",
+      "title": "Says",
+      "type": "string"
+    }
+  },
+  "required": [
+    "file",
+    "line",
+    "level",
+    "says"
+  ],
+  "title": "CodeFindingOut",
+  "type": "object"
+}
