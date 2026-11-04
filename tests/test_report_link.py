@@ -25,9 +25,23 @@ from qagenius.mcp_server.report_link import (
     scheme_for,
     unpack,
 )
-from qagenius.mcp_server.schemas import TestsIn
+from qagenius.mcp_server import report_link
+from qagenius.mcp_server.schemas import RisksIn, ShipIn, TestsIn
 
 HOST = "qa-genius-ashy.vercel.app"
+
+RISKS = [
+    {
+        "id": "R1",
+        "title": "The account is locked for a shopper who did nothing wrong",
+        "effect": "A real shopper cannot sign in",
+        "cause": "The counter is per address, not per account",
+        "category": "reliability",
+        "how_bad": 4,
+        "how_likely": 3,
+        "how_hard_to_notice": 4,
+    }
+]
 
 SUITE = {
     "story": "As a shopper I want my account locked after wrong passwords.",
@@ -276,6 +290,7 @@ def test_problem_ids_come_back_in_order_without_repeats():
 def test_fixed_and_still_open_are_worked_out_from_the_old_link():
     before = pack(
         {
+            "tool": "review_tests",
             "problems": [
                 {"id": "A-1", "says": "AC-1 has no tests yet."},
                 {"id": "B-2", "says": "Two tests are the same test."},
@@ -283,27 +298,33 @@ def test_fixed_and_still_open_are_worked_out_from_the_old_link():
             ]
         }
     )
-    rounds = compare(before, ["B-2", "D-4"])
+    rounds = compare(before, "review_tests", ["B-2", "D-4"])
     assert rounds.fixed == ["A-1", "C-3"]
     assert rounds.still_open == ["B-2"]
+    assert rounds.not_checked == []
 
 
 def test_what_a_fixed_problem_used_to_say_travels_with_its_id():
     # "L-ff63 · Fixed" on its own is a row nobody can check.
-    before = pack({"problems": [{"id": "A-1", "says": "AC-1 has no tests yet."}]})
-    rounds = compare(before, [])
+    before = pack(
+        {
+            "tool": "review_tests",
+            "problems": [{"id": "A-1", "says": "AC-1 has no tests yet."}],
+        }
+    )
+    rounds = compare(before, "review_tests", [])
     assert rounds.fixed_said == {"A-1": "AC-1 has no tests yet."}
 
 
 def test_no_previous_link_means_no_claims_either_way():
-    rounds = compare("", ["A-1"])
+    rounds = compare("", "review_tests", ["A-1"])
     assert (rounds.fixed, rounds.still_open, rounds.fixed_said) == ([], [], {})
 
 
 def test_a_previous_link_we_cannot_read_is_not_an_error():
     # The agent still gets an answer about this round. A refusal it cannot
     # act on would be worse than a round it is not told about.
-    rounds = compare("v1.rubbish", ["A-1"])
+    rounds = compare("v1.rubbish", "review_tests", ["A-1"])
     assert (rounds.fixed, rounds.still_open) == ([], [])
 
 
@@ -393,6 +414,105 @@ def test_the_round_fields_are_empty_without_a_previous_link():
     answer = tools.review_tests(TestsIn.model_validate(SUITE), HOST)
     assert answer.fixed_since_last_check == []
     assert answer.still_open == []
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# A fix is never claimed without the check that would find it
+# ──────────────────────────────────────────────────────────────────────────────
+
+
+def test_ship_check_after_review_tests_claims_nothing_fixed():
+    # The brief's own case. ship_check does not look for duplicate tests or
+    # thin criteria, so it cannot know whether any of them went away.
+    first = tools.review_tests(TestsIn.model_validate(SUITE), HOST)
+    assert first.problems
+
+    ship = tools.ship_check(
+        ShipIn.model_validate({**SUITE, "previous_report_link": first.report_link}),
+        HOST,
+    )
+    assert ship.fixed_since_last_check == []
+    assert ship.still_open == []
+    assert set(ship.not_checked_in_this_call) == {one.id for one in first.problems}
+
+
+def test_what_another_tool_found_is_not_checked_rather_than_fixed():
+    first = tools.review_tests(TestsIn.model_validate(SUITE), HOST)
+    risks = tools.score_risks(
+        RisksIn.model_validate(
+            {**SUITE, "risks": RISKS, "previous_report_link": first.report_link}
+        ),
+        HOST,
+    )
+    assert risks.fixed_since_last_check == []
+    assert set(risks.not_checked_in_this_call) >= {one.id for one in first.problems}
+
+
+def test_the_same_tool_run_again_with_no_changes_fixes_nothing():
+    first = tools.review_tests(TestsIn.model_validate(SUITE), HOST)
+    again = tools.review_tests(
+        TestsIn.model_validate({**SUITE, "previous_report_link": first.report_link}),
+        HOST,
+    )
+    assert again.fixed_since_last_check == []
+    assert set(again.still_open) == {one.id for one in first.problems}
+    assert again.not_checked_in_this_call == []
+
+
+def test_a_tool_that_runs_again_after_another_one_still_sees_its_own_history():
+    # review_tests → ship_check → review_tests. The middle call must not
+    # wipe what review_tests knew about itself, or every real fix would be
+    # reported as "not checked" for ever.
+    first = tools.review_tests(TestsIn.model_validate(SUITE), HOST)
+    middle = tools.ship_check(
+        ShipIn.model_validate({**SUITE, "previous_report_link": first.report_link}),
+        HOST,
+    )
+    better = {
+        **SUITE,
+        "test_cases": [
+            *SUITE["test_cases"],
+            *[one.model_dump() for one in first.add_tests],
+        ],
+        "previous_report_link": middle.report_link,
+    }
+    third = tools.review_tests(TestsIn.model_validate(better), HOST)
+    was = {one.id for one in first.problems}
+    assert set(third.fixed_since_last_check) <= was
+    assert set(third.still_open) <= was
+    # And what ship_check found is now the part nobody checked.
+    assert set(third.not_checked_in_this_call) <= {one.id for one in middle.problems}
+
+
+def test_compare_only_reads_the_matching_tools_problems():
+    before = pack(
+        {
+            "tool": "review_tests",
+            "problems": [{"id": "A-1", "says": "one"}, {"id": "B-2", "says": "two"}],
+        }
+    )
+    mine = compare(before, "review_tests", [])
+    assert mine.fixed == ["A-1", "B-2"]
+
+    theirs = compare(before, "ship_check", [])
+    assert theirs.fixed == []
+    assert theirs.still_open == []
+    assert theirs.not_checked == ["A-1", "B-2"]
+
+
+def test_the_history_carries_every_tools_last_word():
+    history = report_link.rounds_after("", "review_tests", {"A-1": "one"})
+    packed = pack({"tool": "ship_check", "problems": [], "rounds": history})
+    found = report_link.history_of(unpack(packed))
+    assert found["review_tests"] == {"A-1": "one"}
+    assert found.get("ship_check", {}) == {}
+
+
+def test_a_tools_own_problems_replace_its_last_set_not_add_to_them():
+    first = report_link.rounds_after("", "review_tests", {"A-1": "one"})
+    link = pack({"tool": "review_tests", "problems": [], "rounds": first})
+    second = report_link.rounds_after(link, "review_tests", {"B-2": "two"})
+    assert second["review_tests"] == {"B-2": "two"}
 
 
 def test_a_previous_link_does_not_change_what_the_tool_finds():

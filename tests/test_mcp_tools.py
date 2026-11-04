@@ -293,9 +293,9 @@ def test_a_check_with_nothing_sent_for_it_is_never_fine():
 
 def test_the_decision_is_said_in_words_an_agent_can_branch_on():
     assert tools.ship_check(_ship_in()).decision in (
-        "ready",
-        "ready with known risks",
-        "not ready",
+        "Ready",
+        "Release with known risks",
+        "Not ready",
     )
 
 

@@ -46,9 +46,9 @@ from qagenius.test_case_depth import NO_KIND, NOT_COVERED, ONLY_ONE
 
 # The decision words an agent reads, out of the three the engine uses.
 DECISION_WORDS = {
-    "ship": "ready",
-    "ship_with_risks": "ready with known risks",
-    "dont_ship": "not ready",
+    "ship": "Ready",
+    "ship_with_risks": "Release with known risks",
+    "dont_ship": "Not ready",
 }
 
 # A risk id sent as accepted needs a written reason to count, and the agent
@@ -63,10 +63,12 @@ def finish(answer, payload, host: str, extra: dict | None = None):
     report link holds or how a round is counted. What goes in the link is
     the answer plus whatever the page needs to draw it — never more.
     """
-    now = [problem.id for problem in answer.problems]
-    rounds = report_link.compare(getattr(payload, "previous_report_link", ""), now)
+    before = str(getattr(payload, "previous_report_link", "") or "")
+    mine = {problem.id: problem.says for problem in answer.problems}
+    rounds = report_link.compare(before, answer.tool, list(mine))
     answer.fixed_since_last_check = rounds.fixed
     answer.still_open = rounds.still_open
+    answer.not_checked_in_this_call = rounds.not_checked
 
     packed = answer.model_dump(mode="json")
     packed.pop("report_link", None)
@@ -76,6 +78,10 @@ def finish(answer, payload, host: str, extra: dict | None = None):
     # own is a row nobody can check.
     if rounds.fixed_said:
         packed["fixed_said"] = rounds.fixed_said
+    # Every tool's last word, so the next call can be compared against the
+    # last time *its own* check ran rather than against whatever happened
+    # to come immediately before it.
+    packed["rounds"] = report_link.rounds_after(before, answer.tool, mine)
     label = str(getattr(payload, "story_label", "") or "").strip()
     if label:
         packed["story_label"] = label
@@ -87,16 +93,27 @@ def finish(answer, payload, host: str, extra: dict | None = None):
 
 
 def _shown(payload) -> dict:
-    """The inputs a report page needs to show the findings in context."""
+    """The inputs a report page needs to show the findings in context.
+
+    The risks go in as `risks_in`, not `risks`: score_risks answers with a
+    field called `risks` and these would land on top of it, so the page
+    would draw the input scores where the worked-out ones should be.
+    """
     kept: dict = {}
     for name in ("story", "context"):
         value = getattr(payload, name, "")
         if value:
             kept[name] = value
-    for name in ("criteria", "test_cases", "risks"):
+    for name in ("criteria", "test_cases"):
         value = getattr(payload, name, None)
         if value:
             kept[name] = [one.model_dump(mode="json") for one in value]
+    risks = getattr(payload, "risks", None)
+    if risks:
+        kept["risks_in"] = [one.model_dump(mode="json") for one in risks]
+    matrix = getattr(payload, "matrix_summary", None)
+    if matrix is not None:
+        kept["matrix_summary"] = matrix.model_dump(mode="json")
     return kept
 
 
@@ -530,14 +547,15 @@ NOT_FROM_HERE_LINE = (
 
 
 def _ship_questions(report) -> list[str]:
-    """What a person has to decide before this can move."""
+    """Real decisions only: things a person has to settle, not chores.
+
+    "This check was not done" is work to do, and it is already in
+    path_to_ready. Putting it here as a question made the list the agent
+    reads out to the user mostly admin, and buried the one line that was
+    actually somebody's call to make.
+    """
     asked: list[str] = []
     for item in report.items:
-        if item.status == "not_checked" and item.id in SEND_INSTEAD:
-            asked.append(
-                f"{item.title}: nothing was sent for this, so it is not done "
-                "yet — should it be done before release?"
-            )
         if item.status == "accepted" and item.accepted_note:
             asked.append(f"{item.title}: still accepted? {item.accepted_note}")
     return asked

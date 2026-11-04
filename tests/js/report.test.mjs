@@ -15,6 +15,9 @@ import zlib from "node:zlib";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const read = (name) => readFileSync(join(here, "..", "..", "public", name), "utf8");
+/* Objects built inside the vm belong to its realm, so deepStrictEqual
+ * refuses them against literals written out here. Compare the data. */
+const plain = (value) => JSON.parse(JSON.stringify(value));
 
 /* ---------- a DOM small enough to read ---------- */
 
@@ -217,6 +220,34 @@ const REPORT = {
   still_open: ["D-1a2b"]
 };
 
+/* A report carrying something for every desk, which is what the "Open in
+ * QA-Genius desks" button has to fill. */
+const FULL_REPORT = {
+  ...REPORT,
+  risks_in: [
+    {
+      id: "R1",
+      title: "The same coupon is applied twice",
+      effect: "The shop gives double the discount",
+      cause: "Two requests race before either is recorded",
+      category: "data",
+      how_bad: 5,
+      how_likely: 3,
+      how_hard_to_notice: 4,
+      linked_criteria: ["AC-1"],
+      tested_by: []
+    }
+  ],
+  matrix_input: {
+    factors: [
+      { name: "Browser", options: ["Chrome", "Firefox"] },
+      { name: "Device", options: ["Desktop", "Phone"] }
+    ],
+    rules: [],
+    pinned: []
+  }
+};
+
 /* ---------- the page draws ---------- */
 
 test("the report draws from the link", async () => {
@@ -335,6 +366,7 @@ test("the run it builds is the shape the desks read", async () => {
   const run = sandbox.QAGReport.runFrom(REPORT);
   assert.equal(run.story, REPORT.story);
   assert.equal(run.context, REPORT.context);
+  assert.equal(run.story_type, "User story");
   assert.deepEqual(run.test_cases.criteria, [
     "A coupon on a cart over $50 applies the discount",
     "A coupon on a smaller cart is refused"
@@ -344,6 +376,104 @@ test("the run it builds is the shape the desks read", async () => {
   assert.equal(first.expected_result, "The total drops by the discount");
   assert.equal(first.traceability, "AC-1");
   assert.equal(first.category, "Functional");
+});
+
+/* The Criteria desk reads run.criteria as {id, text} objects and renumbers
+ * them by position. Strings, or ids carried over from the agent, leave the
+ * desk empty or mislabelled. */
+test("the criteria are objects the Criteria desk can read", async () => {
+  const { sandbox } = load();
+  const run = sandbox.QAGReport.runFrom(REPORT);
+  assert.deepEqual(plain(run.criteria), [
+    { id: "AC-1", text: "A coupon on a cart over $50 applies the discount" },
+    { id: "AC-2", text: "A coupon on a smaller cart is refused" }
+  ]);
+});
+
+test("the ids follow position, whatever the agent called them", async () => {
+  const { sandbox } = load();
+  const run = sandbox.QAGReport.runFrom({
+    ...REPORT,
+    criteria: [
+      { id: "PAY-7", text: "First" },
+      { id: "PAY-2", text: "Second" }
+    ]
+  });
+  assert.deepEqual(
+    run.criteria.map((one) => one.id),
+    ["AC-1", "AC-2"]
+  );
+});
+
+test("the risks keep their own scores, not placeholder threes", async () => {
+  const { sandbox } = load();
+  const run = sandbox.QAGReport.runFrom({
+    ...REPORT,
+    risks_in: [
+      {
+        id: "R1",
+        title: "The coupon is used twice",
+        effect: "Double discount",
+        cause: "A race between two requests",
+        category: "data",
+        how_bad: 5,
+        how_likely: 3,
+        how_hard_to_notice: 4,
+        linked_criteria: ["AC-1"],
+        tested_by: ["TC-1"]
+      }
+    ]
+  });
+  const risk = run.risk_analysis.analysis.failure_modes[0];
+  assert.equal(risk.severity, 5);
+  assert.equal(risk.likelihood, 3);
+  assert.equal(risk.detectability, 4);
+  assert.equal(risk.effect, "Double discount");
+  assert.equal(risk.cause, "A race between two requests");
+  assert.deepEqual(risk.related_criteria, ["AC-1"]);
+  /* The Risk radar scores against the cases in the run, so they travel. */
+  assert.equal(run.risk_analysis.cases.length, 1);
+  assert.equal(run.risk_analysis.criteria.length, 2);
+});
+
+test("a matrix becomes factors and rules the Test matrix desk redraws from", async () => {
+  const { sandbox } = load();
+  const run = sandbox.QAGReport.runFrom({
+    ...REPORT,
+    matrix_input: {
+      factors: [
+        { name: "Browser", options: ["Chrome", "Firefox"] },
+        { name: "Device", options: ["Desktop", "Phone"] }
+      ],
+      rules: [
+        { a: "Browser=Firefox", b: "Device=Phone", reason: "No mobile Firefox." }
+      ],
+      pinned: []
+    }
+  });
+  assert.deepEqual(plain(run.matrix.factors), [
+    { name: "Browser", values: ["Chrome", "Firefox"], reason: "" },
+    { name: "Device", values: ["Desktop", "Phone"], reason: "" }
+  ]);
+  assert.deepEqual(plain(run.matrix.rules), [
+    {
+      if_factor: "Browser",
+      if_value: "Firefox",
+      then_factor: "Device",
+      then_value: "Phone",
+      reason: "No mobile Firefox.",
+      source: "ai"
+    }
+  ]);
+});
+
+test("a matrix with fewer than two factors is left out rather than half-built", async () => {
+  const { sandbox } = load();
+  const run = sandbox.QAGReport.runFrom({
+    ...REPORT,
+    matrix_input: { factors: [{ name: "Browser", options: ["Chrome", "Firefox"] }] }
+  });
+  assert.equal(run.matrix, undefined);
 });
 
 test("each kind becomes the category the desks count", async () => {
@@ -403,10 +533,117 @@ test("open in desks points this tab at the new story", async () => {
   assert.equal(sandbox.QAGStories.tabStory(), made.story.id);
 });
 
+/* Saving the story is only half of it. Every desk reads the run out of
+ * sessionStorage, so a story that is saved and not opened leaves all four
+ * desks blank — and the button still navigates, so it looks like it
+ * worked. This is the test for that. */
+test("open in desks writes the run where the desks actually look", async () => {
+  const { sandbox, session } = load({ withStore: true });
+  sandbox.QAGReport.openInDesks(FULL_REPORT);
+
+  const run = JSON.parse(session["qag.run"]);
+  assert.equal(run.story, FULL_REPORT.story);
+  assert.equal(run.criteria.length, FULL_REPORT.criteria.length);
+  assert.equal(
+    run.test_cases.result.test_cases.length,
+    FULL_REPORT.test_cases.length
+  );
+  assert.ok(run.risk_analysis.analysis.failure_modes.length);
+  assert.ok(run.matrix.factors.length >= 2);
+});
+
+test("the run in the session is the run that was saved", async () => {
+  const { sandbox, session } = load({ withStore: true });
+  const made = sandbox.QAGReport.openInDesks(FULL_REPORT);
+  const saved = sandbox.QAGStories.get(made.story.id).run;
+  const live = JSON.parse(session["qag.run"]);
+  assert.equal(live.story, saved.story);
+  assert.equal(live._story_id, made.story.id);
+});
+
 test("open in desks says so rather than throwing when there is no store", async () => {
   const { sandbox } = load();
   const made = sandbox.QAGReport.openInDesks(REPORT);
   assert.equal(made.error, "no-store");
+});
+
+/* The point of the button: every desk has something in it afterwards.
+ * These read the saved run the way each desk's own code reads it, so a
+ * shape that is nearly right fails here rather than looking fine until
+ * somebody clicks through and finds three empty pages. */
+test("after opening, the Story desk has the story", async () => {
+  const { sandbox } = load({ withStore: true });
+  const made = sandbox.QAGReport.openInDesks(FULL_REPORT);
+  const run = sandbox.QAGStories.get(made.story.id).run;
+  // requirements_flow.js: setField("user_story", run.story || "")
+  assert.equal(run.story, FULL_REPORT.story);
+  assert.equal(run.context, FULL_REPORT.context);
+  assert.ok(run.story_type);
+});
+
+test("after opening, the Criteria desk has the criteria", async () => {
+  const { sandbox } = load({ withStore: true });
+  const made = sandbox.QAGReport.openInDesks(FULL_REPORT);
+  const run = sandbox.QAGStories.get(made.story.id).run;
+  // requirements_flow.js: (run.criteria || []).map(c => c.text)
+  const texts = (run.criteria || []).map((one) => one.text);
+  assert.deepEqual(
+    texts,
+    FULL_REPORT.criteria.map((one) => one.text)
+  );
+  assert.ok(texts.every((one) => one.trim() !== ""));
+});
+
+test("after opening, the Test cases desk has every test", async () => {
+  const { sandbox } = load({ withStore: true });
+  const made = sandbox.QAGReport.openInDesks(FULL_REPORT);
+  const run = sandbox.QAGStories.get(made.story.id).run;
+  // requirements_flow.js: run.test_cases.result.test_cases
+  const cases =
+    run.test_cases && run.test_cases.result ? run.test_cases.result.test_cases : [];
+  assert.equal(cases.length, FULL_REPORT.test_cases.length);
+  assert.deepEqual(
+    cases.map((one) => one.id),
+    FULL_REPORT.test_cases.map((one) => one.id)
+  );
+  // casesFor() matches on traceability, so a criterion finds its tests.
+  const forAc1 = cases.filter((one) =>
+    String(one.traceability).toUpperCase().includes("AC-1")
+  );
+  assert.ok(forAc1.length > 0);
+});
+
+test("after opening, the Risk radar has the risks with their scores", async () => {
+  const { sandbox } = load({ withStore: true });
+  const made = sandbox.QAGReport.openInDesks(FULL_REPORT);
+  const run = sandbox.QAGStories.get(made.story.id).run;
+  // risk_radar.js: run.risk_analysis.analysis
+  assert.ok(run.risk_analysis && run.risk_analysis.analysis);
+  const modes = run.risk_analysis.analysis.failure_modes;
+  assert.equal(modes.length, 1);
+  assert.equal(modes[0].severity, 5);
+});
+
+test("after opening, the Test matrix has its factors", async () => {
+  const { sandbox } = load({ withStore: true });
+  const made = sandbox.QAGReport.openInDesks(FULL_REPORT);
+  const run = sandbox.QAGStories.get(made.story.id).run;
+  // test_matrix.js: saved.factors && saved.factors.length >= 2
+  assert.ok(run.matrix && run.matrix.factors.length >= 2);
+});
+
+test("a report with only a story leaves the other desks alone", async () => {
+  const { sandbox } = load({ withStore: true });
+  const made = sandbox.QAGReport.openInDesks({
+    story: "As a shopper I want to sign in.",
+    criteria: [],
+    test_cases: []
+  });
+  const run = sandbox.QAGStories.get(made.story.id).run;
+  assert.equal(run.criteria, undefined);
+  assert.equal(run.test_cases, undefined);
+  assert.equal(run.risk_analysis, undefined);
+  assert.equal(run.matrix, undefined);
 });
 
 /* ---------- markdown ---------- */

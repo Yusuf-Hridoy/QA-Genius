@@ -14,6 +14,7 @@ Exits non-zero on any failure, so CI can run it as it stands.
 from __future__ import annotations
 
 import argparse
+import base64
 import io
 import json
 import os
@@ -21,6 +22,7 @@ import socket
 import subprocess
 import sys
 import time
+import zlib
 from pathlib import Path
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
@@ -200,6 +202,27 @@ class Door:
         if not isinstance(found, dict):
             raise RuntimeError(f"{name}: no structuredContent")
         return found
+
+
+def unpack(link: str) -> dict:
+    """What a report link holds, the way the page reads it.
+
+    Written out here rather than imported, because this script also runs
+    against a deployment it does not share a checkout with.
+    """
+    said = str(link or "").partition("#")[2]
+    if not said.startswith("v1."):
+        return {}
+    body = said[3:]
+    body += "=" * (-len(body) % 4)
+    try:
+        raw = zlib.decompressobj(-zlib.MAX_WBITS).decompress(
+            base64.urlsafe_b64decode(body), 2 * 1024 * 1024
+        )
+        found = json.loads(raw.decode("utf-8"))
+    except (ValueError, zlib.error, UnicodeDecodeError):
+        return {}
+    return found if isinstance(found, dict) else {}
 
 
 def get(url: str) -> int:
@@ -443,7 +466,64 @@ def walk(url: str, results: Results) -> None:
         f"{len(not_checked)} checks say not done yet, none say fine",
     )
 
-    # ── 8. the report page opens ─────────────────────────────────────────
+    results.check(
+        str(ship.get("decision", "")[:1]).isupper(),
+        "ship_check · wording",
+        f"the decision reads \"{ship.get('decision')}\"",
+    )
+    results.check(
+        not any(
+            "not done yet" in str(one).lower() for one in ship.get("ask_the_po", [])
+        ),
+        "ask_the_po · real decisions",
+        f"{len(ship.get('ask_the_po') or [])} questions, none of them chores",
+    )
+
+    # ── 8. no false fixes ────────────────────────────────────────────────
+    # ship_check does not look for duplicate tests or thin criteria, so it
+    # cannot know whether any of them went away. Nothing changed between
+    # the review_tests call above and this one, and even if it had, this
+    # tool would have no right to say so.
+    after = door.tool(
+        "ship_check",
+        {
+            "story": STORY,
+            "context": CONTEXT,
+            "criteria": FIXED_CRITERIA,
+            "test_cases": TESTS,
+            "previous_report_link": second.get("report_link", ""),
+        },
+    )
+    results.check(
+        after.get("fixed_since_last_check") == [],
+        "no false fixes",
+        "ship_check after review_tests claims nothing fixed",
+    )
+    results.check(
+        bool(after.get("not_checked_in_this_call")),
+        "not checked, not fixed",
+        f"{len(after.get('not_checked_in_this_call') or [])} problems another "
+        "tool found are reported as not checked",
+    )
+
+    # And running the same tool again with no changes fixes nothing either.
+    repeat = door.tool(
+        "review_tests",
+        {
+            "story": STORY,
+            "context": CONTEXT,
+            "criteria": FIXED_CRITERIA,
+            "test_cases": TESTS + first.get("add_tests", [])[:4],
+            "previous_report_link": second.get("report_link", ""),
+        },
+    )
+    results.check(
+        repeat.get("fixed_since_last_check") == [],
+        "no fixes without a change",
+        "the same call twice fixes nothing",
+    )
+
+    # ── 9. the report page opens, and can fill the desks ─────────────────
     report = ship.get("report_link", "")
     page = report.partition("#")[0]
     results.check(
@@ -455,6 +535,18 @@ def walk(url: str, results: Results) -> None:
         len(report) < 60_000,
         "report size",
         f"{len(report) / 1024:.1f} KB",
+    )
+    carried = unpack(report)
+    desks = {
+        "the story": bool(carried.get("story")),
+        "criteria": len(carried.get("criteria") or []) > 0,
+        "test cases": len(carried.get("test_cases") or []) > 0,
+        "risks": len(carried.get("risks_in") or []) > 0,
+    }
+    results.check(
+        all(desks.values()),
+        "open in desks",
+        "the link carries " + ", ".join(name for name, ok in desks.items() if ok),
     )
 
 

@@ -255,11 +255,11 @@
       "type": "array"
     },
     "decision": {
-      "description": "ready: nothing to do. ready with known risks: it can go, and somebody should look at what is listed. not ready: a check failed.",
+      "description": "\"Ready\": nothing to do. \"Release with known risks\": it can go, and somebody should look at what is listed. \"Not ready\": a check failed. Show the words as they are written here.",
       "enum": [
-        "ready",
-        "ready with known risks",
-        "not ready"
+        "Ready",
+        "Release with known risks",
+        "Not ready"
       ],
       "title": "Decision",
       "type": "string"
@@ -283,6 +283,14 @@
       ],
       "default": null,
       "description": "The letter, or null when no check had anything to score."
+    },
+    "not_checked_in_this_call": {
+      "description": "Problem ids from `previous_report_link` that a different tool found and this one does not look for. They are not fixed \u2014 nobody checked. Call that tool again if you want to know.",
+      "items": {
+        "type": "string"
+      },
+      "title": "Not Checked In This Call",
+      "type": "array"
     },
     "notes": {
       "description": "Anything else worth knowing that is not a problem.",

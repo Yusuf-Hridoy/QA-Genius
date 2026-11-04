@@ -89,7 +89,10 @@ def test_the_skill_exists_and_names_every_tool():
     assert "ask_the_po" in skill
     assert "previous_report_link" in skill
     assert "report_link" in skill
-    assert "Never say a check passed unless you ran it" in skill
+    assert "not_checked_in_this_call" in skill
+    # The two things the skill exists to stop an agent doing.
+    assert "Never say a check passed, or a problem was fixed" in skill
+    assert "only ever compared against itself" in skill
 
 
 def test_the_skill_readme_says_how_to_install_it():

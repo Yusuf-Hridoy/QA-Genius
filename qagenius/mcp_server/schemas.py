@@ -45,7 +45,7 @@ ProblemKind = Literal[
     "limit", "gap", "copy", "weak", "depth", "clarity", "epic", "missing"
 ]
 Level = Literal["high", "medium", "low"]
-Decision = Literal["ready", "ready with known risks", "not ready"]
+Decision = Literal["Ready", "Release with known risks", "Not ready"]
 
 # How a problem id is built, so the same problem keeps the same id between
 # calls: the first letter of its kind, then four hex of a hash of what the
@@ -600,6 +600,14 @@ class ToolOut(Strict):
             "Empty when no previous link was sent."
         ),
     )
+    not_checked_in_this_call: list[str] = Field(
+        default_factory=list,
+        description=(
+            "Problem ids from `previous_report_link` that a different tool "
+            "found and this one does not look for. They are not fixed — "
+            "nobody checked. Call that tool again if you want to know."
+        ),
+    )
 
 
 class GradeOut(Strict):
@@ -771,8 +779,9 @@ class ShipOut(ToolOut):
 
     decision: Decision = Field(
         description=(
-            "ready: nothing to do. ready with known risks: it can go, and "
-            "somebody should look at what is listed. not ready: a check failed."
+            '"Ready": nothing to do. "Release with known risks": it can go, '
+            'and somebody should look at what is listed. "Not ready": a '
+            "check failed. Show the words as they are written here."
         )
     )
     grade: GradeOut | None = Field(

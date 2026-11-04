@@ -2185,6 +2185,11 @@ svg.next-mark{color:var(--ok-line)}
 .report-mark-fixed{background:var(--ok-bg);color:var(--ok-fg)}
 .report-mark-open{background:var(--warn-bg);color:var(--warn-fg)}
 .report-mark-warn{background:var(--info-bg);color:var(--info-fg)}
+/* Neither fixed nor still open: a different check found it and this one
+   does not look for it. Quiet on purpose — it is not a finding. */
+.report-mark-unchecked{background:var(--card-3);color:var(--muted)}
+.report-unchecked{background:transparent;border-style:dashed}
+.report-unchecked .report-meta{margin:0}
 .report-fixed .report-says{color:var(--text-2);font-weight:400}
 
 .report-asks{margin:6px 0 0;padding-left:18px;display:flex;

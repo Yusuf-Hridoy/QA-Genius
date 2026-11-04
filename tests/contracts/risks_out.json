@@ -239,6 +239,14 @@
       "title": "Fixed Since Last Check",
       "type": "array"
     },
+    "not_checked_in_this_call": {
+      "description": "Problem ids from `previous_report_link` that a different tool found and this one does not look for. They are not fixed \u2014 nobody checked. Call that tool again if you want to know.",
+      "items": {
+        "type": "string"
+      },
+      "title": "Not Checked In This Call",
+      "type": "array"
+    },
     "notes": {
       "description": "Anything else worth knowing that is not a problem.",
       "items": {

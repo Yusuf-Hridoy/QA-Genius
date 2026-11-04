@@ -228,27 +228,85 @@ class Rounds:
 
     fixed: list[str]
     still_open: list[str]
+    # Problems from an earlier link that this tool does not look for. They
+    # are not fixed and not still open: nobody checked.
+    not_checked: list[str]
     # id -> what the problem said last time, for the ones now fixed.
     fixed_said: dict[str, str]
 
 
-def compare(previous_link: str, now: list[str]) -> Rounds:
-    """What is gone since the last report, and what is still here.
+def history_of(report: dict) -> dict[str, dict[str, str]]:
+    """Each tool's last set of problems, out of an unpacked report.
+
+    A report carries its own problems and the ones every other tool found
+    earlier in the same chain, so a call that follows two others can still
+    be compared against the last time *this* tool ran.
+    """
+    found: dict[str, dict[str, str]] = {}
+    carried = report.get("rounds")
+    if isinstance(carried, dict):
+        for tool, problems in carried.items():
+            if isinstance(problems, dict):
+                found[str(tool)] = {
+                    str(key): str(value) for key, value in problems.items()
+                }
+    # The report's own problems win: they are this tool's latest word.
+    tool = str(report.get("tool") or "").strip()
+    mine = said_by_id(report)
+    if tool and mine:
+        found[tool] = mine
+    return found
+
+
+def compare(previous_link: str, tool: str, now: list[str]) -> Rounds:
+    """What this tool has fixed since the last time this tool ran.
+
+    Only this tool's own problems are compared. review_tests cannot know
+    whether a risk gap is gone, and ship_check cannot know whether a
+    duplicate test was deleted — neither of them looks. Calling such a
+    problem "fixed" would be claiming a check that never happened, which
+    is the one thing an agent must never be told.
 
     A link we cannot read is not an error: the agent gets an answer about
     this round either way, and a round it cannot be told about is better
     than a refusal it cannot act on.
     """
     if not str(previous_link or "").strip():
-        return Rounds([], [], {})
+        return Rounds([], [], [], {})
     try:
-        before = said_by_id(unpack(previous_link))
+        history = history_of(unpack(previous_link))
     except LinkTrouble:
-        return Rounds([], [], {})
+        return Rounds([], [], [], {})
+
+    mine = history.get(str(tool or ""), {})
     here = set(now)
-    fixed = [one for one in before if one not in here]
+    fixed = [one for one in mine if one not in here]
+    # Everything some other tool found, and this call did not look at.
+    elsewhere: list[str] = []
+    for other, problems in history.items():
+        if other == tool:
+            continue
+        elsewhere.extend(one for one in problems if one not in mine)
     return Rounds(
         fixed=fixed,
-        still_open=[one for one in before if one in here],
-        fixed_said={one: before[one] for one in fixed},
+        still_open=[one for one in mine if one in here],
+        not_checked=elsewhere,
+        fixed_said={one: mine[one] for one in fixed},
     )
+
+
+def rounds_after(previous_link: str, tool: str, problems: dict[str, str]) -> dict:
+    """The history to carry in the next link: the old one, plus this call.
+
+    What this tool just found replaces what it found last time. Every
+    other tool's last word is kept exactly as it was, so a chain of calls
+    does not lose what an earlier one said.
+    """
+    history: dict[str, dict[str, str]] = {}
+    if str(previous_link or "").strip():
+        try:
+            history = history_of(unpack(previous_link))
+        except LinkTrouble:
+            history = {}
+    history[str(tool or "")] = dict(problems)
+    return history

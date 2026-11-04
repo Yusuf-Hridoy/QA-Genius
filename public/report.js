@@ -120,9 +120,9 @@
   /* 2. Decision card ------------------------------------------------- */
 
   var DECISION_TONE = {
-    ready: "ok",
-    "ready with known risks": "warn",
-    "not ready": "bad"
+    Ready: "ok",
+    "Release with known risks": "warn",
+    "Not ready": "bad"
   };
 
   function decision(root, data) {
@@ -179,7 +179,8 @@
   function problems(root, data) {
     var fixed = list(data.fixed_since_last_check);
     var open = list(data.problems);
-    if (!fixed.length && !open.length) return;
+    var unchecked = list(data.not_checked_in_this_call);
+    if (!fixed.length && !open.length && !unchecked.length) return;
 
     var card = add(root, "section", "card report-problems");
     add(card, "h2", "card-title", "What the senior tester found, and what happened");
@@ -199,10 +200,15 @@
         (LEVEL_WORD[problem.level] || text(problem.level)) +
         " · Still open";
     });
+    /* Fixed, and only fixed: every id here came from the same check being
+     * run again and no longer finding it. A problem some other tool found
+     * is in the list below instead, because nobody checked it this time
+     * and saying "Fixed" would be a claim we cannot stand behind. */
     if (fixed.length) {
-      var said = data.fixed_said && typeof data.fixed_said === "object"
-        ? data.fixed_said
-        : {};
+      var said =
+        data.fixed_said && typeof data.fixed_said === "object"
+          ? data.fixed_said
+          : {};
       add(
         card,
         "h3",
@@ -220,6 +226,29 @@
          * on its own is a row nobody can check. */
         add(body, "p", "report-says", text(said[id]) || "No longer reported.");
         add(body, "p", "report-meta mono small", text(id) + " · Fixed");
+      });
+    }
+
+    if (unchecked.length) {
+      add(
+        card,
+        "h3",
+        "report-subhead",
+        unchecked.length + " not checked in this call"
+      );
+      add(
+        card,
+        "p",
+        "muted small",
+        "A different check found these. This one does not look for them, " +
+          "so they are neither fixed nor still open — nobody checked."
+      );
+      var skipped = add(card, "ul", "report-rows");
+      unchecked.forEach(function (id) {
+        var row = add(skipped, "li", "report-row report-unchecked");
+        add(row, "span", "report-mark report-mark-unchecked", "–");
+        var body = add(row, "div", "report-row-body");
+        add(body, "p", "report-meta mono small", text(id) + " · Not checked");
       });
     }
 
@@ -332,31 +361,100 @@
 
   /* 6. Buttons -------------------------------------------------------- */
 
-  /* What the desks read out of a run. Only the parts this report actually
-   * carries are set, so a report with no risks does not plant an empty
-   * risk analysis for the Risk radar to open. */
+  /* What the desks read out of a run.
+   *
+   * Every key here is one some page actually looks for, in the shape it
+   * looks for it — `criteria` is {id, text} objects because the Criteria
+   * desk renumbers them, `test_cases` is {result, criteria} because the
+   * Test cases desk reads `.result.test_cases`, and so on. Getting the
+   * shape nearly right means a desk that opens empty, which is worse than
+   * one that was never filled.
+   *
+   * Only the parts this report carries are set: a report with no risks
+   * must not plant an empty analysis for the Risk radar to open. */
   function runFrom(data) {
-    var run = { story: text(data.story), context: text(data.context) };
-    var criteria = list(data.criteria).map(function (one) {
+    var run = {
+      story: text(data.story),
+      story_type: text(data.story_type) || "User story",
+      context: text(data.context)
+    };
+
+    var criteria = list(data.criteria);
+    var texts = criteria.map(function (one) {
       return text(one.text);
     });
-    var cases = list(data.test_cases);
+    if (criteria.length) {
+      /* Ids follow position on every desk, so they are written that way
+       * here rather than carried over from whatever the agent chose. */
+      run.criteria = texts.map(function (one, index) {
+        return { id: "AC-" + (index + 1), text: one };
+      });
+    }
+
+    var cases = list(data.test_cases).map(toCase);
     if (cases.length) {
       run.test_cases = {
-        result: {
-          test_cases: cases.map(toCase),
-          summary: emptySummary(cases.length)
-        },
-        criteria: criteria
+        result: { test_cases: cases, summary: emptySummary(cases.length) },
+        criteria: texts
       };
-    } else if (criteria.length) {
-      run.criteria = criteria;
     }
-    var risksIn = list(data.risks);
-    if (risksIn.length) {
-      run.risk_analysis = { analysis: { failure_modes: risksIn.map(toRisk) }, cases: [] };
+
+    /* The risks as they were sent in, with their own scores — not the
+     * worked-out list, which has no effect, cause or scores on it. */
+    var risks = list(data.risks_in);
+    if (risks.length) {
+      run.risk_analysis = {
+        analysis: { failure_modes: risks.map(toRisk) },
+        cases: cases,
+        criteria: texts
+      };
     }
+
+    var matrix = matrixFrom(data);
+    if (matrix) run.matrix = matrix;
     return run;
+  }
+
+  /* The Test matrix desk redraws itself from the factors and rules, so
+   * that is what travels. The runs themselves are worked out again from
+   * them, and would be ignored here anyway. */
+  function matrixFrom(data) {
+    var asked = data.matrix_input;
+    if (!asked || typeof asked !== "object") return null;
+    var factors = list(asked.factors)
+      .map(function (one) {
+        return {
+          name: text(one.name),
+          values: list(one.options).map(text),
+          reason: ""
+        };
+      })
+      .filter(function (one) {
+        return one.name && one.values.length >= 2;
+      });
+    if (factors.length < 2) return null;
+    return {
+      factors: factors,
+      rules: list(asked.rules).map(ruleFrom).filter(Boolean),
+      pinned: list(asked.pinned),
+      reasons: {},
+      from_ai: false,
+      suggested: []
+    };
+  }
+
+  function ruleFrom(one) {
+    var left = text(one.a).split("=");
+    var right = text(one.b).split("=");
+    if (left.length < 2 || right.length < 2) return null;
+    return {
+      if_factor: left[0].trim(),
+      if_value: left.slice(1).join("=").trim(),
+      then_factor: right[0].trim(),
+      then_value: right.slice(1).join("=").trim(),
+      reason: text(one.reason),
+      source: "ai"
+    };
   }
 
   var KIND_CATEGORY = {
@@ -384,19 +482,27 @@
     };
   }
 
+  function score(value) {
+    var n = Number(value);
+    return n >= 1 && n <= 5 ? Math.round(n) : 3;
+  }
+
   function toRisk(one) {
     return {
       id: text(one.id),
       title: text(one.title),
       category: text(one.category) || "functional",
-      effect: "",
-      cause: "",
-      severity: 3,
-      likelihood: 3,
-      detectability: 3,
-      related_criteria: [],
+      effect: text(one.effect),
+      cause: text(one.cause),
+      severity: score(one.how_bad),
+      likelihood: score(one.how_likely),
+      detectability: score(one.how_hard_to_notice),
+      severity_reason: "",
+      likelihood_reason: "",
+      detectability_reason: "",
+      related_criteria: list(one.linked_criteria).map(text),
       covered_by: list(one.tested_by).map(text),
-      test_idea: "",
+      test_idea: text(one.test_idea),
       source: "ai",
       covered_if: []
     };
@@ -418,8 +524,16 @@
     if (!stories || !stories.create) return { error: "no-store" };
     var made = stories.create({ run: runFrom(data) });
     if (!made || !made.story) return made || { error: "failed" };
-    stories.setTabStory(made.story.id);
-    if (stories.setTabRev) stories.setTabRev(made.story.revision);
+    /* Saving the story is only half of it. Every desk reads the run out of
+     * sessionStorage, not out of the story list, so a story that is saved
+     * and not opened leaves all four desks blank. `open` is what points
+     * this tab at it and writes the run where the desks look. */
+    if (stories.open) {
+      stories.open(made.story.id);
+    } else {
+      stories.setTabStory(made.story.id);
+      if (stories.setTabRev) stories.setTabRev(made.story.revision);
+    }
     return made;
   }
 

@@ -86,11 +86,14 @@ read all six:
   "notes": ["..."],
   "report_link": "https://.../report#v1.…",
   "fixed_since_last_check": [],
-  "still_open": []
+  "still_open": [],
+  "not_checked_in_this_call": []
 }
 ```
 
-`ship_check` adds `decision`, `grade`, `checks` and `path_to_ready`.
+`ship_check` adds `decision` — one of **`Ready`**, **`Release with known
+risks`** or **`Not ready`**, written exactly like that — plus `grade`,
+`checks` and `path_to_ready`.
 `score_risks` adds `risks` and `untested_high`. `plan_matrix` adds `runs`
 and the pair counts. `check_code` adds `syntax`, `findings` and the
 traced test case ids.
@@ -124,9 +127,21 @@ problem ids, and the new answer carries:
 
 - `fixed_since_last_check` — ids that are gone
 - `still_open` — ids that are still there
+- `not_checked_in_this_call` — ids a *different* tool found, which this one
+  does not look for
 
 That is the whole of the memory: the last answer travels in with the next
 question.
+
+**A fix is never claimed without the check that would find it.** Each tool
+is compared only against the last time *that same tool* ran. `ship_check`
+does not look for duplicate tests or thin criteria, so it can never report
+one as fixed — those come back under `not_checked_in_this_call` instead.
+Call the tool that found a problem if you want to know whether it is gone.
+
+The link carries every tool's last word, so a chain like `review_tests` →
+`score_risks` → `review_tests` still compares the second `review_tests`
+against the first.
 
 ---
 
@@ -246,6 +261,7 @@ Read a user story before anyone writes a test, and say what is wrong with it. Fi
 | `report_note` | `string` | no | Set only when the answer was too big to pack the inputs into the link, so the page shows the findings without them. |
 | `fixed_since_last_check` | list of `string` | no | Problem ids from `previous_report_link` that are gone now. Send the link you were given last time and this fills in. |
 | `still_open` | list of `string` | no | Problem ids from `previous_report_link` that are still here. Empty when no previous link was sent. |
+| `not_checked_in_this_call` | list of `string` | no | Problem ids from `previous_report_link` that a different tool found and this one does not look for. They are not fixed — nobody checked. Call that tool again if you want to know. |
 
 **`Problem`**
 
@@ -320,6 +336,7 @@ Review acceptance criteria and the test cases written for them, the way a senior
 | `report_note` | `string` | no | Set only when the answer was too big to pack the inputs into the link, so the page shows the findings without them. |
 | `fixed_since_last_check` | list of `string` | no | Problem ids from `previous_report_link` that are gone now. Send the link you were given last time and this fills in. |
 | `still_open` | list of `string` | no | Problem ids from `previous_report_link` that are still here. Empty when no previous link was sent. |
+| `not_checked_in_this_call` | list of `string` | no | Problem ids from `previous_report_link` that a different tool found and this one does not look for. They are not fixed — nobody checked. Call that tool again if you want to know. |
 
 **`Problem`**
 
@@ -411,6 +428,7 @@ Score a set of risks and say which ones no test reaches. You write the risks and
 | `report_note` | `string` | no | Set only when the answer was too big to pack the inputs into the link, so the page shows the findings without them. |
 | `fixed_since_last_check` | list of `string` | no | Problem ids from `previous_report_link` that are gone now. Send the link you were given last time and this fills in. |
 | `still_open` | list of `string` | no | Problem ids from `previous_report_link` that are still here. Empty when no previous link was sent. |
+| `not_checked_in_this_call` | list of `string` | no | Problem ids from `previous_report_link` that a different tool found and this one does not look for. They are not fixed — nobody checked. Call that tool again if you want to know. |
 | `risks` | list of `RiskOut` | no | Every risk, worst first. |
 | `untested_high` | list of `string` | no | The ids of high risks no test reaches. Write a test for each or say in writing why not. |
 
@@ -495,6 +513,7 @@ Work out the fewest test runs that still put every allowed pair of values togeth
 | `report_note` | `string` | no | Set only when the answer was too big to pack the inputs into the link, so the page shows the findings without them. |
 | `fixed_since_last_check` | list of `string` | no | Problem ids from `previous_report_link` that are gone now. Send the link you were given last time and this fills in. |
 | `still_open` | list of `string` | no | Problem ids from `previous_report_link` that are still here. Empty when no previous link was sent. |
+| `not_checked_in_this_call` | list of `string` | no | Problem ids from `previous_report_link` that a different tool found and this one does not look for. They are not fixed — nobody checked. Call that tool again if you want to know. |
 | `runs` | list of `RunOut` | no | The runs to do, in order. |
 | `combinations` | `integer` | no | How many combinations there are in all. |
 | `pairs_possible` | `integer` | no | How many pairs of values are worth covering. |
@@ -583,6 +602,7 @@ Read automation code and say what a senior tester would send back. Finds tests l
 | `report_note` | `string` | no | Set only when the answer was too big to pack the inputs into the link, so the page shows the findings without them. |
 | `fixed_since_last_check` | list of `string` | no | Problem ids from `previous_report_link` that are gone now. Send the link you were given last time and this fills in. |
 | `still_open` | list of `string` | no | Problem ids from `previous_report_link` that are still here. Empty when no previous link was sent. |
+| `not_checked_in_this_call` | list of `string` | no | Problem ids from `previous_report_link` that a different tool found and this one does not look for. They are not fixed — nobody checked. Call that tool again if you want to know. |
 | `language` | `string` | no | What these files are written in. |
 | `syntax` | object | no | file → what its syntax check actually proved. Python is parsed for real; TypeScript and JavaScript get a quick check that brackets and quotes match, which is not a full compile. |
 | `findings` | list of `CodeFindingOut` | no | Everything found, file by file. |
@@ -700,7 +720,8 @@ Decide whether this work is ready to release, and say why. Runs every check at o
 | `report_note` | `string` | no | Set only when the answer was too big to pack the inputs into the link, so the page shows the findings without them. |
 | `fixed_since_last_check` | list of `string` | no | Problem ids from `previous_report_link` that are gone now. Send the link you were given last time and this fills in. |
 | `still_open` | list of `string` | no | Problem ids from `previous_report_link` that are still here. Empty when no previous link was sent. |
-| `decision` | `ready` \| `ready with known risks` \| `not ready` | yes | ready: nothing to do. ready with known risks: it can go, and somebody should look at what is listed. not ready: a check failed. |
+| `not_checked_in_this_call` | list of `string` | no | Problem ids from `previous_report_link` that a different tool found and this one does not look for. They are not fixed — nobody checked. Call that tool again if you want to know. |
+| `decision` | `Ready` \| `Release with known risks` \| `Not ready` | yes | "Ready": nothing to do. "Release with known risks": it can go, and somebody should look at what is listed. "Not ready": a check failed. Show the words as they are written here. |
 | `grade` | `GradeOut` (optional) | no | The letter, or null when no check had anything to score. |
 | `checks` | list of `CheckOut` | no | Every check, in a fixed order. |
 | `path_to_ready` | list of `string` | no | What to do, in order, to turn this into ready. |

@@ -55,10 +55,18 @@ Every answer carries a `report_link`. Pass it back as
 
 - `fixed_since_last_check` — the ids that are gone
 - `still_open` — the ids that are still there
+- `not_checked_in_this_call` — ids another tool found, which this one does
+  not look for
 
 Use it on every call after the first. It is the only way the tools can
 tell you whether your last round of fixes worked, because nothing is
 stored between calls.
+
+**Each tool is only ever compared against itself.** `ship_check` does not
+look for duplicate tests, so it will never tell you one was fixed — it
+puts those under `not_checked_in_this_call`. Do not read that as "fixed",
+and do not tell the user it was: call `review_tests` again if you want to
+know.
 
 ## Always do these
 
@@ -71,8 +79,9 @@ stored between calls.
   the part of the URL after the `#`, which the browser never sends. Say
   that when you hand it over, so they know it is theirs to share or throw
   away.
-- **Never say a check passed unless you ran it and read the answer.** In
-  `ship_check`, a check with `status: "not_checked"` has *not* passed —
+- **Never say a check passed, or a problem was fixed, unless you ran the
+  check that would find it.** In `ship_check`, a check with
+  `status: "not_checked"` has *not* passed —
   it means you sent nothing for it. Three of the seven checks (story
   clarity, the two-reader comparison, automation) can only be run on the
   QA-Genius website and will always come back not checked from here. Say
@@ -112,7 +121,7 @@ from step 3. It comes back with `fixed_since_last_check: ["L-b225",
 high with `coverage: "no test"`. You add a test for it.
 
 **6. `ship_check`**, with `previous_report_link` from step 5. It answers
-`decision: "ready with known risks"`, a grade, and a `report_link`.
+`decision: "Release with known risks"`, a grade, and a `report_link`.
 
 **7.** You tell the user what was found and fixed, repeat the questions
 they still have to answer, and give them the link.
